@@ -174,8 +174,9 @@ curl_setopt($ch, CURLOPT_ENCODING, ''); // Handle gzip
 // Enable SSL verify for production security
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookie.txt');
-curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookie.txt');
+$cookie_file = sys_get_temp_dir() . '/cookie_' . $url_hash . '.txt';
+curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie_file);
+curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie_file);
 
 $html = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);

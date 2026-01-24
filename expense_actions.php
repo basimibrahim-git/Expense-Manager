@@ -27,12 +27,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $exchange_rate = floatval($_POST['exchange_rate'] ?? 1.0);
     $tags = htmlspecialchars($_POST['tags'] ?? '');
 
-    // Auto-Heal: Add currency column if missing
-    try {
-        $pdo->exec("ALTER TABLE expenses ADD COLUMN currency VARCHAR(3) DEFAULT 'AED'");
-        $pdo->exec("ALTER TABLE expenses ADD COLUMN original_amount DECIMAL(15,2) NULL");
-    } catch (Exception $e) {
-    }
+    // Auto-Heal removed for security - schema updates handled by installer
     $tags = htmlspecialchars($_POST['tags'] ?? '');
 
     $final_amount = $amount;
