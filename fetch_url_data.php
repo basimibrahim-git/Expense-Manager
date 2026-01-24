@@ -170,8 +170,9 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'Pragma: no-cache'
 ]);
 curl_setopt($ch, CURLOPT_ENCODING, ''); // Handle gzip
-// Ignore SSL verify for simplicity in dev (NOT for production banking, but ok for public info scraping)
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+// Enable SSL verify for production security
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
 curl_setopt($ch, CURLOPT_COOKIEJAR, 'cookie.txt');
 curl_setopt($ch, CURLOPT_COOKIEFILE, 'cookie.txt');
 

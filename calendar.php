@@ -5,20 +5,7 @@ $page_title = "My Calendar";
 require_once 'config.php';
 
 // 1. Auto-Healing: Create Reminders Table with Recurrence Type
-// 1. Auto-Healing: Create Reminders Table - Removed for Security
-/*
-try {
-    $r_chk = $pdo->query("SELECT 1 FROM reminders LIMIT 1");
-    // Check if recurrence_type column exists
-    try {
-        $pdo->query("SELECT recurrence_type FROM reminders LIMIT 1");
-    } catch (PDOException $e) {
-        // ... (ALTER removed) ...
-    }
-} catch (PDOException $e) {
-    // ... (CREATE removed) ...
-}
-*/
+// Auto-Healing - removed for security
 
 // 2. Handle Actions (Logic BEFORE Header)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {

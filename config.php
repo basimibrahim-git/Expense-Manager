@@ -60,8 +60,18 @@ try {
 ini_set('display_errors', 0);
 ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
+// Secure Error Logging
+// Attempt to log outside webroot, or fallback to hidden file
+$logDataDir = dirname(__DIR__); // Parent of project root
+$logFile = $logDataDir . '/expense_manager_errors.log';
+
+// If parent is not writable, fallback to project root but hidden
+if (!is_writable($logDataDir) && !is_writable($logFile)) {
+    $logFile = __DIR__ . '/.error.log'; 
+}
+
 ini_set('log_errors', 1);
-ini_set('error_log', __DIR__ . '/error.log');
+ini_set('error_log', $logFile);
 
 // CSRF Protection & Session Hardening
 if (session_status() === PHP_SESSION_NONE) {

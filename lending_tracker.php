@@ -8,20 +8,7 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Auto-Create Table if not exists - Removed for Security
-/*
-$stmt = $pdo->query("SHOW TABLES LIKE 'lending_tracker'");
-if ($stmt->rowCount() == 0) {
-    // ... DDL code ...
-}
-*/
-// Check for currency column update - Removed for Security
-/*
-$col_check = $pdo->query("SHOW COLUMNS FROM lending_tracker LIKE 'currency'");
-if ($col_check->rowCount() == 0) {
-    // ... DDL code ...
-}
-*/
+// Auto-Create Table/Column removed - handled by installer
 
 // Handle Actions (Must be before outputting any HTML)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {

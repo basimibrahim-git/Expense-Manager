@@ -32,15 +32,7 @@ try {
         'year2' => $curr_year
     ]);
     $cards = $stmt->fetchAll();
-/*
     // Auto-healing logic removed for security.
-    if ($e->getCode() == '42S02') {
-        // ... (DDL removed) ...
-    } else {
-        error_log("Database Error in my_cards.php: " . $e->getMessage());
-        die("A system error occurred. Please contact support.");
-    }
-*/
     error_log("Database Error in my_cards.php: " . $e->getMessage());
     die("A system error occurred. Please contact support.");
 ?>

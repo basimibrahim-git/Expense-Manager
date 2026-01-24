@@ -4,14 +4,7 @@ require_once 'config.php';
 require_once 'includes/header.php';
 require_once 'includes/sidebar.php';
 
-// 1. Auto-Healing: Create interest_tracker Table - Removed for Security
-/*
-try {
-    $pdo->query("SELECT 1 FROM interest_tracker LIMIT 1");
-} catch (PDOException $e) {
-    // ... DDL removed ...
-}
-*/
+// Auto-Healing - removed for security
 
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 
