@@ -1,0 +1,403 @@
+/* Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+    /* Professional FinTech Palette (Deep Blue/Slate) */
+    --primary-color: #1e3a8a;
+    /* Corporate Blue */
+    --secondary-color: #3b82f6;
+    /* Action Blue */
+    --accent-color: #60a5fa;
+    --success-color: #10b981;
+    /* Emerald */
+    --danger-color: #ef4444;
+    --warning-color: #f59e0b;
+
+    /* Neutral Backgrounds */
+    --background-start: #f3f4f6;
+    /* Gray 100 */
+    --background-end: #e5e7eb;
+    /* Gray 200 */
+
+    /* Text */
+    --text-dark: #111827;
+    /* Gray 900 */
+    --text-muted: #6b7280;
+    /* Gray 500 */
+    --white: #ffffff;
+
+    /* Panels */
+    --glass-bg: rgba(255, 255, 255, 0.95);
+    /* High opacity, clean look */
+    --glass-border: rgba(255, 255, 255, 0.8);
+    --shadow-soft: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Dynamic Themes (Refined to be Professional) */
+body.theme-morning {
+    --background-start: #eff6ff;
+    --background-end: #dbeafe;
+    --primary-color: #2563eb;
+}
+
+body.theme-afternoon {
+    --background-start: #f8fafc;
+    --background-end: #e2e8f0;
+    --primary-color: #1e40af;
+}
+
+body.theme-night {
+    --background-start: #0f172a;
+    --background-end: #1e293b;
+    --text-dark: #f1f5f9;
+    --text-muted: #94a3b8;
+    --white: #1e293b;
+    --glass-bg: rgba(30, 41, 59, 0.9);
+    --glass-border: rgba(51, 65, 85, 0.5);
+    /* For dark mode text contrast */
+}
+
+/* Privacy Mode */
+body.privacy-mode .blur-sensitive {
+    color: transparent !important;
+    text-shadow: 0 0 10px rgba(107, 114, 128, 0.5);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+body.privacy-mode .blur-sensitive:hover {
+    color: inherit !important;
+    text-shadow: none;
+}
+
+body {
+    font-family: 'Outfit', sans-serif;
+    background: linear-gradient(135deg, var(--background-start) 0%, var(--background-end) 100%);
+    color: var(--text-dark);
+    min-height: 100vh;
+    overflow-x: hidden;
+    transition: background 0.5s ease;
+}
+
+/* Professional Card Styling */
+.glass-panel {
+    background: var(--glass-bg);
+    border: 1px solid rgba(229, 231, 235, 0.5);
+    /* Subtle border */
+    box-shadow: var(--shadow-soft);
+    border-radius: 12px;
+    /* Slightly tighter radius */
+}
+
+/* Dashboard Layout */
+.dashboard-wrapper {
+    display: flex;
+    min-height: 100vh;
+}
+
+.sidebar {
+    width: 260px;
+    background: var(--white);
+    border-right: 1px solid rgba(0, 0, 0, 0.05);
+    padding: 1.5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    height: 100vh;
+    z-index: 100;
+    overflow-y: auto;
+}
+
+.sidebar::-webkit-scrollbar {
+    width: 5px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+@media (max-width: 768px) {
+    .sidebar.show {
+        transform: translateX(0);
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+    }
+}
+
+.main-content {
+    flex: 1;
+    margin-left: 260px;
+    padding: 2rem;
+    max-width: 1400px;
+    /* Constrain width for cleaner look */
+}
+
+.brand-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin-bottom: 2rem;
+    padding: 0 0.5rem;
+    letter-spacing: -0.5px;
+}
+
+.sidebar-nav .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    color: var(--text-muted);
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    font-weight: 500;
+    margin-bottom: 4px;
+    font-size: 0.95rem;
+}
+
+.sidebar-nav .nav-link:hover {
+    background-color: #f3f4f6;
+    color: var(--text-dark);
+}
+
+.sidebar-nav .nav-link.active {
+    background-color: var(--primary-color);
+    color: #ffffff;
+    /* White text for active state */
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+}
+
+.sidebar-nav .nav-link i {
+    font-size: 1.1rem;
+    width: 20px;
+    text-align: center;
+}
+
+/* Stat Cards */
+.stat-card {
+    border: none;
+    border-radius: 12px;
+    background: var(--white);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-soft);
+    height: 100%;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid rgba(229, 231, 235, 0.5);
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover);
+}
+
+.stat-title {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.25rem;
+}
+
+.stat-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    letter-spacing: -1px;
+}
+
+.stat-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+
+.stat-icon.blue {
+    background: #eff6ff;
+    color: #2563eb;
+}
+
+.stat-icon.green {
+    background: #ecfdf5;
+    color: #10b981;
+}
+
+.stat-icon.purple {
+    background: #f3e8ff;
+    color: #9333ea;
+}
+
+.stat-icon.red {
+    background: #fef2f2;
+    color: #ef4444;
+}
+
+/* Buttons */
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 500;
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+.btn-primary:hover {
+    background-color: #1e3a8a;
+    border-color: #1e3a8a;
+}
+
+/* Tables */
+.custom-table thead th {
+    background: #f9fafb;
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 1rem;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.custom-table tbody td {
+    padding: 1rem;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 0.95rem;
+}
+
+/* Floating Action Button (FAB) */
+.fab-main {
+    background: var(--primary-color) !important;
+    border: none !important;
+}
+
+/* Skeleton & Empty States */
+.skeleton {
+    background: #e5e7eb;
+    background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 6px;
+    color: transparent !important;
+}
+
+.empty-state-icon {
+    color: #cbd5e1;
+    /* Lighter gray */
+    margin-bottom: 1.5rem;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* Authentication Pages */
+.auth-wrapper {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 450px;
+    padding: 3rem 2.5rem;
+}
+
+.auth-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.auth-subtitle {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    margin-bottom: 2rem;
+}
+
+/* Responsive */
+/* Responsive & PWA Mobile Styles */
+@media (max-width: 991.98px) {
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease-in-out;
+        box-shadow: none;
+        /* Shadow handled by show state */
+    }
+
+    .sidebar.show {
+        transform: translateX(0);
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+    }
+
+    .main-content {
+        margin-left: 0;
+        padding: 1rem;
+    }
+
+    /* Reduce panel padding on mobile */
+    .glass-panel {
+        padding: 1rem !important;
+    }
+
+    .display-4 {
+        font-size: 2.5rem;
+        /* Smaller big text */
+    }
+
+    /* Mobile Menu Toggle Button Visibility */
+    .mobile-toggle-btn {
+        display: inline-block !important;
+    }
+}
+
+/* Sidebar Backdrop Overlay */
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 90;
+    display: none;
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+    transition: opacity 0.3s ease;
+}
+
+.sidebar-overlay.show {
+    display: block;
+}
+
+@media (min-width: 992px) {
+    .mobile-toggle-btn {
+        display: none !important;
+    }
+}
