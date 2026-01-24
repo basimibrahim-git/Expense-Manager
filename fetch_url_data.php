@@ -160,7 +160,8 @@ curl_setopt($ch, CURLOPT_URL, $safe_url);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false); // Disable following redirects to prevent SSRF via redirect
 curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS); // Restrict protocols
-curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'Host: ' . $original_host,  // Set Host header for virtual hosting
@@ -182,7 +183,10 @@ $error = curl_error($ch);
 curl_close($ch);
 
 if ($html === false || $httpCode >= 400) {
-    echo json_encode(['success' => false, 'error' => 'Failed to load page', 'details' => $error]);
+    // Log detailed error server-side
+    error_log("Fetch URL Error: $url - " . $error . " (HTTP $httpCode)");
+    // Return generic error to client
+    echo json_encode(['success' => false, 'error' => 'Failed to load page content.']);
     exit;
 }
 
