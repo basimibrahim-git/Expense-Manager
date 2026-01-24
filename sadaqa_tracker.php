@@ -5,6 +5,8 @@ require_once 'includes/header.php';
 require_once 'includes/sidebar.php';
 
 // 1. Auto-Healing: Create sadaqa_tracker Table
+// Logic removed for security. Schema handled by install.php
+/*
 try {
     $pdo->query("SELECT 1 FROM sadaqa_tracker LIMIT 1");
 } catch (PDOException $e) {
@@ -20,6 +22,7 @@ try {
         )");
     }
 }
+*/
 
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 

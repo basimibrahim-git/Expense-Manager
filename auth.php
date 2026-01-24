@@ -1,19 +1,15 @@
 <?php
-session_start();
 require_once 'config.php';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // CSRF Check
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? '')) {
-        header("Location: index.php?error=Security session invalid. Please refresh.");
-        exit();
-    }
+    verify_csrf_token($_POST['csrf_token'] ?? '');
 
-    $email = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_EMAIL);
+    $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
     $password = $_POST['password'];
 
-    if (empty($email) || empty($password)) {
-        header("Location: index.php?error=Please fill in all fields");
+    if (!$email || empty($password)) {
+        header("Location: index.php?error=" . urlencode("Please fill in all fields correctly"));
         exit();
     }
 
@@ -31,15 +27,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 header("Location: dashboard.php");
                 exit();
             } else {
-                header("Location: index.php?error=Invalid credentials");
+                header("Location: index.php?error=" . urlencode("Invalid credentials"));
                 exit();
             }
         } else {
-            header("Location: index.php?error=Database connection failed");
+            header("Location: index.php?error=" . urlencode("Database connection failed"));
             exit();
         }
     } catch (Exception $e) {
-        header("Location: index.php?error=An error occurred");
+        // Log the actual error internally
+        error_log("Auth Error: " . $e->getMessage());
+        header("Location: index.php?error=" . urlencode("An error occurred"));
         exit();
     }
 } else {

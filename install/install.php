@@ -2,6 +2,16 @@
 // install/install.php
 // Automated Installer for Expense Manager
 
+// Secure session cookie params
+$secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $_SERVER['SERVER_PORT'] == 443;
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path' => '/',
+    'domain' => $_SERVER['HTTP_HOST'] ?? '',
+    'secure' => $secure,
+    'httponly' => true,
+    'samesite' => 'Lax'
+]);
 session_start();
 
 // Helper to determine root path

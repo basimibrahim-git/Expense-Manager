@@ -3,6 +3,8 @@ $page_title = "Zakath Tracker";
 require_once 'config.php';
 
 // 1. Auto-Healing: Create zakath_calculations Table
+// Logic removed for security. Schema handled by install.php
+/*
 try {
     $pdo->query("SELECT 1 FROM zakath_calculations LIMIT 1");
 } catch (PDOException $e) {
@@ -23,6 +25,7 @@ try {
         )");
     }
 }
+*/
 
 // Handle Status Update
 if (isset($_GET['mark_paid']) && isset($_GET['id'])) {

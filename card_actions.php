@@ -25,6 +25,7 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Auto-heal: Check for fee_type and card_image
     // Auto-heal: Check for fee_type
+    /*
     try {
         $pdo->query("SELECT fee_type FROM cards LIMIT 1");
     } catch (PDOException $e) {
@@ -33,7 +34,9 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         } catch (Exception $ex) {
         }
     }
+    */
     // Auto-heal: Check for card_image
+    /*
     try {
         $pdo->query("SELECT card_image FROM cards LIMIT 1");
     } catch (PDOException $e) {
@@ -42,6 +45,7 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         } catch (Exception $ex) {
         }
     }
+    */
     $limit_amount = floatval($_POST['limit_amount']);
     $bill_day = filter_input(INPUT_POST, 'bill_day', FILTER_VALIDATE_INT) ?: 1;
     $statement_day = filter_input(INPUT_POST, 'statement_day', FILTER_VALIDATE_INT) ?: 1;
@@ -91,6 +95,7 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Auto-heal: Check for fee_type and card_image
     // Auto-heal: Check for fee_type
+    /*
     try {
         $pdo->query("SELECT fee_type FROM cards LIMIT 1");
     } catch (PDOException $e) {
@@ -99,6 +104,7 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         } catch (Exception $ex) {
         }
     }
+    */
     // Auto-heal: Check for card_image
     try {
         $pdo->query("SELECT card_image FROM cards LIMIT 1");

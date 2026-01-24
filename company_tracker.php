@@ -9,6 +9,9 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 // 1. Auto-Binding
+// 1. Auto-Binding - Removed for security (use install.php)
+// Schema creation moved to install/install.php to prevent unexpected DDL on production requests.
+/*
 $pdo->exec("CREATE TABLE IF NOT EXISTS company_incentives (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -18,6 +21,7 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS company_incentives (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 )");
+*/
 
 // Handle POST Actions
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {

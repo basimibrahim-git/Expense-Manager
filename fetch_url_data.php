@@ -159,6 +159,7 @@ $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, $safe_url);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false); // Disable following redirects to prevent SSRF via redirect
+curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS); // Restrict protocols
 curl_setopt($ch, CURLOPT_TIMEOUT, 15);
 curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
