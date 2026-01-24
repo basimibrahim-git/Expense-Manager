@@ -1,3 +1,4 @@
+<?php
 require_once __DIR__ . '/../config.php';
 // session is started by config.php with secure params
 if (!isset($_SESSION['user_id'])) {

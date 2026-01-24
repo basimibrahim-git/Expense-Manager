@@ -32,9 +32,11 @@ try {
         'year2' => $curr_year
     ]);
     $cards = $stmt->fetchAll();
+} catch (\PDOException $e) {
     // Auto-healing logic removed for security.
     error_log("Database Error in my_cards.php: " . $e->getMessage());
     die("A system error occurred. Please contact support.");
+}
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
