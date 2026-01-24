@@ -4,6 +4,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![PHP](https://img.shields.io/badge/PHP-8.0%2B-777BB4.svg)
 ![MySQL](https://img.shields.io/badge/MySQL-5.7%2B-4479A1.svg)
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/basimibrahim-git/Expense-Manager?utm_source=oss&utm_medium=github&utm_campaign=basimibrahim-git%2FExpense-Manager&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 **Expense Manager** is a premium, web-based financial tracking application designed to help you manage your personal finances with elegance and precision. Built with modern PHP and a glassmorphism-inspired UI, it provides a comprehensive 360-degree view of your wealth, spending habits, credit card portfolio, and spiritual obligations.
 
