@@ -4,7 +4,6 @@ require_once 'config.php';
 require_once 'includes/header.php';
 require_once 'includes/sidebar.php';
 
-// Auto-Healing - removed for security
 
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 

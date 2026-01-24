@@ -1,7 +1,5 @@
-<?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../config.php';
+// session is started by config.php with secure params
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
     exit();

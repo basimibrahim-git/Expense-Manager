@@ -8,7 +8,6 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Auto-Create Table/Column removed - handled by installer
 
 // Handle Actions (Must be before outputting any HTML)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {

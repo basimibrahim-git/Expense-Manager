@@ -5,7 +5,6 @@ $page_title = "My Calendar";
 require_once 'config.php';
 
 // 1. Auto-Healing: Create Reminders Table with Recurrence Type
-// Auto-Healing - removed for security
 
 // 2. Handle Actions (Logic BEFORE Header)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
