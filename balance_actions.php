@@ -29,20 +29,6 @@ if ($action == 'add_balance' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $bstmt->execute([$bank_id, $user_id]);
     $bank_name = $bstmt->fetchColumn();
 
-    // Auto-heal DDL removed for security
-    /*
-    try {
-        // Auto-heal bank_id column
-        $pdo->exec("ALTER TABLE bank_balances ADD COLUMN bank_id INT NULL");
-    } catch (Exception $e) {
-    }
-
-    try {
-        // Auto-heal currency column
-        $pdo->exec("ALTER TABLE bank_balances ADD COLUMN currency VARCHAR(3) DEFAULT 'AED'");
-    } catch (Exception $e) {
-    }
-    */
 
     try {
         $stmt = $pdo->prepare("INSERT INTO bank_balances (user_id, bank_id, bank_name, amount, balance_date, currency) VALUES (?, ?, ?, ?, ?, ?)");

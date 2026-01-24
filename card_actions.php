@@ -22,29 +22,6 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $fee_type = htmlspecialchars($_POST['fee_type'] ?? 'LTF');
     $card_image = filter_var($_POST['card_image'] ?? '', FILTER_SANITIZE_URL);
 
-    // Auto-heal: Check for fee_type and card_image
-    // Auto-heal: Check for fee_type
-    /*
-    try {
-        $pdo->query("SELECT fee_type FROM cards LIMIT 1");
-    } catch (PDOException $e) {
-        try {
-            $pdo->exec("ALTER TABLE cards ADD COLUMN fee_type VARCHAR(20) DEFAULT 'LTF'");
-        } catch (Exception $ex) {
-        }
-    }
-    */
-    // Auto-heal: Check for card_image
-    /*
-    try {
-        $pdo->query("SELECT card_image FROM cards LIMIT 1");
-    } catch (PDOException $e) {
-        try {
-            $pdo->exec("ALTER TABLE cards ADD COLUMN card_image TEXT NULL");
-        } catch (Exception $ex) {
-        }
-    }
-    */
     $limit_amount = floatval($_POST['limit_amount']);
     $bill_day = filter_input(INPUT_POST, 'bill_day', FILTER_VALIDATE_INT) ?: 1;
     $statement_day = filter_input(INPUT_POST, 'statement_day', FILTER_VALIDATE_INT) ?: 1;
@@ -93,27 +70,6 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $fee_type = htmlspecialchars($_POST['fee_type'] ?? 'LTF');
     $card_image = filter_var($_POST['card_image'] ?? '', FILTER_SANITIZE_URL);
 
-    // Auto-heal: Check for fee_type and card_image
-    // Auto-heal: Check for fee_type
-    /*
-    try {
-        $pdo->query("SELECT fee_type FROM cards LIMIT 1");
-    } catch (PDOException $e) {
-        try {
-            $pdo->exec("ALTER TABLE cards ADD COLUMN fee_type VARCHAR(20) DEFAULT 'LTF'");
-        } catch (Exception $ex) {
-        }
-    }
-    */
-    // Auto-heal: Check for card_image
-    try {
-        $pdo->query("SELECT card_image FROM cards LIMIT 1");
-    } catch (PDOException $e) {
-        try {
-            $pdo->exec("ALTER TABLE cards ADD COLUMN card_image TEXT NULL");
-        } catch (Exception $ex) {
-        }
-    }
     $limit_amount = floatval($_POST['limit_amount']);
     $bill_day = filter_input(INPUT_POST, 'bill_day', FILTER_VALIDATE_INT) ?: 1;
     $statement_day = filter_input(INPUT_POST, 'statement_day', FILTER_VALIDATE_INT) ?: 1;

@@ -32,11 +32,6 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
-    try {
-        try {
-            $pdo->exec("ALTER TABLE income ADD COLUMN currency VARCHAR(3) DEFAULT 'AED'");
-        } catch (Exception $e) {
-        }
 
         $stmt = $pdo->prepare("INSERT INTO income (user_id, amount, description, category, income_date, is_recurring, recurrence_day, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([$user_id, $amount, $desc, $category, $date, $is_recurring, $recurrence_day, $currency]);
