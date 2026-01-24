@@ -75,7 +75,8 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
 
     } catch (PDOException $e) {
-        header("Location: add_card.php?error=Failed to add card");
+        error_log("Add Card Error: " . $e->getMessage());
+        header("Location: add_card.php?error=" . urlencode("Failed to add card. Please try again."));
         exit();
     }
 } elseif ($action == 'update_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -158,7 +159,7 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
     } catch (PDOException $e) {
         error_log("Card Update Error: " . $e->getMessage());
-        header("Location: edit_card.php?id=$card_id&error=Failed to update: " . urlencode($e->getMessage()));
+        header("Location: edit_card.php?id=$card_id&error=" . urlencode("Failed to update card details."));
         exit();
     }
 } elseif ($action == 'delete_card' && isset($_GET['id'])) {
@@ -172,6 +173,7 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             header("Location: my_cards.php?success=Card deleted");
             exit();
         } catch (PDOException $e) {
+            error_log("Delete Card Error: " . $e->getMessage());
             header("Location: my_cards.php?error=Delete failed");
             exit();
         }
@@ -216,7 +218,8 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         header("Location: my_cards.php?success=Payment recorded successfully");
         exit();
     } catch (PDOException $e) {
-        header("Location: pay_card.php?error=Failed: " . urlencode($e->getMessage()));
+        error_log("Payment Record Error: " . $e->getMessage());
+        header("Location: pay_card.php?error=" . urlencode("Failed to record payment."));
         exit();
     }
 }

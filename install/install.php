@@ -163,7 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         bank_name VARCHAR(100) NOT NULL,
                         amount DECIMAL(15,2) NOT NULL,
                         balance_date DATE NOT NULL,
-                        bank_id INT,
+                        bank_id INT NULL,
                         currency VARCHAR(3) DEFAULT 'AED',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE

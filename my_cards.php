@@ -32,82 +32,17 @@ try {
         'year2' => $curr_year
     ]);
     $cards = $stmt->fetchAll();
-} catch (PDOException $e) {
+/*
+    // Auto-healing logic removed for security.
     if ($e->getCode() == '42S02') {
-        // Handle missing cards table
-        $pdo->exec("CREATE TABLE IF NOT EXISTS cards (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
-            card_name VARCHAR(100) NOT NULL,
-            bank_name VARCHAR(100) NOT NULL,
-            card_type ENUM('Credit', 'Debit') NOT NULL,
-            network ENUM('Visa', 'Mastercard', 'Amex') NOT NULL,
-            tier VARCHAR(50) DEFAULT 'Standard',
-            currency VARCHAR(10) DEFAULT 'AED',
-            limit_amount DECIMAL(15, 2) DEFAULT 0.00,
-            bank_url TEXT,
-            first_four VARCHAR(4) NULL,
-            last_four VARCHAR(4) NULL,
-            last_synced TIMESTAMP NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )");
-
-        // Handle missing card_payments table
-        $pdo->exec("CREATE TABLE IF NOT EXISTS card_payments (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
-            card_id INT NOT NULL,
-            bank_id INT NULL,
-            amount DECIMAL(15, 2) NOT NULL,
-            payment_date DATE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE,
-            FOREIGN KEY (bank_id) REFERENCES banks(id) ON DELETE SET NULL
-        )");
-
-        // Silence ALTER TABLE errors (e.g. column already exists)
-        try {
-            $pdo->exec("ALTER TABLE cards ADD COLUMN first_four VARCHAR(4) NULL");
-        } catch (Exception $e) {
-        }
-        try {
-            $pdo->exec("ALTER TABLE cards ADD COLUMN last_four VARCHAR(4) NULL");
-        } catch (Exception $e) {
-        }
-
-        // Re-prepare the statement because the original prepare failed
-        $stmt = $pdo->prepare("
-            SELECT c.*, 
-            (SELECT SUM(amount) FROM expenses e 
-             WHERE e.card_id = c.id 
-             AND MONTH(e.expense_date) = :month1 
-             AND YEAR(e.expense_date) = :year1) as total_expenses,
-            (SELECT SUM(amount) FROM card_payments p 
-             WHERE p.card_id = c.id 
-             AND MONTH(p.payment_date) = :month2 
-             AND YEAR(p.payment_date) = :year2) as total_payments
-            FROM cards c 
-            WHERE c.user_id = :user_id 
-            ORDER BY c.created_at DESC
-        ");
-
-        // Retry the original query
-        $stmt->execute([
-            'user_id' => $_SESSION['user_id'],
-            'month1' => $curr_month,
-            'year1' => $curr_year,
-            'month2' => $curr_month,
-            'year2' => $curr_year
-        ]);
-        $cards = $stmt->fetchAll();
+        // ... (DDL removed) ...
     } else {
-        // Show actual error instead of white screen
         error_log("Database Error in my_cards.php: " . $e->getMessage());
         die("A system error occurred. Please contact support.");
     }
-}
+*/
+    error_log("Database Error in my_cards.php: " . $e->getMessage());
+    die("A system error occurred. Please contact support.");
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">

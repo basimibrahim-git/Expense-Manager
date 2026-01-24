@@ -5,28 +5,20 @@ $page_title = "My Calendar";
 require_once 'config.php';
 
 // 1. Auto-Healing: Create Reminders Table with Recurrence Type
+// 1. Auto-Healing: Create Reminders Table - Removed for Security
+/*
 try {
     $r_chk = $pdo->query("SELECT 1 FROM reminders LIMIT 1");
     // Check if recurrence_type column exists
     try {
         $pdo->query("SELECT recurrence_type FROM reminders LIMIT 1");
     } catch (PDOException $e) {
-        $pdo->exec("ALTER TABLE reminders ADD COLUMN recurrence_type VARCHAR(20) DEFAULT 'none'"); // none, monthly, yearly
+        // ... (ALTER removed) ...
     }
 } catch (PDOException $e) {
-    if ($e->getCode() == '42S02') { // Table not found
-        $pdo->exec("CREATE TABLE IF NOT EXISTS reminders (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
-            title VARCHAR(255) NOT NULL,
-            alert_date DATE NOT NULL,
-            recurrence_type VARCHAR(20) DEFAULT 'none',
-            color VARCHAR(20) DEFAULT 'primary',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )");
-    }
+    // ... (CREATE removed) ...
 }
+*/
 
 // 2. Handle Actions (Logic BEFORE Header)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {

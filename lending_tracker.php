@@ -8,27 +8,20 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Auto-Create Table if not exists
+// Auto-Create Table if not exists - Removed for Security
+/*
 $stmt = $pdo->query("SHOW TABLES LIKE 'lending_tracker'");
 if ($stmt->rowCount() == 0) {
-    $pdo->exec("CREATE TABLE lending_tracker (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
-        borrower_name VARCHAR(100) NOT NULL,
-        amount DECIMAL(10,2) NOT NULL,
-        lent_date DATE NOT NULL,
-        due_date DATE DEFAULT NULL,
-        status ENUM('Pending', 'Paid', 'Partially Paid') DEFAULT 'Pending',
-        notes TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )");
+    // ... DDL code ...
 }
-
-// Check for currency column update
+*/
+// Check for currency column update - Removed for Security
+/*
 $col_check = $pdo->query("SHOW COLUMNS FROM lending_tracker LIKE 'currency'");
 if ($col_check->rowCount() == 0) {
-    $pdo->exec("ALTER TABLE lending_tracker ADD COLUMN currency VARCHAR(10) DEFAULT 'AED' AFTER amount");
+    // ... DDL code ...
 }
+*/
 
 // Handle Actions (Must be before outputting any HTML)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {

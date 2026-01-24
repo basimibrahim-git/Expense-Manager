@@ -42,7 +42,8 @@ if ($action == 'add_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
 
     } catch (PDOException $e) {
-        header("Location: add_bank.php?error=Failed to add bank");
+        error_log("Add Bank Error: " . $e->getMessage());
+        header("Location: add_bank.php?error=" . urlencode("Failed to add bank."));
         exit();
     }
 }
@@ -77,7 +78,8 @@ elseif ($action == 'update_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
 
     } catch (PDOException $e) {
-        header("Location: edit_bank.php?id=$bank_id&error=Failed to update");
+        error_log("Update Bank Error: " . $e->getMessage());
+        header("Location: edit_bank.php?id=$bank_id&error=" . urlencode("Failed to update bank."));
         exit();
     }
 }

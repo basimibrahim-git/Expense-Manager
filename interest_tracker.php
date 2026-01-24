@@ -4,22 +4,14 @@ require_once 'config.php';
 require_once 'includes/header.php';
 require_once 'includes/sidebar.php';
 
-// 1. Auto-Healing: Create interest_tracker Table
+// 1. Auto-Healing: Create interest_tracker Table - Removed for Security
+/*
 try {
     $pdo->query("SELECT 1 FROM interest_tracker LIMIT 1");
 } catch (PDOException $e) {
-    if ($e->getCode() == '42S02') { // Table not found
-        $pdo->exec("CREATE TABLE IF NOT EXISTS interest_tracker (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
-            title VARCHAR(255) NOT NULL,
-            amount DECIMAL(10,2) NOT NULL,
-            interest_date DATE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )");
-    }
+    // ... DDL removed ...
 }
+*/
 
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 
