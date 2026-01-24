@@ -200,7 +200,7 @@ try {
                                         <td class="fw-bold text-dark blur-sensitive">
                                             <?php echo number_format($ex['amount'], 2); ?>
                                             <?php if ($ex['currency'] != 'AED')
-                                                echo ' <small class="text-muted">(' . $ex['currency'] . ')</small>'; ?>
+                                                echo ' <small class="text-muted">(' . htmlspecialchars($ex['currency']) . ')</small>'; ?>
                                         </td>
                                         <td class="pe-4 text-end">
                                             <form action="expense_actions.php" method="POST" class="d-inline"

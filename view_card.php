@@ -78,7 +78,7 @@ if (!$card) {
                     <div>
                         <small class="text-white-50 d-block">Limit</small>
                         <span class="fw-bold fs-5">
-                            <?php echo $card['currency'] . ' ' . number_format($card['limit_amount'], 2); ?>
+                            <?php echo htmlspecialchars($card['currency']) . ' ' . number_format($card['limit_amount'], 2); ?>
                         </span>
                     </div>
                     <span class="badge bg-white text-dark">

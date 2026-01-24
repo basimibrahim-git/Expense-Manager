@@ -44,7 +44,7 @@ try {
 <?php if (isset($error)): ?>
     <div class="alert alert-warning">
         <i class="fa-solid fa-exclamation-triangle me-2"></i>
-        <?php echo $error; ?>
+        <?php echo htmlspecialchars($error); ?>
         <a href="migrate_banks.php" class="btn btn-sm btn-warning ms-2">Run Migration</a>
     </div>
 <?php endif; ?>
@@ -75,7 +75,7 @@ try {
                                 <?php endif; ?>
                             </div>
                             <span class="badge bg-light text-dark">
-                                <?php echo $bank['account_type']; ?>
+                                <?php echo htmlspecialchars($bank['account_type']); ?>
                             </span>
                         </div>
 
