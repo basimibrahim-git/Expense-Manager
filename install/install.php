@@ -50,7 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'DB_HOST' => $host,
                 'DB_NAME' => $name,
                 'DB_USER' => $user,
-                'DB_PASS' => '"' . str_replace('"', '\"', $pass) . '"' // Escape quotes
+                'DB_PASS' => '"' . str_replace('"', '\"', $pass) . '"', // Escape quotes
+                'APP_TIMEZONE' => $_POST['app_timezone'] ?? 'Asia/Dubai'
             ];
             
             if (writeEnvFile($envFile, $envData)) {
@@ -369,7 +370,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <label class="form-label">Database Name</label>
                             <input type="text" name="db_name" class="form-control form-control-lg" placeholder="expense_manager" required>
                         </div>
-                        <div class="row g-2 mb-4">
+                        <div class="row g-2 mb-3">
                             <div class="col-6">
                                 <label class="form-label">Username</label>
                                 <input type="text" name="db_user" class="form-control" placeholder="root" required>
@@ -379,6 +380,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <input type="password" name="db_pass" class="form-control" placeholder="******">
                             </div>
                         </div>
+                        
+                        <div class="mb-4">
+                            <label class="form-label">Application Timezone</label>
+                            <select name="app_timezone" class="form-select form-control-lg">
+                                <option value="Asia/Dubai" selected>Asia/Dubai (GST)</option>
+                                <option value="UTC">UTC</option>
+                                <option value="America/New_York">New York (EST)</option>
+                                <option value="Europe/London">London (GMT)</option>
+                                <option value="Asia/Kolkata">Kolkata (IST)</option>
+                                <option value="Asia/Riyadh">Riyadh (AST)</option>
+                                <option value="Australia/Sydney">Sydney (AEDT)</option>
+                                <!-- Add more as needed -->
+                            </select>
+                            <div class="form-text">This will be saved to your .env file.</div>
+                        </div>
+
                         <button type="submit" class="btn btn-primary w-100 py-3 fw-bold shadow">
                             Check Connection <i class="fa-solid fa-arrow-right ms-2"></i>
                         </button>

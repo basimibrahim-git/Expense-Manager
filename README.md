@@ -24,7 +24,7 @@
 ### 🤲 Islamic Finance Modules
 - **Zakath Tracker**: Smart calculator that pulls bank balances and gold/silver rates to compute and track 2.5% Zakath obligations.
 - **Sadaqa Tracker**: Log and track voluntary charity donations.
-- **Interest Purifier**: Separate tracking for interest income to ensure ethical disposal.
+- **Interest Purifier**: Separate tracking for interest income to ensure ethical disposal. Tracks accrued interest vs. charity payments, with a dashboard for net due calculations.
 
 ### 💼 Professional Tools
 - **Company Tracker**: Monitor annual incentives, bonuses, and sales performance grids.
@@ -52,6 +52,7 @@ This application is built with a robust, standard LAMP/LEMP stack:
   - **CSRF Protection**: Token-based security for all forms.
   - **Input Sanitization**: Protection against XSS and SQL injection.
   - **Environment Variables**: Secure credential management via `.env`.
+- **Application Timezone**: Configurable timezone setting (`APP_TIMEZONE`) in `.env` (default: `Asia/Dubai`).
 
 ---
 
@@ -85,7 +86,7 @@ The application is modularized for maintainability:
 
 1.  **Clone the Repository**
     ```bash
-    git clone https://github.com/yourusername/expense-manager.git
+    git clone https://github.com/basimibrahim-git/Expense-Manager.git
     cd expense-manager
     ```
 

@@ -97,9 +97,35 @@
 
 <!-- Main Content Wrapper -->
 <main class="main-content">
-    <button class="btn btn-white shadow-sm mobile-toggle-btn mb-3 border text-primary fw-bold" onclick="toggleSidebar()">
-        <i class="fa-solid fa-bars me-2"></i> Menu
-    </button>
+    <!-- Top Bar -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <button class="btn btn-white shadow-sm mobile-toggle-btn border text-primary fw-bold" onclick="toggleSidebar()">
+            <i class="fa-solid fa-bars me-2"></i> Menu
+        </button>
+        
+        <div class="ms-auto glass-panel px-3 py-2 border-0 shadow-sm">
+            <i class="fa-regular fa-calendar-check me-2 text-primary"></i>
+            <span id="liveDateTime" class="fw-bold text-muted small" style="letter-spacing: 0.5px;">Loading...</span>
+        </div>
+    </div>
+
+    <script>
+        function updateLiveClock() {
+            const now = new Date();
+            const options = { 
+                weekday: 'short', 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            };
+            document.getElementById('liveDateTime').innerText = now.toLocaleString('en-US', options);
+        }
+        setInterval(updateLiveClock, 1000);
+        updateLiveClock();
+    </script>
 
     <script>
         function toggleSidebar() {

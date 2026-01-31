@@ -5,9 +5,6 @@
  * Please update the following constants with your remote database credentials.
  */
 
-// Set Timezone
-date_default_timezone_set('Asia/Dubai');
-
 // Load .env variables
 $envFile = __DIR__ . '/.env';
 if (file_exists($envFile)) {
@@ -25,6 +22,9 @@ if (file_exists($envFile)) {
         $_ENV[$name] = $value;
     }
 }
+
+// Set Timezone
+date_default_timezone_set($_ENV['APP_TIMEZONE'] ?? 'Asia/Dubai');
 
 // Database Host (e.g., localhost or IP address)
 define('DB_HOST', $_ENV['DB_HOST'] ?? 'localhost');
