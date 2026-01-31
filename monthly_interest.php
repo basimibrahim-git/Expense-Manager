@@ -252,8 +252,10 @@ foreach ($records as $r) {
                 </form>
             </div>
         </div>
-    </div>
 </div>
+</div>
+
+<?php require_once 'includes/footer.php'; ?>
 
 <script>
     const interestModal = new bootstrap.Modal(document.getElementById('interestModal'));
@@ -300,5 +302,3 @@ foreach ($records as $r) {
         new bootstrap.Modal(document.getElementById('deleteInterestModal')).show();
     }
 </script>
-
-<?php require_once 'includes/footer.php'; ?>
