@@ -315,6 +315,27 @@ foreach ($roi_cards as $card) {
         }
     }
 }
+// 11. Interest Tracker Chart Data (Last 12 Months)
+// Positive = Interest (Debt), Negative = Payments
+$interest_months = [];
+$interest_accrued_data = [];
+$interest_paid_data = [];
+
+for ($i = 11; $i >= 0; $i--) {
+    $m = date('n', strtotime("-$i months"));
+    $y = date('Y', strtotime("-$i months"));
+    $interest_months[] = date('M Y', strtotime("-$i months"));
+
+    // Interest Accrued (Sum of positive amounts)
+    $stmt = $pdo->prepare("SELECT SUM(amount) FROM interest_tracker WHERE user_id = ? AND amount > 0 AND MONTH(interest_date) = ? AND YEAR(interest_date) = ?");
+    $stmt->execute([$user_id, $m, $y]);
+    $interest_accrued_data[] = $stmt->fetchColumn() ?: 0;
+
+    // Payments Made (Sum of negative amounts -> convert to positive for chart)
+    $stmt = $pdo->prepare("SELECT SUM(ABS(amount)) FROM interest_tracker WHERE user_id = ? AND amount < 0 AND MONTH(interest_date) = ? AND YEAR(interest_date) = ?");
+    $stmt->execute([$user_id, $m, $y]);
+    $interest_paid_data[] = $stmt->fetchColumn() ?: 0;
+}
 ?>
 
 <!-- Header -->
@@ -351,7 +372,6 @@ foreach ($roi_cards as $card) {
 
 <!-- Stats Row -->
 <div class="row g-4 mb-5">
-    <!-- Income -->
     <!-- Income -->
     <div class="col-12 col-sm-6 col-lg-3">
         <div class="glass-panel p-4 h-100 position-relative overflow-hidden">
@@ -570,93 +590,25 @@ foreach ($roi_cards as $card) {
     </div>
 </div>
 
-<!-- Best Card & Float Engines -->
+<!-- Interest Chart (Replaced Best Card Engine) -->
 <div class="row mb-5">
     <div class="col-12">
         <div class="glass-panel p-4">
-            <h5 class="fw-bold mb-3"><i class="fa-solid fa-wand-magic-sparkles text-warning me-2"></i> Best Card Engine
-            </h5>
-            <div class="position-relative">
-                <input type="text" id="cardSearch" class="form-control form-control-lg border-0 shadow-sm ps-5"
-                    placeholder="Where are you spending? (e.g. Grocery, Dining, Fuel...)" onkeyup="findBestCard()">
-                <i
-                    class="fa-solid fa-magnifying-glass position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+            <div class="d-flex justify-content-between align-items-end mb-4">
+                <div>
+                    <h5 class="fw-bold mb-1"><i class="fa-solid fa-chart-line text-danger me-2"></i> Interest Tracker</h5>
+                    <p class="text-muted small mb-0">Interest Accrued vs Payments (Last 12 Months)</p>
+                </div>
+                <a href="interest_tracker.php" class="btn btn-sm btn-outline-danger fw-bold rounded-pill px-3">
+                    View Details <i class="fa-solid fa-arrow-right ms-1"></i>
+                </a>
             </div>
-            <div id="cardResults" class="row mt-3 g-3"></div>
+            <div style="position: relative; height: 300px; width: 100%;">
+                <canvas id="interestChart"></canvas>
+            </div>
         </div>
     </div>
 </div>
-
-<script>
-    const myCards = <?php echo json_encode($roi_cards); ?>;
-
-    function findBestCard() {
-        const query = document.getElementById('cardSearch').value.toLowerCase();
-        const resultsDiv = document.getElementById('cardResults');
-        resultsDiv.innerHTML = '';
-
-        if (query.length < 2) return;
-
-        // 1. Filter by Category Keywords
-        let matches = myCards.filter(card => {
-            if (!card.cashback_struct) return false;
-            // Parse JSON "Grocery", "Fuel" array
-            let keywords = [];
-            try {
-                keywords = JSON.parse(card.cashback_struct);
-                if (!Array.isArray(keywords)) keywords = [];
-            } catch (e) { keywords = []; }
-
-            return keywords.some(k => k.toLowerCase().includes(query));
-        });
-
-        // 2. Float Logic (Statement Dates)
-        const today = new Date().getDate();
-
-        // Suggest "Float" cards if no category match, or sort matches by Float?
-        // Let's just display the matches with Float data.
-
-        matches.forEach(card => {
-            let floatMsg = "";
-            let floatColor = "text-muted";
-
-            if (card.statement_day) {
-                const sDay = parseInt(card.statement_day);
-                // Simple logic: If today is just after Statement Day, it's BEST.
-                // e.g. Day 16, Statement 15 -> Best (45 days)
-                // e.g. Day 14, Statement 15 -> Worst (1 day)
-
-                let diff = today - sDay;
-                if (diff < 0) diff += 30; // Handle wrapping roughly
-
-                if (diff >= 0 && diff <= 5) {
-                    floatMsg = "🚀 Statement just closed! Max Float.";
-                    floatColor = "text-success";
-                } else if (diff > 25) {
-                    floatMsg = "⚠️ Statement closing soon. Payment due shortly.";
-                    floatColor = "text-warning";
-                }
-            }
-
-            const html = `
-                <div class="col-md-4">
-                    <div class="card border-0 shadow-sm h-100">
-                        <div class="card-body">
-                            <h6 class="fw-bold text-primary mb-1">${card.bank_name} - ${card.card_name}</h6>
-                            <div class="small fw-bold text-success mb-2"> <i class="fa-solid fa-check"></i> Best for ${query}</div>
-                            <div class="x-small ${floatColor}"><i class="fa-solid fa-clock-rotate-left"></i> ${floatMsg}</div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            resultsDiv.innerHTML += html;
-        });
-
-        if (matches.length === 0) {
-            resultsDiv.innerHTML = `<div class="col-12 text-muted x-small ps-3">No specific card found for "${query}". Use your general spending card.</div>`;
-        }
-    }
-</script>
 
 <!-- Charts Row -->
 <div class="row g-5 mb-5 pb-3">
@@ -733,6 +685,57 @@ foreach ($roi_cards as $card) {
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
+    // Interest Chart (Moved here to ensure Chart.js is loaded)
+    const interestCtx = document.getElementById('interestChart').getContext('2d');
+    new Chart(interestCtx, {
+        type: 'bar',
+        data: {
+            labels: <?php echo json_encode($interest_months); ?>,
+            datasets: [
+                {
+                    label: 'Interest Accrued (Debt)',
+                    data: <?php echo json_encode($interest_accrued_data); ?>,
+                    backgroundColor: 'rgba(220, 53, 69, 0.7)', // Danger Red
+                    borderColor: '#dc3545',
+                    borderWidth: 1,
+                    borderRadius: 4
+                },
+                {
+                    label: 'Payments Made (Charity)',
+                    data: <?php echo json_encode($interest_paid_data); ?>,
+                    backgroundColor: 'rgba(25, 135, 84, 0.7)', // Success Green
+                    borderColor: '#198754',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top' },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': AED ' + context.parsed.y.toLocaleString(undefined, {minimumFractionDigits: 2});
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { borderDash: [5, 5] },
+                    ticks: { callback: function(value) { return 'AED ' + value.toLocaleString(); } }
+                },
+                x: {
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+
     // Global Modal Function
     window.showPopup = function (message, title = "Notification") {
         document.getElementById('infoModalBody').innerHTML = message;
