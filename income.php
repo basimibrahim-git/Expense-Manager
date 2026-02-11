@@ -48,7 +48,24 @@ $current_year = date('Y');
         <a href="?year=<?php echo $year + 1; ?>" class="btn btn-outline-light text-dark"><i
                 class="fa-solid fa-chevron-right"></i></a>
     </div>
+    </div>
 </div>
+
+<?php if (isset($_GET['success'])): ?>
+    <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
+        <i class="fa-solid fa-check-circle me-2"></i>
+        <?php echo htmlspecialchars($_GET['success']); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+
+<?php if (isset($_GET['error'])): ?>
+    <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+        <i class="fa-solid fa-exclamation-circle me-2"></i>
+        <?php echo htmlspecialchars($_GET['error']); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
 
 <div class="row g-4">
     <?php foreach ($months as $num => $name): ?>

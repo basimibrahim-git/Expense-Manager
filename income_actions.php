@@ -32,7 +32,7 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
-
+    try {
         $stmt = $pdo->prepare("INSERT INTO income (user_id, amount, description, category, income_date, is_recurring, recurrence_day, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([$user_id, $amount, $desc, $category, $date, $is_recurring, $recurrence_day, $currency]);
 
@@ -66,7 +66,30 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         header("Location: monthly_income.php?month=$month&year=$year&success=Income recorded and balance updated");
         exit();
     } catch (PDOException $e) {
-        header("Location: add_income.php?error=Failed to add income");
+        // Auto-fix for missing currency column (Error 1054 / 42S22)
+        if ($e->getCode() == '42S22' || strpos($e->getMessage(), "Unknown column 'currency'") !== false) {
+            try {
+                // Add the missing column
+                $pdo->exec("ALTER TABLE income ADD COLUMN currency VARCHAR(3) DEFAULT 'AED'");
+                
+                // Retry the insert
+                $stmt = $pdo->prepare("INSERT INTO income (user_id, amount, description, category, income_date, is_recurring, recurrence_day, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$user_id, $amount, $desc, $category, $date, $is_recurring, $recurrence_day, $currency]);
+                
+                // Success redirect
+                $month = date('n', strtotime($date));
+                $year = date('Y', strtotime($date));
+                header("Location: monthly_income.php?month=$month&year=$year&success=Income recorded (Database schema updated seamlessly)");
+                exit();
+                
+            } catch (Exception $ex) {
+                 // If auto-fix fails, show original error
+                 header("Location: add_income.php?error=Failed to add income: " . urlencode($e->getMessage()));
+                 exit();
+            }
+        }
+        
+        header("Location: add_income.php?error=Failed to add income: " . urlencode($e->getMessage()));
         exit();
     }
 
@@ -113,7 +136,25 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
 
     } catch (PDOException $e) {
-        header("Location: edit_income.php?id=$income_id&error=Failed to update");
+        // Auto-fix for missing currency column (Error 1054 / 42S22)
+        if ($e->getCode() == '42S22' || strpos($e->getMessage(), "Unknown column 'currency'") !== false) {
+             try {
+                // Add the missing column
+                $pdo->exec("ALTER TABLE income ADD COLUMN currency VARCHAR(3) DEFAULT 'AED'");
+                
+                // Retry the update
+                $stmt = $pdo->prepare("UPDATE income SET amount = ?, description = ?, category = ?, income_date = ?, is_recurring = ?, recurrence_day = ?, currency = ? WHERE id = ? AND user_id = ?");
+                $stmt->execute([$amount, $desc, $category, $date, $is_recurring, $recurrence_day, $currency, $income_id, $user_id]);
+                
+                header("Location: edit_income.php?id=$income_id&success=Income updated successfully");
+                exit();
+             } catch (Exception $ex) {
+                 header("Location: edit_income.php?id=$income_id&error=Failed to update: " . urlencode($e->getMessage()));
+                 exit();
+             }
+        }
+
+        header("Location: edit_income.php?id=$income_id&error=Failed to update: " . urlencode($e->getMessage()));
         exit();
     }
 }

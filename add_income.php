@@ -28,6 +28,22 @@ $user_banks = $banks_stmt->fetchAll();
     </a>
 </div>
 
+<?php if (isset($_GET['success'])): ?>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="fa-solid fa-check-circle me-2"></i>
+        <?php echo htmlspecialchars($_GET['success']); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+
+<?php if (isset($_GET['error'])): ?>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="fa-solid fa-exclamation-circle me-2"></i>
+        <?php echo htmlspecialchars($_GET['error']); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+
 <div class="row justify-content-center">
     <div class="col-md-6">
         <div class="glass-panel p-4">

@@ -68,7 +68,24 @@ $total_income = $sum_stmt->fetchColumn() ?: 0;
                 <?php echo number_format($total_income, 2); ?></span>
         </h3>
     </div>
+    </div>
 </div>
+
+<?php if (isset($_GET['success'])): ?>
+    <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
+        <i class="fa-solid fa-check-circle me-2"></i>
+        <?php echo htmlspecialchars($_GET['success']); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+
+<?php if (isset($_GET['error'])): ?>
+    <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+        <i class="fa-solid fa-exclamation-circle me-2"></i>
+        <?php echo htmlspecialchars($_GET['error']); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
 
 <!-- Filters & Actions -->
 <div class="glass-panel p-3 mb-4">
