@@ -162,7 +162,7 @@ $categories = ['Grocery', 'Food', 'Transport', 'Shopping', 'Utilities', 'Travel'
                     <button type="submit" class="btn btn-primary py-3 fw-bold">
                         <i class="fa-solid fa-save me-2"></i> Update Expense
                     </button>
-                    <a href="#" onclick="return confirmDelete('expense_actions.php?action=delete_expense&id=<?php echo $expense['id']; ?>', 'Delete this expense permanently?');"
+                    <a href="#" onclick="return confirmDelete('expense_actions.php?action=delete_expense&id=<?php echo $expense['id']; ?>', 'Delete <?php echo addslashes(htmlspecialchars($expense['description'])); ?> - AED <?php echo number_format($expense['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($expense['expense_date'])); ?> permanently?');"
                        class="btn btn-outline-danger">
                         <i class="fa-solid fa-trash me-2"></i> Delete Expense
                     </a>

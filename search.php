@@ -204,7 +204,7 @@ try {
                                         </td>
                                         <td class="pe-4 text-end">
                                             <form action="expense_actions.php" method="POST" class="d-inline"
-                                                onsubmit="return confirmSubmit(this, 'Delete this expense?');">
+                                                onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($ex['description'])); ?> - AED <?php echo number_format($ex['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($ex['expense_date'])); ?>?');">
                                                 <input type="hidden" name="action" value="delete">
                                                 <input type="hidden" name="id" value="<?php echo $ex['id']; ?>">
                                                 <button type="submit" class="btn btn-link text-danger p-0 small border-0">
@@ -214,27 +214,35 @@ try {
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                        
-                        <!-- Pagination -->
-                        <?php if ($total_pages > 1): ?>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    <?php if ($total_pages > 1): ?>
                         <div class="card-footer bg-light d-flex justify-content-between align-items-center py-3">
                             <div class="text-muted small">
-                                Showing <?php echo ($offset + 1); ?>–<?php echo min($offset + $items_per_page, $total_items); ?> of <?php echo $total_items; ?> results
+                                Showing <?php echo ($offset + 1); ?>–<?php echo min($offset + $items_per_page, $total_items); ?> of
+                                <?php echo $total_items; ?> results
                             </div>
                             <nav aria-label="Page navigation">
                                 <ul class="pagination pagination-sm mb-0">
-                                    <?php 
+                                    <?php
                                     $base_url = "?";
-                                    if ($keyword) $base_url .= "q=" . urlencode($keyword) . "&";
-                                    if ($category) $base_url .= "category=" . urlencode($category) . "&";
-                                    if ($tag) $base_url .= "tag=" . urlencode($tag) . "&";
-                                    if ($min_amount) $base_url .= "min=$min_amount&";
-                                    if ($max_amount) $base_url .= "max=$max_amount&";
-                                    if ($start_date) $base_url .= "start=$start_date&";
-                                    if ($end_date) $base_url .= "end=$end_date&";
+                                    if ($keyword)
+                                        $base_url .= "q=" . urlencode($keyword) . "&";
+                                    if ($category)
+                                        $base_url .= "category=" . urlencode($category) . "&";
+                                    if ($tag)
+                                        $base_url .= "tag=" . urlencode($tag) . "&";
+                                    if ($min_amount)
+                                        $base_url .= "min=$min_amount&";
+                                    if ($max_amount)
+                                        $base_url .= "max=$max_amount&";
+                                    if ($start_date)
+                                        $base_url .= "start=$start_date&";
+                                    if ($end_date)
+                                        $base_url .= "end=$end_date&";
                                     ?>
                                     <li class="page-item <?php echo $page_num <= 1 ? 'disabled' : ''; ?>">
                                         <a class="page-link" href="<?php echo $base_url; ?>page=<?php echo $page_num - 1; ?>">
@@ -243,7 +251,8 @@ try {
                                     </li>
                                     <?php for ($i = max(1, $page_num - 2); $i <= min($total_pages, $page_num + 2); $i++): ?>
                                         <li class="page-item <?php echo $i == $page_num ? 'active' : ''; ?>">
-                                            <a class="page-link" href="<?php echo $base_url; ?>page=<?php echo $i; ?>"><?php echo $i; ?></a>
+                                            <a class="page-link"
+                                                href="<?php echo $base_url; ?>page=<?php echo $i; ?>"><?php echo $i; ?></a>
                                         </li>
                                     <?php endfor; ?>
                                     <li class="page-item <?php echo $page_num >= $total_pages ? 'disabled' : ''; ?>">
@@ -254,11 +263,11 @@ try {
                                 </ul>
                             </nav>
                         </div>
-                        <?php endif; ?>
-                    </div>
-                <?php endif; ?>
+                    <?php endif; ?>
+                </div>
             <?php endif; ?>
-        </div>
+        <?php endif; ?>
     </div>
+</div>
 
 <?php require_once 'includes/footer.php'; ?>

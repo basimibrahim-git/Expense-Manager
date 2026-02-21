@@ -154,7 +154,8 @@ try {
                 $categories = ['Grocery', 'Medical', 'Food', 'Utilities', 'Transport', 'Shopping', 'Entertainment', 'Travel', 'Education', 'Other'];
                 foreach ($categories as $cat): ?>
                     <option value="<?php echo $cat; ?>" <?php echo $category_filter == $cat ? 'selected' : ''; ?>>
-                        <?php echo $cat; ?></option>
+                        <?php echo $cat; ?>
+                    </option>
                 <?php endforeach; ?>
             </select>
         </div>
@@ -278,7 +279,7 @@ try {
                                 <a href="edit_expense.php?id=<?php echo $expense['id']; ?>" class="btn btn-sm text-muted me-1"
                                     title="Edit"><i class="fa-solid fa-pen"></i></a>
                                 <a href="#"
-                                    onclick="return confirmDelete('expense_actions.php?action=delete_expense&id=<?php echo $expense['id']; ?>', 'Delete this expense?');"
+                                    onclick="return confirmDelete('expense_actions.php?action=delete_expense&id=<?php echo $expense['id']; ?>', 'Delete <?php echo addslashes(htmlspecialchars($expense['description'])); ?> - AED <?php echo number_format($expense['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($expense['expense_date'])); ?>?');"
                                     class="btn btn-sm text-danger" title="Delete"><i class="fa-solid fa-trash"></i></a>
                             </td>
                         </tr>
