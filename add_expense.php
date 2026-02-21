@@ -121,7 +121,7 @@ elseif ($pre_month && $pre_year) {
                             <option value="<?php echo $card['id']; ?>" <?php echo $card['id'] == $default_card_id ? 'selected' : ''; ?>>
                                 <?php echo htmlspecialchars($card['bank_name'] . ' - ' . $card['card_name']); ?>
                                 (<?php echo $card['card_type']; ?>)
-                                <?php echo !empty($card['is_default']) ? '⭐' : ''; ?>
+                                <?php echo !empty($card['is_default']) ? 'â­' : ''; ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -236,15 +236,15 @@ elseif ($pre_month && $pre_year) {
                         <option value="" disabled selected>Select Category</option>
                         <option value="Grocery"><i class="fa-solid fa-basket-shopping"></i> Grocery & Supermarkets
                         </option>
-                        <option value="Medical">💊 Medical & Healthcare</option>
-                        <option value="Food">🍔 Food & Dining</option>
-                        <option value="Utilities">💡 Bills & Utilities</option>
-                        <option value="Transport">🚖 Transport & Fuel</option>
-                        <option value="Shopping">🛍️ Shopping & Apparel</option>
-                        <option value="Entertainment">🎬 Entertainment</option>
-                        <option value="Travel">✈️ Travel</option>
-                        <option value="Education">🎓 Education</option>
-                        <option value="Other">🔹 Other</option>
+                        <option value="Medical">ðŸ’Š Medical & Healthcare</option>
+                        <option value="Food">ðŸ” Food & Dining</option>
+                        <option value="Utilities">ðŸ’¡ Bills & Utilities</option>
+                        <option value="Transport">ðŸš– Transport & Fuel</option>
+                        <option value="Shopping">ðŸ›ï¸ Shopping & Apparel</option>
+                        <option value="Entertainment">ðŸŽ¬ Entertainment</option>
+                        <option value="Travel">âœˆï¸ Travel</option>
+                        <option value="Education">ðŸŽ“ Education</option>
+                        <option value="Other">ðŸ”¹ Other</option>
                     </select>
                 </div>
 

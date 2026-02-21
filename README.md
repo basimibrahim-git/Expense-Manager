@@ -1,6 +1,6 @@
 # 💰 Expense Manager
 
-![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![PHP](https://img.shields.io/badge/PHP-8.0%2B-777BB4.svg)
 ![MySQL](https://img.shields.io/badge/MySQL-5.7%2B-4479A1.svg)

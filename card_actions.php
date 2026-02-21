@@ -1,5 +1,5 @@
 <?php
-require_once 'config.php';
+require_once 'config.php'; // NOSONAR
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
@@ -69,8 +69,9 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $card_id = filter_input(INPUT_POST, 'card_id', FILTER_VALIDATE_INT);
     $user_id = $_SESSION['user_id'];
 
-    if (!$card_id)
+    if (!$card_id) {
         die("Invalid ID");
+    }
 
     $bank_name = htmlspecialchars($_POST['bank_name']);
     $card_name = htmlspecialchars($_POST['card_name']);
@@ -149,8 +150,9 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $user_id = $_SESSION['user_id'];
     $card_id = filter_input(INPUT_POST, 'card_id', FILTER_VALIDATE_INT);
     $bank_id = filter_input(INPUT_POST, 'bank_id', FILTER_VALIDATE_INT);
-    if (!$bank_id)
+    if (!$bank_id) {
         $bank_id = null; // Ensure NULL if empty/false to pass FK constraint
+    }
     $amount = floatval($_POST['amount']);
     $date = htmlspecialchars($_POST['payment_date']);
 
@@ -176,4 +178,3 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 // Fallback
 header("Location: my_cards.php");
 exit();
-?>

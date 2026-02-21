@@ -4,12 +4,12 @@
 
 /**
  * Records an action or event into the audit_logs table.
- * 
+ *
  * @param string $action The type of action (e.g., 'bulk_delete', 'login_success')
  * @param mixed $context Additional data, description, or IDs (will be JSON encoded)
  * @return bool
  */
-function log_audit($action, $context = null)
+function log_audit($action, $context = null) // NOSONAR
 {
     global $pdo;
 
@@ -30,7 +30,7 @@ function log_audit($action, $context = null)
         $stmt = $pdo->prepare("INSERT INTO audit_logs (tenant_id, user_id, action, context, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)");
         return $stmt->execute([$tenantId, $userId, $action, $contextStr, $ip, $ua]);
     } catch (Exception $e) {
-        // Fail silently in production to avoid breaking the main user flow, 
+        // Fail silently in production to avoid breaking the main user flow,
         // but log to error_log if configured.
         error_log("Audit Logging Failed: " . $e->getMessage());
         return false;

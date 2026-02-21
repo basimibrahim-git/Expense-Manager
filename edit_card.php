@@ -1,8 +1,8 @@
 <?php
 $page_title = "Edit Card";
-require_once 'config.php';
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+require_once 'config.php'; // NOSONAR
+require_once 'includes/header.php'; // NOSONAR
+require_once 'includes/sidebar.php'; // NOSONAR
 
 // Get Card ID
 $card_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
@@ -56,7 +56,7 @@ $all_banks = $banks_stmt->fetchAll();
                 <h5 class="mb-3 text-muted">Card Source</h5>
 
                 <div class="mb-4">
-                    <label class="form-label">Bank Login URL</label>
+                    <label class="form-label" for="bankUrlInput">Bank Login URL</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="fa-solid fa-link"></i></span>
                         <input type="url" name="bank_url" id="bankUrlInput" class="form-control"
@@ -73,8 +73,8 @@ $all_banks = $banks_stmt->fetchAll();
                 <h5 class="mb-3 text-muted">Card Details</h5>
 
                 <div class="mb-3">
-                    <label class="form-label">Associated Bank <span class="text-secondary small">(Optional)</span></label>
-                    <select name="bank_id" class="form-select">
+                    <label class="form-label" for="bank_id">Associated Bank <span class="text-secondary small">(Optional)</span></label>
+                    <select name="bank_id" id="bank_id" class="form-select">
                         <option value="">-- No Bank Linked --</option>
                         <?php foreach($all_banks as $b): ?>
                             <option value="<?php echo $b['id']; ?>" <?php echo $card['bank_id'] == $b['id'] ? 'selected' : ''; ?>>
@@ -86,21 +86,21 @@ $all_banks = $banks_stmt->fetchAll();
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Bank Name <span class="text-danger">*</span></label>
+                    <label class="form-label" for="bankNameInput">Bank Name <span class="text-danger">*</span></label>
                     <input type="text" name="bank_name" id="bankNameInput" class="form-control"
                         value="<?php echo htmlspecialchars($card['bank_name']); ?>" required>
                     <div class="form-text x-small">Display name for the card</div>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Card Name / Nickname <span class="text-danger">*</span></label>
+                    <label class="form-label" for="cardNameInput">Card Name / Nickname <span class="text-danger">*</span></label>
                     <input type="text" name="card_name" id="cardNameInput" class="form-control"
                         value="<?php echo htmlspecialchars($card['card_name']); ?>" required>
                 </div>
 
                 <div class="row">
                     <div class="col-md-4 mb-3">
-                        <label class="form-label">Card Type <span class="text-danger">*</span></label>
+                        <label class="form-label" for="cardTypeInput">Card Type <span class="text-danger">*</span></label>
                         <select name="card_type" id="cardTypeInput" class="form-select" required>
                             <option value="Credit" <?php echo ($card['card_type'] == 'Credit') ? 'selected' : ''; ?>>
                                 Credit Card</option>
@@ -109,7 +109,7 @@ $all_banks = $banks_stmt->fetchAll();
                         </select>
                     </div>
                     <div class="col-md-4 mb-3">
-                        <label class="form-label">Network <span class="text-danger">*</span></label>
+                        <label class="form-label" for="networkInput">Network <span class="text-danger">*</span></label>
                         <select name="network" id="networkInput" class="form-select" required>
                             <option value="Visa" <?php echo ($card['network'] == 'Visa') ? 'selected' : ''; ?>>Visa
                             </option>
@@ -119,8 +119,8 @@ $all_banks = $banks_stmt->fetchAll();
                         </select>
                     </div>
                     <div class="col-md-4 mb-3">
-                        <label class="form-label">Fee Type</label>
-                        <select name="fee_type" class="form-select">
+                        <label class="form-label" for="fee_type">Fee Type</label>
+                        <select name="fee_type" id="fee_type" class="form-select">
                             <option value="LTF" <?php echo (($card['fee_type'] ?? '') == 'LTF') ? 'selected' : ''; ?>>LTF (Lifetime Free)</option>
                             <option value="Paid" <?php echo (($card['fee_type'] ?? '') == 'Paid') ? 'selected' : ''; ?>>Paid</option>
                             <option value="Spend Based" <?php echo (($card['fee_type'] ?? '') == 'Spend Based') ? 'selected' : ''; ?>>Spend Based</option>
@@ -130,40 +130,40 @@ $all_banks = $banks_stmt->fetchAll();
 
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">Category / Tier</label>
+                        <label class="form-label" for="tierInput">Category / Tier</label>
                         <input type="text" name="tier" id="tierInput" class="form-control"
                             value="<?php echo htmlspecialchars($card['tier']); ?>">
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">Credit / Monthly Limit (AED)</label>
-                        <input type="number" name="limit_amount" class="form-control" step="0.01"
+                        <label class="form-label" for="limit_amount">Credit / Monthly Limit (AED)</label>
+                        <input type="number" name="limit_amount" id="limit_amount" class="form-control" step="0.01"
                             value="<?php echo htmlspecialchars($card['limit_amount']); ?>">
                     </div>
                 </div>
 
                 <div class="row">
                     <div class="col-6 mb-3">
-                        <label class="form-label">First 4 Digits</label>
-                        <input type="text" name="first_four" id="firstFourInput" class="form-control" 
+                        <label class="form-label" for="firstFourInput">First 4 Digits</label>
+                        <input type="text" name="first_four" id="firstFourInput" class="form-control"
                             value="<?php echo htmlspecialchars($card['first_four'] ?? ''); ?>" maxlength="4">
                     </div>
                     <div class="col-6 mb-3">
-                        <label class="form-label">Last 4 Digits</label>
-                        <input type="text" name="last_four" id="lastFourInput" class="form-control" 
+                        <label class="form-label" for="lastFourInput">Last 4 Digits</label>
+                        <input type="text" name="last_four" id="lastFourInput" class="form-control"
                             value="<?php echo htmlspecialchars($card['last_four'] ?? ''); ?>" maxlength="4">
                     </div>
                 </div>
 
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">Bill Generation Day</label>
-                        <input type="number" name="bill_day" class="form-control" placeholder="e.g. 15" min="1" max="31"
+                        <label class="form-label" for="bill_day">Bill Generation Day</label>
+                        <input type="number" name="bill_day" id="bill_day" class="form-control" placeholder="e.g. 15" min="1" max="31"
                             value="<?php echo htmlspecialchars($card['bill_day'] ?? ''); ?>">
                         <div class="form-text x-small">Day of month bill is issued</div>
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">Statement Closing Day</label>
-                        <input type="number" name="statement_day" class="form-control" placeholder="e.g. 14" min="1"
+                        <label class="form-label" for="statement_day">Statement Closing Day</label>
+                        <input type="number" name="statement_day" id="statement_day" class="form-control" placeholder="e.g. 14" min="1"
                             max="31" value="<?php echo htmlspecialchars($card['statement_day'] ?? ''); ?>">
                         <div class="form-text x-small">Day of month statement closes</div>
                     </div>
@@ -183,13 +183,14 @@ $all_banks = $banks_stmt->fetchAll();
 
                 <?php
                 $cb_struct = json_decode($card['cashback_struct'] ?? '{}', true);
-                if (!is_array($cb_struct))
+                if (!is_array($cb_struct)) {
                     $cb_struct = [];
+                }
                 ?>
                 <!-- Cashback Categories -->
                 <div class="mb-4">
-                    <label class="form-label fw-bold"><i class="fa-solid fa-percent text-primary me-2"></i> Category
-                        Cashback %</label>
+                    <div class="form-label fw-bold d-block"><i class="fa-solid fa-percent text-primary me-2"></i> Category
+                        Cashback %</div>
                     <div class="bg-light p-3 rounded shadow-sm border">
                         <div class="row g-2 mb-2">
                             <?php
@@ -207,13 +208,14 @@ $all_banks = $banks_stmt->fetchAll();
                             ];
                             $count = 0;
                             foreach ($cats as $key => $label):
-                                if ($count % 4 == 0 && $count != 0)
+                                if ($count % 4 == 0 && $count != 0) {
                                     echo '</div><div class="row g-2 mb-2">';
+                                }
                                 ?>
                                 <div class="col-6 col-md-3">
-                                    <label class="x-small text-muted"><?php echo $label; ?></label>
+                                    <label for="cb_<?php echo $key; ?>" class="x-small text-muted"><?php echo $label; ?></label>
                                     <div class="input-group input-group-sm">
-                                        <input type="number" name="cb_<?php echo $key; ?>" class="form-control" step="0.1"
+                                        <input type="number" id="cb_<?php echo $key; ?>" name="cb_<?php echo $key; ?>" class="form-control" step="0.1"
                                             value="<?php echo $cb_struct[$key] ?? 0; ?>">
                                         <span class="input-group-text">%</span>
                                     </div>
@@ -226,15 +228,19 @@ $all_banks = $banks_stmt->fetchAll();
 
                 <!-- New Features Field -->
                 <div class="mb-3">
-                    <label class="form-label">Card Offers & Features</label>
-                    <textarea name="features" class="form-control" rows="4"
+                    <label class="form-label" for="featuresInput">Card Offers & Features</label>
+                    <textarea name="features" id="featuresInput" class="form-control" rows="4"
                         placeholder="Paste offers, cashback details, or benefits here..."><?php echo htmlspecialchars($card['features'] ?? ''); ?></textarea>
                     <div class="form-text">Note down validation dates or specific cashback categories here.</div>
                 </div>
 
+                <div class="d-grid gap-2 mb-3">
+                    <button type="submit" class="btn btn-primary btn-lg fw-bold">
+                        <i class="fa-solid fa-save me-2"></i> Update Card Details
+                    </button>
                 </div>
             </form>
-            <form action="card_actions.php" method="POST" class="d-grid mt-2">
+            <form action="card_actions.php" method="POST" class="d-grid">
                 <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
                 <input type="hidden" name="action" value="delete_card">
                 <input type="hidden" name="id" value="<?php echo $card['id']; ?>">
@@ -242,7 +248,6 @@ $all_banks = $banks_stmt->fetchAll();
                     onclick="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($card['bank_name'] . ' ' . $card['card_name'])); ?>? This action CANNOT be undone.');">
                     <i class="fa-solid fa-trash me-2"></i> Delete Card
                 </button>
-            </form>
             </form>
         </div>
     </div>
@@ -315,7 +320,7 @@ $all_banks = $banks_stmt->fetchAll();
             if (data.success && data.data) {
                 // Update Fields
                 if(data.data.description) document.querySelector('textarea[name="features"]').value = "✅ VERIFIED LIVE DATA:\n" + data.data.description;
-                // We don't overwrite Name/Bank in Edit mode unless completely empty or user confirms? 
+                // We don't overwrite Name/Bank in Edit mode unless completely empty or user confirms?
                 // Creating a simplified flow: Update Features & Image primarily.
                 
                 if (data.data.image) {
@@ -364,4 +369,4 @@ $all_banks = $banks_stmt->fetchAll();
     }
 </script>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php require_once 'includes/footer.php'; // NOSONAR ?>

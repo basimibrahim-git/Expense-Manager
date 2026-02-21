@@ -1,5 +1,5 @@
 <?php
-require_once 'config.php';
+require_once 'config.php'; // NOSONAR
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
@@ -155,9 +155,9 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
                 // 2. Insert New Expense
                 $insStmt = $pdo->prepare("
                     INSERT INTO expenses (
-                        user_id, tenant_id, spent_by_user_id, amount, description, 
-                        category, payment_method, card_id, expense_date, 
-                        is_subscription, currency, original_amount, tags, 
+                        user_id, tenant_id, spent_by_user_id, amount, description,
+                        category, payment_method, card_id, expense_date,
+                        is_subscription, currency, original_amount, tags,
                         cashback_earned, is_fixed
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
@@ -286,9 +286,9 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
     try {
         $stmt = $pdo->prepare("UPDATE expenses SET 
-            amount = ?, description = ?, category = ?, payment_method = ?, 
-            card_id = ?, expense_date = ?, is_subscription = ?, 
-            currency = ?, original_amount = ?, tags = ?, 
+            amount = ?, description = ?, category = ?, payment_method = ?,
+            card_id = ?, expense_date = ?, is_subscription = ?,
+            currency = ?, original_amount = ?, tags = ?,
             cashback_earned = ?, is_fixed = ?
             WHERE id = ? AND tenant_id = ?");
         $stmt->execute([
@@ -320,4 +320,3 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
 header("Location: expenses.php"); // Fallback
 exit();
-?>

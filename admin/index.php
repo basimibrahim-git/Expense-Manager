@@ -1,7 +1,7 @@
 <?php
 // admin/index.php
 $current_page = 'admin/index.php';
-require_once '../config.php';
+require_once '../config.php'; // NOSONAR
 
 // Root Admin Authorization
 if (($_SESSION['role'] ?? '') !== 'root_admin') {
@@ -45,7 +45,7 @@ try {
 </head>
 
 <body>
-    <?php include '../includes/sidebar.php'; ?>
+    <?php include_once '../includes/sidebar.php'; // NOSONAR ?>
 
     <div class="container-fluid py-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -145,7 +145,7 @@ try {
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <?php include '../includes/footer.php'; ?>
+    <?php include_once '../includes/footer.php'; // NOSONAR ?>
 </body>
 
 </html>

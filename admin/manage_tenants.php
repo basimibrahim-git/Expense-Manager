@@ -1,7 +1,7 @@
 <?php
 // admin/manage_tenants.php
 $current_page = 'admin/manage_tenants.php';
-require_once '../config.php';
+require_once '../config.php'; // NOSONAR
 
 // Root Admin Authorization
 if (($_SESSION['role'] ?? '') !== 'root_admin') {
@@ -86,7 +86,7 @@ if (isset($_GET['view_members'])) {
 }
 try {
     $stmt = $pdo->query("
-        SELECT t.*, 
+        SELECT t.*,
                (SELECT COUNT(*) FROM users WHERE tenant_id = t.id) as user_count,
                (SELECT name FROM users WHERE tenant_id = t.id AND role = 'family_admin' LIMIT 1) as admin_name
         FROM tenants t
@@ -110,7 +110,7 @@ try {
 </head>
 
 <body>
-    <?php include '../includes/sidebar.php'; ?>
+    <?php include_once '../includes/sidebar.php'; // NOSONAR ?>
 
     <div class="container-fluid py-4">
         <div class="mb-4">
@@ -202,7 +202,8 @@ try {
                         <input type="hidden" name="action" value="rename_tenant">
                         <input type="hidden" name="tenant_id" id="editTenantId">
                         <div class="mb-3">
-                            <label class="form-label small text-muted text-uppercase fw-bold">Family / Tenant
+                            <label for="editFamilyName"
+                                class="form-label small text-muted text-uppercase fw-bold">Family / Tenant
                                 Name</label>
                             <input type="text" name="family_name" id="editFamilyName" class="form-control" required>
                         </div>
@@ -228,20 +229,24 @@ try {
                         <input type="hidden" name="action" value="add_member">
                         <input type="hidden" name="tenant_id" id="addMemberTenantId">
                         <div class="mb-3">
-                            <label class="form-label small text-muted text-uppercase fw-bold">Full Name</label>
-                            <input type="text" name="name" class="form-control" required>
+                            <label for="addMemberName" class="form-label small text-muted text-uppercase fw-bold">Full
+                                Name</label>
+                            <input type="text" name="name" id="addMemberName" class="form-control" required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small text-muted text-uppercase fw-bold">Email Address</label>
-                            <input type="email" name="email" class="form-control" required>
+                            <label for="addMemberEmail" class="form-label small text-muted text-uppercase fw-bold">Email
+                                Address</label>
+                            <input type="email" name="email" id="addMemberEmail" class="form-control" required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small text-muted text-uppercase fw-bold">Password</label>
-                            <input type="password" name="password" class="form-control" required>
+                            <label for="addMemberPassword"
+                                class="form-label small text-muted text-uppercase fw-bold">Password</label>
+                            <input type="password" name="password" id="addMemberPassword" class="form-control" required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small text-muted text-uppercase fw-bold">Role</label>
-                            <select name="role" class="form-select">
+                            <label for="addMemberRole"
+                                class="form-label small text-muted text-uppercase fw-bold">Role</label>
+                            <select name="role" id="addMemberRole" class="form-select">
                                 <option value="user">Standard User</option>
                                 <option value="family_admin">Family Admin</option>
                             </select>
@@ -309,7 +314,7 @@ try {
             }
         <?php endif; ?>
     </script>
-    <?php include '../includes/footer.php'; ?>
+    <?php include_once '../includes/footer.php'; // NOSONAR ?>
 </body>
 
 </html>

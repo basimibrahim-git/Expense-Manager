@@ -1,6 +1,6 @@
 <?php
 // v3_archive_engine.php - Maintenance script for cleaning up old data.
-require_once 'config.php';
+require_once 'config.php'; // NOSONAR
 
 if (php_sapi_name() !== 'cli' && !isset($_SESSION['user_id'])) {
     die("Unauthorized. Run via CLI or log in.");

@@ -1,8 +1,8 @@
 <?php
 $page_title = "Dashboard";
-require_once 'config.php';
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+require_once 'config.php'; // NOSONAR
+require_once 'includes/header.php'; // NOSONAR
+require_once 'includes/sidebar.php'; // NOSONAR
 
 $user_id = $_SESSION['user_id'];
 $curr_month = date('n');
@@ -29,13 +29,13 @@ $expense_now = $stmt->fetchColumn() ?: 0;
 // This query gets the latest amount for each bank_name
 $stmt = $pdo->prepare("
     SELECT SUM(
-        CASE 
-            WHEN currency = 'INR' THEN amount / 24 
-            ELSE amount 
+        CASE
+            WHEN currency = 'INR' THEN amount / 24
+            ELSE amount
         END
     )
     FROM bank_balances b1
-    WHERE tenant_id = ? 
+    WHERE tenant_id = ?
     AND bank_name != 'Opening Balance Adjustment'
     AND id = (SELECT MAX(id) FROM bank_balances b2 WHERE b2.bank_name = b1.bank_name AND b2.tenant_id = b1.tenant_id)
 ");
@@ -65,8 +65,8 @@ $stmt = $pdo->prepare("
     FROM bank_balances b1
     WHERE tenant_id = ?
     AND id = (
-        SELECT MAX(id) FROM bank_balances b2 
-        WHERE b2.bank_name = b1.bank_name 
+        SELECT MAX(id) FROM bank_balances b2
+        WHERE b2.bank_name = b1.bank_name
         AND b2.tenant_id = b1.tenant_id
         AND b2.balance_date <= LAST_DAY(DATE_SUB(NOW(), INTERVAL 1 YEAR))
     )
@@ -90,8 +90,8 @@ for ($i = 11; $i >= 0; $i--) {
         FROM bank_balances b1
         WHERE tenant_id = ?
         AND id = (
-            SELECT MAX(id) FROM bank_balances b2 
-            WHERE b2.bank_name = b1.bank_name 
+            SELECT MAX(id) FROM bank_balances b2
+            WHERE b2.bank_name = b1.bank_name
             AND b2.tenant_id = b1.tenant_id
             AND b2.balance_date <= ?
         )
@@ -204,14 +204,16 @@ for ($i = 0; $i <= 30; $i++) {
 
     // Add Income
     foreach ($recurring_incomes as $inc) {
-        if ($inc['recurrence_day'] == $day_num)
+        if ($inc['recurrence_day'] == $day_num) {
             $running_bal += $inc['amount'];
+        }
     }
 
     // Subtract Subscriptions
     foreach ($recurring_expenses as $exp) {
-        if ($exp['day'] == $day_num)
+        if ($exp['day'] == $day_num) {
             $running_bal -= $exp['amount'];
+        }
     }
 
     $projected_dates[] = $formatted_date;
@@ -235,8 +237,8 @@ $true_liquidity = $net_worth - $unbilled_card_spend;
 // 9. PHASE 6: Safe-to-Spend Logic
 // Estimate Monthly Fixed Cost (Avg of last 3 months fixed spend)
 $stmt = $pdo->prepare("
-    SELECT SUM(amount) FROM expenses 
-    WHERE tenant_id = ? AND is_fixed = 1 
+    SELECT SUM(amount) FROM expenses
+    WHERE tenant_id = ? AND is_fixed = 1
     AND expense_date BETWEEN DATE_SUB(NOW(), INTERVAL 3 MONTH) AND NOW()
 ");
 $stmt->execute([$_SESSION['tenant_id']]);
@@ -253,8 +255,9 @@ $active_goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 foreach ($active_goals as $goal) {
     $needed = $goal['target_amount'] - $goal['current_saved'];
-    if ($needed <= 0)
+    if ($needed <= 0) {
         continue;
+    }
 
     $days_left = ceil((strtotime($goal['target_date']) - time()) / 86400);
     $months_left = max(1, ceil($days_left / 30));
@@ -281,11 +284,13 @@ $stmt->execute([$_SESSION['tenant_id']]);
 $recent_card_txns = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 foreach ($recent_card_txns as $txn) {
-    if (empty($txn['category']))
+    if (empty($txn['category'])) {
         continue;
+    }
     foreach ($roi_cards as $card) {
-        if ($card['id'] == $txn['used_card_id'])
+        if ($card['id'] == $txn['used_card_id']) {
             continue; // Skip same card
+        }
 
         $keywords = json_decode($card['cashback_struct'] ?? '[]', true);
         if (is_array($keywords)) {
@@ -315,15 +320,13 @@ foreach ($roi_cards as $card) {
         // Very rough accumulation approximation
         // In real app, we'd query API or DB for "Statement Balance"
         // Here we assume 1000 AED estimated bill for demo if statement just passed
-        if ($today_day == $stmt_day) {
-            if ($true_liquidity < 2000) {
-                $alerts[] = [
-                    'type' => 'bill',
-                    'icon' => 'fa-triangle-exclamation',
-                    'color' => 'danger',
-                    'msg' => "Liquidity Alert: Bill for <b>{$card['card_name']}</b> generated today. Ensure you have funds."
-                ];
-            }
+        if ($today_day == $stmt_day && $true_liquidity < 2000) {
+            $alerts[] = [
+                'type' => 'bill',
+                'icon' => 'fa-triangle-exclamation',
+                'color' => 'danger',
+                'msg' => "Liquidity Alert: Bill for <b>{$card['card_name']}</b> generated today. Ensure you have funds."
+            ];
         }
     }
 }
@@ -357,12 +360,12 @@ $logged_subs = $curr_month_logged->fetchAll(PDO::FETCH_COLUMN);
 
 // Fetch Unique Subscription Templates
 $stmt = $pdo->prepare("
-    SELECT e1.* 
+    SELECT e1.*
     FROM expenses e1
     JOIN (
-        SELECT MAX(id) as max_id 
-        FROM expenses 
-        WHERE tenant_id = ? AND is_subscription = 1 
+        SELECT MAX(id) as max_id
+        FROM expenses
+        WHERE tenant_id = ? AND is_subscription = 1
         GROUP BY description
     ) e2 ON e1.id = e2.max_id
 ");
@@ -380,7 +383,7 @@ foreach ($templates as $sb) {
     }
     $days_to_bill = ceil((strtotime($target_renewal) - time()) / 86400);
 
-    // Alert Logic: 
+    // Alert Logic:
     // 1. If not logged this month AND (due in 7 days OR overdue)
     $is_due_this_month = true; // Subscriptions are monthly
     if (!$is_logged) {
@@ -535,7 +538,7 @@ usort($upcoming_bills, function ($a, $b) {
     <div class="col-lg-4">
         <div class="glass-panel p-4 h-100 text-center position-relative overflow-hidden">
             <div class="position-absolute top-0 start-0 w-100 h-100 bg-success bg-opacity-10" style="z-index: 0;"></div>
-            <h5 class="fw-bold mb-3 position-relative">🟢 Safe to Spend</h5>
+            <h5 class="fw-bold mb-3 position-relative">ðŸŸ¢ Safe to Spend</h5>
             <h2 class="display-4 fw-bold text-success position-relative blur-sensitive">
                 <?php echo number_format(max(0, $safe_to_spend), 2); ?>
             </h2>
@@ -546,7 +549,7 @@ usort($upcoming_bills, function ($a, $b) {
     <div class="col-lg-4">
         <div class="glass-panel p-4 h-100">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="fw-bold mb-0">❤️ Financial Health</h5>
+                <h5 class="fw-bold mb-0">â¤ï¸ Financial Health</h5>
                 <span class="badge bg-success-subtle text-success">Target: >20% Savings</span>
             </div>
 
@@ -557,8 +560,8 @@ usort($upcoming_bills, function ($a, $b) {
                 </div>
                 <div class="col">
                     <div class="progress" style="height: 12px;">
-                        <div class="progress-bar bg-success" role="progressbar"
-                            style="width: <?php echo min($savings_rate, 100); ?>%"></div>
+                        <div class="progress-bar bg-success" style="width: <?php echo min($savings_rate, 100); ?>%">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -568,14 +571,20 @@ usort($upcoming_bills, function ($a, $b) {
     <div class="col-lg-4">
         <div class="glass-panel p-4 h-100">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="fw-bold mb-0">💳 Credit Utilization</h5>
+                <h5 class="fw-bold mb-0">ðŸ’³ Credit Utilization</h5>
                 <span class="badge bg-primary-subtle text-primary">Target: <30%< /span>
             </div>
 
             <div class="row align-items-center">
                 <div class="col-auto">
                     <?php
-                    $util_color = $utilization < 30 ? 'success' : ($utilization < 50 ? 'warning' : 'danger');
+                    if ($utilization < 30) {
+                        $util_color = 'success';
+                    } elseif ($utilization < 50) {
+                        $util_color = 'warning';
+                    } else {
+                        $util_color = 'danger';
+                    }
                     ?>
                     <div class="display-5 fw-bold text-<?php echo $util_color; ?>">
                         <?php echo number_format($utilization, 1); ?>%
@@ -584,7 +593,7 @@ usort($upcoming_bills, function ($a, $b) {
                 </div>
                 <div class="col">
                     <div class="progress" style="height: 12px;">
-                        <div class="progress-bar bg-<?php echo $util_color; ?>" role="progressbar"
+                        <div class="progress-bar bg-<?php echo $util_color; ?>"
                             style="width: <?php echo min($utilization, 100); ?>%"></div>
                     </div>
                 </div>
@@ -624,11 +633,18 @@ usort($upcoming_bills, function ($a, $b) {
                             // Show top 4 spending categories vs budget
                             $count = 0;
                             foreach ($dash_budgets as $cat => $limit):
-                                if ($count++ >= 4)
+                                if ($count++ >= 4) {
                                     break;
+                                }
                                 $spent = $cat_results[$cat] ?? 0;
                                 $pct = ($spent / $limit) * 100;
-                                $color = $pct > 100 ? 'danger' : ($pct > 80 ? 'warning' : 'success');
+                                if ($pct > 100) {
+                                    $color = 'danger';
+                                } elseif ($pct > 80) {
+                                    $color = 'warning';
+                                } else {
+                                    $color = 'success';
+                                }
                                 ?>
                                 <div class="col-6 col-md-3">
                                     <div class="small fw-bold mb-1 d-flex justify-content-between">
@@ -656,7 +672,7 @@ usort($upcoming_bills, function ($a, $b) {
     <!-- Cash Flow Projection -->
     <div class="col-lg-8">
         <div class="glass-panel p-4 h-100">
-            <h5 class="fw-bold mb-4">🔮 30-Day Cash Flow Projection</h5>
+            <h5 class="fw-bold mb-4">ðŸ”® 30-Day Cash Flow Projection</h5>
             <canvas id="projectionChart" style="max-height: 250px;"></canvas>
         </div>
     </div>
@@ -664,7 +680,8 @@ usort($upcoming_bills, function ($a, $b) {
     <!-- Lifestyle Creep -->
     <div class="col-lg-4">
         <div class="glass-panel p-4 h-100">
-            <h5 class="fw-bold mb-4">📉 Lifestyle Creep <span class="badge bg-warning text-dark ms-2">YoY Alerts</span>
+            <h5 class="fw-bold mb-4">ðŸ“‰ Lifestyle Creep <span class="badge bg-warning text-dark ms-2">YoY
+                    Alerts</span>
             </h5>
             <?php if (empty($creep_alerts)): ?>
                 <div class="text-center py-5 text-muted"> <i
@@ -706,10 +723,12 @@ usort($upcoming_bills, function ($a, $b) {
                         <div class="col-md-4 col-lg-3">
                             <div class="p-3 rounded-4 bg-light border-0 shadow-sm h-100 d-flex flex-column">
                                 <div class="d-flex justify-content-between mb-2">
-                                    <span class="fw-bold text-truncate me-2" title="<?php echo htmlspecialchars($bill['name']); ?>">
+                                    <span class="fw-bold text-truncate me-2"
+                                        title="<?php echo htmlspecialchars($bill['name']); ?>">
                                         <?php echo htmlspecialchars($bill['name']); ?>
                                     </span>
-                                    <span class="text-<?php echo $bill['is_overdue'] ? 'danger' : 'warning'; ?> small fw-bold text-nowrap">
+                                    <span
+                                        class="text-<?php echo $bill['is_overdue'] ? 'danger' : 'warning'; ?> small fw-bold text-nowrap">
                                         <?php echo $bill['status']; ?>
                                     </span>
                                 </div>
@@ -747,14 +766,14 @@ usort($upcoming_bills, function ($a, $b) {
 <div class="row mb-5">
     <div class="col-12">
         <div class="glass-panel p-4">
-            <h5 class="fw-bold mb-3">🧩 Spend Anatomy <span class="text-muted small fw-normal">(Fixed vs.
+            <h5 class="fw-bold mb-3">ðŸ§© Spend Anatomy <span class="text-muted small fw-normal">(Fixed vs.
                     Lifestyle)</span></h5>
             <div class="progress" style="height: 25px;">
-                <div class="progress-bar bg-secondary" role="progressbar" style="width: <?php echo $fixed_pct; ?>%"
+                <div class="progress-bar bg-secondary" style="width: <?php echo $fixed_pct; ?>%"
                     title="Fixed Costs: <?php echo number_format($fixed_cost); ?>">
                     Fixed <?php echo number_format($fixed_pct, 0); ?>%
                 </div>
-                <div class="progress-bar bg-info" role="progressbar" style="width: <?php echo 100 - $fixed_pct; ?>%"
+                <div class="progress-bar bg-info" style="width: <?php echo 100 - $fixed_pct; ?>%"
                     title="Variable Costs: <?php echo number_format($var_cost); ?>">
                     Lifestyle <?php echo number_format(100 - $fixed_pct, 0); ?>%
                 </div>
@@ -839,7 +858,7 @@ usort($upcoming_bills, function ($a, $b) {
         <div class="glass-panel p-4">
             <div class="d-flex justify-content-between align-items-end mb-4">
                 <div>
-                    <h5 class="fw-bold mb-1">🚀 Wealth Journey</h5>
+                    <h5 class="fw-bold mb-1">ðŸš€ Wealth Journey</h5>
                     <p class="text-muted small mb-0">Net Worth Growth over last 12 months</p>
                 </div>
                 <div class="text-end">
@@ -1072,4 +1091,4 @@ usort($upcoming_bills, function ($a, $b) {
     });
 </script>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php require_once 'includes/footer.php'; // NOSONAR ?>

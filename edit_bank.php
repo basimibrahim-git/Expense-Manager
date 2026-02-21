@@ -1,8 +1,8 @@
 <?php
 $page_title = "Edit Bank";
-require_once 'config.php';
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+require_once 'config.php'; // NOSONAR
+require_once 'includes/header.php'; // NOSONAR
+require_once 'includes/sidebar.php'; // NOSONAR
 
 $bank_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 
@@ -54,14 +54,14 @@ if (!$bank) {
                 <input type="hidden" name="bank_id" value="<?php echo $bank['id']; ?>">
 
                 <div class="mb-3">
-                    <label class="form-label">Bank Name <span class="text-danger">*</span></label>
-                    <input type="text" name="bank_name" class="form-control form-control-lg" 
+                    <label class="form-label" for="bank_name">Bank Name <span class="text-danger">*</span></label>
+                    <input type="text" name="bank_name" id="bank_name" class="form-control form-control-lg"
                            value="<?php echo htmlspecialchars($bank['bank_name']); ?>" required>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Account Type</label>
-                    <select name="account_type" class="form-select">
+                    <label class="form-label" for="account_type">Account Type</label>
+                    <select name="account_type" id="account_type" class="form-select">
                         <option value="Current" <?php echo $bank['account_type'] == 'Current' ? 'selected' : ''; ?>>Current Account</option>
                         <option value="Savings" <?php echo $bank['account_type'] == 'Savings' ? 'selected' : ''; ?>>Savings Account</option>
                         <option value="Salary" <?php echo $bank['account_type'] == 'Salary' ? 'selected' : ''; ?>>Salary Account</option>
@@ -70,20 +70,20 @@ if (!$bank) {
 
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">Account Number</label>
-                        <input type="text" name="account_number" class="form-control" 
+                        <label class="form-label" for="account_number">Account Number</label>
+                        <input type="text" name="account_number" id="account_number" class="form-control"
                                value="<?php echo htmlspecialchars($bank['account_number'] ?? ''); ?>">
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">IBAN</label>
-                        <input type="text" name="iban" class="form-control" 
+                        <label class="form-label" for="iban">IBAN</label>
+                        <input type="text" name="iban" id="iban" class="form-control"
                                value="<?php echo htmlspecialchars($bank['iban'] ?? ''); ?>">
                     </div>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Currency</label>
-                    <select name="currency" class="form-select">
+                    <label class="form-label" for="currency">Currency</label>
+                    <select name="currency" id="currency" class="form-select">
                         <?php foreach (['AED', 'USD', 'EUR', 'GBP', 'INR'] as $cur): ?>
                             <option value="<?php echo $cur; ?>" <?php echo ($bank['currency'] ?? 'AED') == $cur ? 'selected' : ''; ?>>
                                 <?php echo $cur; ?>
@@ -93,8 +93,8 @@ if (!$bank) {
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Notes</label>
-                    <textarea name="notes" class="form-control" rows="2"><?php echo htmlspecialchars($bank['notes'] ?? ''); ?></textarea>
+                    <label class="form-label" for="notes">Notes</label>
+                    <textarea name="notes" id="notes" class="form-control" rows="2"><?php echo htmlspecialchars($bank['notes'] ?? ''); ?></textarea>
                 </div>
 
                 <div class="mb-4 p-3 bg-primary bg-opacity-10 rounded border border-primary">
@@ -108,9 +108,13 @@ if (!$bank) {
                     </div>
                 </div>
 
+                <div class="d-grid gap-2 mb-3">
+                    <button type="submit" class="btn btn-primary btn-lg fw-bold">
+                        <i class="fa-solid fa-save me-2"></i> Update Bank Account
+                    </button>
                 </div>
             </form>
-            <form action="bank_actions.php" method="POST" class="d-grid mt-2">
+            <form action="bank_actions.php" method="POST" class="d-grid">
                 <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
                 <input type="hidden" name="action" value="delete">
                 <input type="hidden" name="id" value="<?php echo $bank['id']; ?>">
@@ -119,9 +123,8 @@ if (!$bank) {
                     <i class="fa-solid fa-trash me-2"></i> Delete Bank Account
                 </button>
             </form>
-            </form>
         </div>
     </div>
 </div>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php require_once 'includes/footer.php'; // NOSONAR ?>

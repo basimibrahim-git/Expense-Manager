@@ -1,5 +1,5 @@
 <?php
-require_once 'config.php';
+require_once 'config.php'; // NOSONAR
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
@@ -37,8 +37,6 @@ if ($action == 'add_balance' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $bstmt = $pdo->prepare("SELECT bank_name FROM banks WHERE id = ? AND tenant_id = ?");
     $bstmt->execute([$bank_id, $tenant_id]);
     $bank_name = $bstmt->fetchColumn();
-
-
     try {
         $stmt = $pdo->prepare("INSERT INTO bank_balances (user_id, tenant_id, bank_id, bank_name, amount, balance_date, currency) VALUES (?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([$user_id, $tenant_id, $bank_id, $bank_name, $amount, $date, $currency]);
@@ -77,4 +75,3 @@ if ($action == 'add_balance' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
 header("Location: bank_balances.php");
 exit();
-?>

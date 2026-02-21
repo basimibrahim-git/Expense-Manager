@@ -55,8 +55,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $success = "Registration successful! You can now sign in.";
             }
         } catch (Exception $e) {
-            if ($pdo->inTransaction())
-                $pdo->rollBack();
+            if ($pdo->inTransaction()) { $pdo->rollBack(); }
             error_log("Signup Error: " . $e->getMessage());
             $error = "An error occurred during registration.";
         }

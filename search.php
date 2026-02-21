@@ -80,7 +80,7 @@ try {
 
 <div class="row mb-4">
     <div class="col-12">
-        <h1 class="h3 fw-bold mb-3">🔍 Advanced Transaction Search</h1>
+        <h1 class="h3 fw-bold mb-3">ðŸ” Advanced Transaction Search</h1>
     </div>
 </div>
 
@@ -91,18 +91,18 @@ try {
             <h5 class="fw-bold mb-3">Filters</h5>
             <form method="GET" action="search.php">
                 <div class="mb-3">
-                    <label class="form-label small fw-bold">Keyword</label>
-                    <input type="text" name="q" class="form-control"
+                    <label for="q" class="form-label small fw-bold">Keyword</label>
+                    <input type="text" id="q" name="q" class="form-control"
                         value="<?php echo htmlspecialchars($keyword ?? ''); ?>" placeholder="e.g. Dinner, Uber...">
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small fw-bold">Tag</label>
-                    <input type="text" name="tag" class="form-control"
+                    <label for="tag" class="form-label small fw-bold">Tag</label>
+                    <input type="text" id="tag" name="tag" class="form-control"
                         value="<?php echo htmlspecialchars($tag ?? ''); ?>" placeholder="#Vacation">
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small fw-bold">Category</label>
-                    <select name="category" class="form-select">
+                    <label for="category" class="form-label small fw-bold">Category</label>
+                    <select id="category" name="category" class="form-select">
                         <option value="">All Categories</option>
                         <!-- Should populate dynamically, hardcoded for speed -->
                         <option value="Grocery" <?php echo $category == 'Grocery' ? 'selected' : ''; ?>>Grocery</option>
@@ -116,19 +116,19 @@ try {
                 </div>
                 <div class="row">
                     <div class="col-6 mb-3">
-                        <label class="form-label small fw-bold">Min $</label>
-                        <input type="number" name="min" class="form-control"
+                        <label for="min" class="form-label small fw-bold">Min $</label>
+                        <input type="number" id="min" name="min" class="form-control"
                             value="<?php echo htmlspecialchars($min_amount ?? ''); ?>">
                     </div>
                     <div class="col-6 mb-3">
-                        <label class="form-label small fw-bold">Max $</label>
-                        <input type="number" name="max" class="form-control"
+                        <label for="max" class="form-label small fw-bold">Max $</label>
+                        <input type="number" id="max" name="max" class="form-control"
                             value="<?php echo htmlspecialchars($max_amount ?? ''); ?>">
                     </div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small fw-bold">Date Range</label>
-                    <input type="date" name="start" class="form-control mb-2"
+                    <label for="start" class="form-label small fw-bold">Date Range</label>
+                    <input type="date" id="start" name="start" class="form-control mb-2"
                         value="<?php echo htmlspecialchars($start_date ?? ''); ?>">
                     <input type="date" name="end" class="form-control"
                         value="<?php echo htmlspecialchars($end_date ?? ''); ?>">
@@ -199,8 +199,7 @@ try {
                                         </td>
                                         <td class="fw-bold text-dark blur-sensitive">
                                             <?php echo number_format($ex['amount'], 2); ?>
-                                            <?php if ($ex['currency'] != 'AED')
-                                                echo ' <small class="text-muted">(' . htmlspecialchars($ex['currency']) . ')</small>'; ?>
+                                            <?php if ($ex['currency'] != 'AED') { echo ' <small class="text-muted">(' . htmlspecialchars($ex['currency']) . ')</small>'; } ?>
                                         </td>
                                         <td class="pe-4 text-end">
                                             <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
@@ -227,27 +226,20 @@ try {
                     <?php if ($total_pages > 1): ?>
                         <div class="card-footer bg-light d-flex justify-content-between align-items-center py-3">
                             <div class="text-muted small">
-                                Showing <?php echo ($offset + 1); ?>–<?php echo min($offset + $items_per_page, $total_items); ?> of
+                                Showing <?php echo $offset + 1; ?>â€“<?php echo min($offset + $items_per_page, $total_items); ?> of
                                 <?php echo $total_items; ?> results
                             </div>
                             <nav aria-label="Page navigation">
                                 <ul class="pagination pagination-sm mb-0">
                                     <?php
                                     $base_url = "?";
-                                    if ($keyword)
-                                        $base_url .= "q=" . urlencode($keyword) . "&";
-                                    if ($category)
-                                        $base_url .= "category=" . urlencode($category) . "&";
-                                    if ($tag)
-                                        $base_url .= "tag=" . urlencode($tag) . "&";
-                                    if ($min_amount)
-                                        $base_url .= "min=$min_amount&";
-                                    if ($max_amount)
-                                        $base_url .= "max=$max_amount&";
-                                    if ($start_date)
-                                        $base_url .= "start=$start_date&";
-                                    if ($end_date)
-                                        $base_url .= "end=$end_date&";
+                                    if ($keyword) { $base_url .= "q=" . urlencode($keyword) . "&"; }
+                                    if ($category) { $base_url .= "category=" . urlencode($category) . "&"; }
+                                    if ($tag) { $base_url .= "tag=" . urlencode($tag) . "&"; }
+                                    if ($min_amount) { $base_url .= "min=$min_amount&"; }
+                                    if ($max_amount) { $base_url .= "max=$max_amount&"; }
+                                    if ($start_date) { $base_url .= "start=$start_date&"; }
+                                    if ($end_date) { $base_url .= "end=$end_date&"; }
                                     ?>
                                     <li class="page-item <?php echo $page_num <= 1 ? 'disabled' : ''; ?>">
                                         <a class="page-link" href="<?php echo $base_url; ?>page=<?php echo $page_num - 1; ?>">

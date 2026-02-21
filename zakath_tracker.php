@@ -43,8 +43,7 @@ $records = $stmt->fetchAll();
 
 $total_pending = 0;
 foreach ($records as $r) {
-    if ($r['status'] == 'Pending')
-        $total_pending += $r['total_zakath'];
+    if ($r['status'] == 'Pending') { $total_pending += $r['total_zakath']; }
 }
 ?>
 

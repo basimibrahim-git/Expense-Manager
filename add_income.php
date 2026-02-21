@@ -80,13 +80,13 @@ $user_banks = $banks_stmt->fetchAll();
                 <div class="mb-3">
                     <label class="form-label">Category <span class="text-danger">*</span></label>
                     <select name="category" class="form-select" required>
-                        <option value="Salary">💼 Salary</option>
-                        <option value="Incentives">🎯 Incentives / Commission</option>
-                        <option value="Business">🏢 Business Income</option>
-                        <option value="Bonus">🎁 Bonus</option>
-                        <option value="Investment">📈 Investment Return</option>
-                        <option value="Gift">🎀 Gift</option>
-                        <option value="Other">🔹 Other</option>
+                        <option value="Salary">ðŸ’¼ Salary</option>
+                        <option value="Incentives">ðŸŽ¯ Incentives / Commission</option>
+                        <option value="Business">ðŸ¢ Business Income</option>
+                        <option value="Bonus">ðŸŽ Bonus</option>
+                        <option value="Investment">ðŸ“ˆ Investment Return</option>
+                        <option value="Gift">ðŸŽ€ Gift</option>
+                        <option value="Other">ðŸ”¹ Other</option>
                     </select>
                 </div>
 

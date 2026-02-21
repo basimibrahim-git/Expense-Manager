@@ -212,7 +212,7 @@ $total_income = $sum_stmt->fetchColumn() ?: 0;
         <?php if ($total_pages > 1): ?>
             <div class="card-footer bg-light d-flex justify-content-between align-items-center py-3">
                 <div class="text-muted small">
-                    Showing <?php echo ($offset + 1); ?>–<?php echo min($offset + $items_per_page, $total_items); ?> of
+                    Showing <?php echo ($offset + 1); ?>â€“<?php echo min($offset + $items_per_page, $total_items); ?> of
                     <?php echo $total_items; ?> entries
                 </div>
                 <nav aria-label="Page navigation">

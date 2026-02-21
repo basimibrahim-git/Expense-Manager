@@ -1,5 +1,6 @@
 <?php
 require_once 'config.php';
+const REDIRECT_ERROR = "Location: index.php?error=";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // CSRF Check
@@ -8,7 +9,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Rate Limiting / Cooldown
     $last_attempt = $_SESSION['last_auth_attempt'] ?? 0;
     if (time() - $last_attempt < 2) { // 2 second cooldown
-        header("Location: index.php?error=" . urlencode("Too many attempts. Please slow down."));
+        header(REDIRECT_ERROR . urlencode("Too many attempts. Please slow down."));
         exit();
     }
     $_SESSION['last_auth_attempt'] = time();
@@ -17,7 +18,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $password = $_POST['password'];
 
     if (!$email || empty($password)) {
-        header("Location: index.php?error=" . urlencode("Please fill in all fields correctly"));
+        header(REDIRECT_ERROR . urlencode("Please fill in all fields correctly"));
         exit();
     }
 
@@ -39,21 +40,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 header("Location: dashboard.php");
                 exit();
             } else {
-                header("Location: index.php?error=" . urlencode("Invalid credentials"));
+                header(REDIRECT_ERROR . urlencode("Invalid credentials"));
                 exit();
             }
         } else {
-            header("Location: index.php?error=" . urlencode("Database connection failed"));
+            header(REDIRECT_ERROR . urlencode("Database connection failed"));
             exit();
         }
     } catch (Exception $e) {
         // Log the actual error internally
         error_log("Auth Error: " . $e->getMessage());
-        header("Location: index.php?error=" . urlencode("An error occurred"));
+        header(REDIRECT_ERROR . urlencode("An error occurred"));
         exit();
     }
 } else {
     header("Location: index.php");
     exit();
 }
-?>

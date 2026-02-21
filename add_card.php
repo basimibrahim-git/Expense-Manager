@@ -331,46 +331,46 @@ $all_banks = $banks_stmt->fetchAll();
 
         // 1. Feature Library (Fallback)
         const featureAnalysis = {
-            'cashback': `• 3% Cashback on non-AED spend
-• 2% Cashback on Grocery & Supermarkets
-• 1% Cashback on all other retail spends
-• No Annual Fee for the first year`,
-            'infinite': `• Unlimited complimentary access to 1000+ airport lounges (LoungeKey)
-• Multi-trip travel insurance
-• Golf privileges at various clubs across UAE
-• Concierge Service 24/7`,
-            'platinum': `• Buy 1 Get 1 Free movie tickets at Vox Cinemas
-• 20% off on Careem rides
-• Purchase Protection & Extended Warranty
-• 2 free airport transfers per year`,
-            'rewards': `• Earn 2.5 Reward Points for every AED 1 spent
-• Redeem points for flights, hotels, or electronics
-• Access to exclusive 'Buy 1, Get 1' offers
-• Dining discounts up to 30%`,
-            'miles': `• Earn 2 Miles per USD spend
-• Redeem on any airline, any time
-• Free travel insurance for you and family
-• Priority pass lounge access`,
-            'touchpoints': `• Earn 1.5 TouchPoints for every AED 1 spent
-• 20% off on talabat orders twice a month
-• Buy 1 Get 1 Free coffee at Costa
-• Complimentary golf access`,
-            'skywards': `• Up to 2.5 Skywards Miles per USD spent
-• Silver Tier membership status
-• 25% discount on dining at 2000+ restaurants
-• Valet parking at selected malls`,
-            'neo': `• 1% Cashback on all spends
-• Free international transfers
-• No minimum balance required
-• Instant digital card issuance`,
-            'standard': `• Standard shopping protection
-• SMS alerts for transactions
-• Online banking access
-• 24/7 Customer Support`,
-            'islamic': `• Sharia-compliant card
-• No annual fee for life
-• Roadside assistance
-• Travel desk services`
+            'cashback': `â€¢ 3% Cashback on non-AED spend
+â€¢ 2% Cashback on Grocery & Supermarkets
+â€¢ 1% Cashback on all other retail spends
+â€¢ No Annual Fee for the first year`,
+            'infinite': `â€¢ Unlimited complimentary access to 1000+ airport lounges (LoungeKey)
+â€¢ Multi-trip travel insurance
+â€¢ Golf privileges at various clubs across UAE
+â€¢ Concierge Service 24/7`,
+            'platinum': `â€¢ Buy 1 Get 1 Free movie tickets at Vox Cinemas
+â€¢ 20% off on Careem rides
+â€¢ Purchase Protection & Extended Warranty
+â€¢ 2 free airport transfers per year`,
+            'rewards': `â€¢ Earn 2.5 Reward Points for every AED 1 spent
+â€¢ Redeem points for flights, hotels, or electronics
+â€¢ Access to exclusive 'Buy 1, Get 1' offers
+â€¢ Dining discounts up to 30%`,
+            'miles': `â€¢ Earn 2 Miles per USD spend
+â€¢ Redeem on any airline, any time
+â€¢ Free travel insurance for you and family
+â€¢ Priority pass lounge access`,
+            'touchpoints': `â€¢ Earn 1.5 TouchPoints for every AED 1 spent
+â€¢ 20% off on talabat orders twice a month
+â€¢ Buy 1 Get 1 Free coffee at Costa
+â€¢ Complimentary golf access`,
+            'skywards': `â€¢ Up to 2.5 Skywards Miles per USD spent
+â€¢ Silver Tier membership status
+â€¢ 25% discount on dining at 2000+ restaurants
+â€¢ Valet parking at selected malls`,
+            'neo': `â€¢ 1% Cashback on all spends
+â€¢ Free international transfers
+â€¢ No minimum balance required
+â€¢ Instant digital card issuance`,
+            'standard': `â€¢ Standard shopping protection
+â€¢ SMS alerts for transactions
+â€¢ Online banking access
+â€¢ 24/7 Customer Support`,
+            'islamic': `â€¢ Sharia-compliant card
+â€¢ No annual fee for life
+â€¢ Roadside assistance
+â€¢ Travel desk services`
         };
 
         // 2. Try Live Fetch (The Real Data)
@@ -384,7 +384,7 @@ $all_banks = $banks_stmt->fetchAll();
 
             if (data.success && data.data.description && data.data.description.length > 20) {
                 // Formatting the live content nicely
-                features = "✅ VERIFIED LIVE DATA FROM BANK WEBSITE:\n" + data.data.description;
+                features = "âœ… VERIFIED LIVE DATA FROM BANK WEBSITE:\n" + data.data.description;
                 if (data.data.title) {
                     features = "Card: " + data.data.title + "\n" + features;
                 }

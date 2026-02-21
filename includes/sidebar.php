@@ -48,24 +48,25 @@
         $tool_pages = ['reminders.php', 'search.php', 'reports_advanced.php'];
         $is_tools_active = in_array($current_page, $tool_pages);
         ?>
-        <a class="nav-link d-flex justify-content-between align-items-center <?php echo $is_tools_active ? '' : 'collapsed'; ?>"
-            data-bs-toggle="collapse" href="#toolsMenu" role="button"
-            aria-expanded="<?php echo $is_tools_active ? 'true' : 'false'; ?>">
+        <button type="button"
+            class="nav-link w-100 text-start d-flex justify-content-between align-items-center <?php echo $is_tools_active ? '' : 'collapsed'; ?>"
+            data-bs-toggle="collapse" data-bs-target="#toolsMenu" aria-controls="toolsMenu"
+            aria-expanded="<?php echo $is_tools_active ? 'true' : 'false'; ?>" style="border:none;background:none;">
             <span><i class="fa-solid fa-screwdriver-wrench"></i> Analysis & Tools</span>
             <i class="fa-solid fa-chevron-down small"></i>
-        </a>
+        </button>
         <div class="collapse <?php echo $is_tools_active ? 'show' : ''; ?>" id="toolsMenu">
             <div class="ps-3 border-start ms-3 border-2 mb-2">
                 <a href="<?php echo BASE_URL; ?>reminders.php"
-                    class="nav-link py-1 <?php echo $current_page == 'reminders.php' ? 'active text-primary' : 'text-muted'; ?>">
+                    class="nav-link py-1 <?php echo $current_page == 'reminders.php' ? $activeClass : 'text-muted'; ?>">
                     Reminders
                 </a>
                 <a href="<?php echo BASE_URL; ?>search.php"
-                    class="nav-link py-1 <?php echo $current_page == 'search.php' ? 'active text-primary' : 'text-muted'; ?>">
+                    class="nav-link py-1 <?php echo $current_page == 'search.php' ? $activeClass : 'text-muted'; ?>">
                     Advanced Search
                 </a>
                 <a href="<?php echo BASE_URL; ?>reports_advanced.php"
-                    class="nav-link py-1 <?php echo $current_page == 'reports_advanced.php' ? 'active text-primary' : 'text-muted'; ?>">
+                    class="nav-link py-1 <?php echo $current_page == 'reports_advanced.php' ? $activeClass : 'text-muted'; ?>">
                     Advanced Reports
                 </a>
             </div>
@@ -85,32 +86,33 @@
         ];
         $is_tracker_active = in_array($current_page, $tracker_pages);
         ?>
-        <a class="nav-link d-flex justify-content-between align-items-center <?php echo $is_tracker_active ? '' : 'collapsed'; ?>"
-            data-bs-toggle="collapse" href="#trackersMenu" role="button"
-            aria-expanded="<?php echo $is_tracker_active ? 'true' : 'false'; ?>">
+        <button type="button"
+            class="nav-link w-100 text-start d-flex justify-content-between align-items-center <?php echo $is_tracker_active ? '' : 'collapsed'; ?>"
+            data-bs-toggle="collapse" data-bs-target="#trackersMenu" aria-controls="trackersMenu"
+            aria-expanded="<?php echo $is_tracker_active ? 'true' : 'false'; ?>" style="border:none;background:none;">
             <span><i class="fa-solid fa-toolbox"></i> Special Trackers</span>
             <i class="fa-solid fa-chevron-down small"></i>
-        </a>
+        </button>
         <div class="collapse <?php echo $is_tracker_active ? 'show' : ''; ?>" id="trackersMenu">
             <div class="ps-3 border-start ms-3 border-2 mb-2">
                 <a href="<?php echo BASE_URL; ?>company_tracker.php"
-                    class="nav-link py-1 <?php echo ($current_page == 'company_tracker.php' || $current_page == 'monthly_incentives.php') ? 'active text-primary' : 'text-muted'; ?>">
+                    class="nav-link py-1 <?php echo ($current_page == 'company_tracker.php' || $current_page == 'monthly_incentives.php') ? $activeClass : 'text-muted'; ?>">
                     Incentive Tracker
                 </a>
                 <a href="<?php echo BASE_URL; ?>zakath_tracker.php"
-                    class="nav-link py-1 <?php echo ($current_page == 'zakath_tracker.php' || $current_page == 'zakath_calculator.php') ? 'active text-primary' : 'text-muted'; ?>">
+                    class="nav-link py-1 <?php echo ($current_page == 'zakath_tracker.php' || $current_page == 'zakath_calculator.php') ? $activeClass : 'text-muted'; ?>">
                     Zakath Tracker
                 </a>
                 <a href="<?php echo BASE_URL; ?>interest_tracker.php"
-                    class="nav-link py-1 <?php echo ($current_page == 'interest_tracker.php' || $current_page == 'monthly_interest.php') ? 'active text-primary' : 'text-muted'; ?>">
+                    class="nav-link py-1 <?php echo ($current_page == 'interest_tracker.php' || $current_page == 'monthly_interest.php') ? $activeClass : 'text-muted'; ?>">
                     Interest Tracker
                 </a>
                 <a href="<?php echo BASE_URL; ?>sadaqa_tracker.php"
-                    class="nav-link py-1 <?php echo ($current_page == 'sadaqa_tracker.php' || $current_page == 'monthly_sadaqa.php') ? 'active text-primary' : 'text-muted'; ?>">
+                    class="nav-link py-1 <?php echo ($current_page == 'sadaqa_tracker.php' || $current_page == 'monthly_sadaqa.php') ? $activeClass : 'text-muted'; ?>">
                     Sadaqa Tracker
                 </a>
                 <a href="<?php echo BASE_URL; ?>lending_tracker.php"
-                    class="nav-link py-1 <?php echo ($current_page == 'lending_tracker.php') ? 'active text-primary' : 'text-muted'; ?>">
+                    class="nav-link py-1 <?php echo ($current_page == 'lending_tracker.php') ? $activeClass : 'text-muted'; ?>">
                     Money Lending
                 </a>
             </div>
@@ -127,34 +129,35 @@
             }
         }
         ?>
-        <a class="nav-link d-flex justify-content-between align-items-center <?php echo $is_mgmt_active ? '' : 'collapsed'; ?>"
-            data-bs-toggle="collapse" href="#mgmtMenu" role="button"
-            aria-expanded="<?php echo $is_mgmt_active ? 'true' : 'false'; ?>">
+        <button type="button"
+            class="nav-link w-100 text-start d-flex justify-content-between align-items-center <?php echo $is_mgmt_active ? '' : 'collapsed'; ?>"
+            data-bs-toggle="collapse" data-bs-target="#mgmtMenu" aria-controls="mgmtMenu"
+            aria-expanded="<?php echo $is_mgmt_active ? 'true' : 'false'; ?>" style="border:none;background:none;">
             <span><i class="fa-solid fa-users-gear"></i> Administration</span>
             <i class="fa-solid fa-chevron-down small"></i>
-        </a>
+        </button>
         <div class="collapse <?php echo $is_mgmt_active ? 'show' : ''; ?>" id="mgmtMenu">
             <div class="ps-3 border-start ms-3 border-2 mb-2">
                 <?php if (in_array($_SESSION['role'] ?? '', ['family_admin', 'root_admin'])): ?>
                     <a href="<?php echo BASE_URL; ?>family_management.php"
-                        class="nav-link py-1 <?php echo ($current_page == 'family_management.php') ? 'active text-primary' : 'text-muted'; ?>">
+                        class="nav-link py-1 <?php echo ($current_page == 'family_management.php') ? $activeClass : 'text-muted'; ?>">
                         Family Settings
                     </a>
                 <?php endif; ?>
 
                 <?php if (($_SESSION['role'] ?? '') === 'root_admin'): ?>
                     <a href="<?php echo BASE_URL; ?>admin/index.php"
-                        class="nav-link py-1 <?php echo (strpos($current_page, 'admin/index.php') !== false) ? 'active text-primary' : 'text-muted'; ?>">
+                        class="nav-link py-1 <?php echo (strpos($current_page, 'admin/index.php') !== false) ? $activeClass : 'text-muted'; ?>">
                         Root Dashboard
                     </a>
                     <a href="<?php echo BASE_URL; ?>admin/manage_tenants.php"
-                        class="nav-link py-1 <?php echo (strpos($current_page, 'admin/manage_tenants.php') !== false) ? 'active text-primary' : 'text-muted'; ?>">
+                        class="nav-link py-1 <?php echo (strpos($current_page, 'admin/manage_tenants.php') !== false) ? $activeClass : 'text-muted'; ?>">
                         Manage Tenants
                     </a>
                 <?php endif; ?>
 
                 <a href="<?php echo BASE_URL; ?>security_audit.php"
-                    class="nav-link py-1 <?php echo $current_page == 'security_audit.php' ? 'active text-primary' : 'text-muted'; ?>">
+                    class="nav-link py-1 <?php echo $current_page == 'security_audit.php' ? $activeClass : 'text-muted'; ?>">
                     Security Audit
                 </a>
             </div>
@@ -191,7 +194,8 @@
     </div>
 </nav>
 
-<div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+<button type="button" class="sidebar-overlay" onclick="toggleSidebar()" aria-label="Close Sidebar"
+    style="border:none;background:transparent;"></button>
 
 <!-- Main Content Wrapper -->
 <main class="main-content">

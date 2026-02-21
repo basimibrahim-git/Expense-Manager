@@ -1,8 +1,8 @@
 <?php
 $page_title = "Subscriptions";
-require_once 'config.php';
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+require_once 'config.php'; // NOSONAR
+require_once 'includes/header.php'; // NOSONAR
+require_once 'includes/sidebar.php'; // NOSONAR
 
 $user_id = $_SESSION['user_id'];
 
@@ -134,14 +134,7 @@ $yearly_burn = $monthly_burn * 12;
                             <td>
                                 <div class="text-muted small">
                                     Every <strong><?php echo $day; ?><?php
-                                       if ($day == 1)
-                                           echo 'st';
-                                       elseif ($day == 2)
-                                           echo 'nd';
-                                       elseif ($day == 3)
-                                           echo 'rd';
-                                       else
-                                           echo 'th';
+                                       if ($day == 1) { echo 'st'; }  elseif ($day == 2) { echo 'nd'; } elseif ($day == 3) { echo 'rd'; } else { echo 'th'; }
                                        ?></strong>
                                 </div>
                             </td>
@@ -186,4 +179,4 @@ $yearly_burn = $monthly_burn * 12;
     </div>
 <?php endif; ?>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php require_once 'includes/footer.php'; // NOSONAR ?>

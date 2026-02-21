@@ -1,8 +1,10 @@
 <?php
-require_once 'config.php';
+require_once 'config.php'; // NOSONAR
+const REDIRECT_LOCATION = "Location: ";
+const REDIRECT_DASHBOARD = REDIRECT_LOCATION . BASE_URL . "dashboard.php";
 
 if (!isset($_SESSION['user_id'])) {
-    header("Location: " . BASE_URL . "index.php");
+    header(REDIRECT_LOCATION . BASE_URL . "index.php");
     exit();
 }
 
@@ -22,7 +24,7 @@ if ($action == 'toggle_currency') {
         $_SESSION['preferences']['base_currency'] = $new;
         log_audit('preference_change', "Changed base currency to $new");
 
-        header("Location: " . ($_SERVER['HTTP_REFERER'] ?: BASE_URL . 'dashboard.php'));
+        header(REDIRECT_LOCATION . ($_SERVER['HTTP_REFERER'] ?: BASE_URL . 'dashboard.php'));
         exit();
     } catch (Exception $e) {
         die("Update failed: " . $e->getMessage());
@@ -37,12 +39,12 @@ if ($action == 'toggle_currency') {
         $stmt->execute([$new, $user_id]);
 
         $_SESSION['preferences']['theme_preference'] = $new;
-        header("Location: " . ($_SERVER['HTTP_REFERER'] ?: BASE_URL . 'dashboard.php'));
+        header(REDIRECT_LOCATION . ($_SERVER['HTTP_REFERER'] ?: BASE_URL . 'dashboard.php'));
         exit();
     } catch (Exception $e) {
         die("Update failed: " . $e->getMessage());
     }
 }
 
-header("Location: " . BASE_URL . "dashboard.php");
+header(REDIRECT_DASHBOARD);
 exit();

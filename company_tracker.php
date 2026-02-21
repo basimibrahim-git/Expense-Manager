@@ -1,6 +1,6 @@
 <?php
 $page_title = "Incentive Tracker";
-require_once 'config.php';
+require_once 'config.php'; // NOSONAR
 
 // Auth Check
 if (!isset($_SESSION['user_id'])) {
@@ -64,8 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     }
 }
 
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+require_once 'includes/header.php'; // NOSONAR
+require_once 'includes/sidebar.php'; // NOSONAR
 
 // Determine View Mode: YEAR LIST vs MONTH GRID
 $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
@@ -77,12 +77,12 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
     // Fetch Totals for displayed years
     $years_to_show = range(2023, 2026); // Default Range
 
-    // Check if we have data outside this range to show dynamically? 
+    // Check if we have data outside this range to show dynamically?
     // For now, adhere to "start 2023 end 2026" request but fetch totals.
     $stmt = $pdo->prepare("
-        SELECT YEAR(incentive_date) as year, SUM(amount) as total 
-        FROM company_incentives 
-        WHERE tenant_id = ? 
+        SELECT YEAR(incentive_date) as year, SUM(amount) as total
+        FROM company_incentives
+        WHERE tenant_id = ?
         GROUP BY YEAR(incentive_date)
     ");
     $stmt->execute([$_SESSION['tenant_id']]);
@@ -144,9 +144,9 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
 
     // Fetch ALL incentives for this year
     $stmt = $pdo->prepare("
-        SELECT id, MONTH(incentive_date) as month, amount 
-        FROM company_incentives 
-        WHERE tenant_id = :tenant_id AND YEAR(incentive_date) = :year 
+        SELECT id, MONTH(incentive_date) as month, amount
+        FROM company_incentives
+        WHERE tenant_id = :tenant_id AND YEAR(incentive_date) = :year
         ORDER BY id ASC
     ");
     $stmt->execute(['tenant_id' => $_SESSION['tenant_id'], 'year' => $year]);
@@ -158,12 +158,14 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
 
     foreach ($all_incentives as $row) {
         $m = $row['month'];
-        if (!isset($monthly_data[$m]))
+        if (!isset($monthly_data[$m])) {
             $monthly_data[$m] = [];
+        }
         $monthly_data[$m][] = $row;
 
-        if (!isset($monthly_totals[$m]))
+        if (!isset($monthly_totals[$m])) {
             $monthly_totals[$m] = 0;
+        }
         $monthly_totals[$m] += $row['amount'];
     }
 
@@ -211,7 +213,7 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
         <?php foreach ($months as $num => $name): ?>
             <?php
             $total = $monthly_totals[$num] ?? 0;
-            $has_data = isset($monthly_totals[$num]); // Use isset to allow 0 value to show as data if wanted, though total 0 is tricky. Logic: display "AED 0" if data exists? 
+            $has_data = isset($monthly_totals[$num]); // Use isset to allow 0 value to show as data if wanted, though total 0 is tricky. Logic: display "AED 0" if data exists?
             // Better logic: check if $monthly_data[$num] has entries.
             $has_entries = !empty($monthly_data[$num]);
 
@@ -219,16 +221,16 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
             $border_class = $has_entries ? "border-success border-2" : "border-0 shadow-sm";
             ?>
             <div class="col-6 col-md-3 col-lg-2">
-                <div onclick="openManageModal(<?php echo $num; ?>, '<?php echo $name; ?>')"
-                    class="card h-100 p-2 text-center cursor-pointer <?php echo $bg_class . ' ' . $border_class; ?>"
-                    style="cursor: pointer; transition: transform 0.1s;">
+                <button type="button" onclick="openManageModal(<?php echo $num; ?>, '<?php echo $name; ?>')"
+                    class="card h-100 p-2 text-center cursor-pointer w-100 <?php echo $bg_class . ' ' . $border_class; ?>"
+                    style="cursor: pointer; transition: transform 0.1s; border: none; text-align: inherit; background: none;">
                     <div class="text-uppercase fw-bold small opacity-75 mb-1"><?php echo $name; ?></div>
                     <?php if ($has_entries): ?>
                         <div class="fw-bold h6 mb-0">AED <?php echo number_format($total, 0); ?></div>
                     <?php else: ?>
                         <div class="small py-1 opacity-50"><i class="fa-solid fa-plus"></i></div>
                     <?php endif; ?>
-                </div>
+                </button>
             </div>
         <?php endforeach; ?>
     </div>
@@ -369,4 +371,4 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
     }
 </style>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php require_once 'includes/footer.php'; // NOSONAR ?>

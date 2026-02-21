@@ -137,14 +137,7 @@ require_once 'includes/sidebar.php';
                                 <td>
                                     <?php
                                     $badgeClass = 'bg-secondary';
-                                    if (strpos($log['action'], 'delete') !== false)
-                                        $badgeClass = 'bg-danger';
-                                    if (strpos($log['action'], 'login') !== false)
-                                        $badgeClass = 'bg-success';
-                                    if (strpos($log['action'], 'update') !== false)
-                                        $badgeClass = 'bg-warning text-dark';
-                                    if (strpos($log['action'], 'add') !== false)
-                                        $badgeClass = 'bg-primary';
+                                    if (strpos($log['action'], 'delete') !== false) { $badgeClass = 'bg-danger'; } elseif (strpos($log['action'], 'login') !== false) { $badgeClass = 'bg-success'; } elseif (strpos($log['action'], 'update') !== false) { $badgeClass = 'bg-warning text-dark'; } elseif (strpos($log['action'], 'add') !== false) { $badgeClass = 'bg-primary'; }
                                     ?>
                                     <span class="badge <?php echo $badgeClass; ?> rounded-pill px-3">
                                         <?php echo ucwords(str_replace('_', ' ', $log['action'])); ?>
@@ -199,15 +192,15 @@ require_once 'includes/sidebar.php';
             <div class="modal-body p-4">
                 <div class="row g-4">
                     <div class="col-md-4">
-                        <label class="text-muted small fw-bold text-uppercase d-block mb-1">Performer</label>
+                        <div class="text-muted small fw-bold text-uppercase d-block mb-1">Performer</div>
                         <div id="modalUserName" class="h5 fw-bold text-primary"></div>
                     </div>
                     <div class="col-md-4">
-                        <label class="text-muted small fw-bold text-uppercase d-block mb-1">Action Type</label>
+                        <div class="text-muted small fw-bold text-uppercase d-block mb-1">Action Type</div>
                         <div id="modalAction" class="h5 fw-bold"></div>
                     </div>
                     <div class="col-md-4">
-                        <label class="text-muted small fw-bold text-uppercase d-block mb-1">Occurrence</label>
+                        <div class="text-muted small fw-bold text-uppercase d-block mb-1">Occurrence</div>
                         <div id="modalTime" class="h5"></div>
                     </div>
                     <div class="col-12">
@@ -217,11 +210,11 @@ require_once 'includes/sidebar.php';
                             style="word-break: break-all;"></div>
                     </div>
                     <div class="col-md-6">
-                        <label class="text-muted small fw-bold text-uppercase d-block mb-1">IP Address</label>
+                        <div class="text-muted small fw-bold text-uppercase d-block mb-1">IP Address</div>
                         <div id="modalIP" class="h6"></div>
                     </div>
                     <div class="col-12">
-                        <label class="text-muted small fw-bold text-uppercase d-block mb-1">User Agent</label>
+                        <div class="text-muted small fw-bold text-uppercase d-block mb-1">User Agent</div>
                         <div id="modalUA" class="p-2 border rounded-3 small text-muted font-monospace"></div>
                     </div>
                 </div>
