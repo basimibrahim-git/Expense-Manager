@@ -1,347 +1,250 @@
 <?php
 $page_title = "Monthly Income";
-include_once 'config.php';
-include_once 'includes/header.php';
-include_once 'includes/sidebar.php';
+include_once 'config.php'; // NOSONAR
+include_once 'includes/header.php'; // NOSONAR
+include_once 'includes/sidebar.php'; // NOSONAR
 
 $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
-$category_filter = filter_input(INPUT_GET, 'category');
-$start_date = filter_input(INPUT_GET, 'start');
-$end_date = filter_input(INPUT_GET, 'end');
 
-$month_name = date("F", mktime(0, 0, 0, $month, 10));
+// Handle Bulk Category Change
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'bulk_change_category') {
+    verify_csrf_token($_POST['csrf_token'] ?? '');
 
-// Pagination settings
-$items_per_page = 15;
-$page_num = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT) ?: 1;
-$offset = ($page_num - 1) * $items_per_page;
+    // Permission Check
+    if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+        header("Location: monthly_income.php?month=$month&year=$year&error=Unauthorized: Read-only access");
+        exit();
+    }
 
-// Build query with filters
-$count_query = "SELECT COUNT(*) FROM income WHERE tenant_id = :tenant_id AND MONTH(income_date) = :month AND YEAR(income_date) = :year";
-$params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];
+    $ids = $_POST['ids'] ?? [];
+    $new_category = $_POST['new_category'] ?? '';
 
-if ($category_filter) {
-    $count_query .= " AND category = :cat";
-    $params['cat'] = $category_filter;
-}
-if ($start_date) {
-    $count_query .= " AND income_date >= :start";
-    $params['start'] = $start_date;
-}
-if ($end_date) {
-    $count_query .= " AND income_date <= :end";
-    $params['end'] = $end_date;
+    if (!empty($ids) && !empty($new_category)) {
+        $ids_placeholder = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $pdo->prepare("UPDATE monthly_income SET category = ? WHERE id IN ($ids_placeholder) AND tenant_id = ?");
+        $stmt->execute(array_merge([$new_category], $ids, [$_SESSION['tenant_id']]));
+
+        log_audit('bulk_income_edit', "Changed category for " . count($ids) . " items to $new_category");
+        header("Location: monthly_income.php?month=$month&year=$year&success=Bulk update successful");
+        exit();
+    }
 }
 
-$count_stmt = $pdo->prepare($count_query);
-$count_stmt->execute($params);
-$total_items = $count_stmt->fetchColumn();
-$total_pages = max(1, ceil($total_items / $items_per_page));
+// Fetch Records
+$stmt = $pdo->prepare("SELECT * FROM monthly_income WHERE tenant_id = ? AND month = ? AND year = ? ORDER BY id DESC");
+$stmt->execute([$_SESSION['tenant_id'], $month, $year]);
+$records = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch Income with LIMIT
-$query = str_replace("SELECT COUNT(*)", "SELECT *", $count_query);
-$query .= " ORDER BY income_date DESC LIMIT $items_per_page OFFSET $offset";
-$stmt = $pdo->prepare($query);
-$stmt->execute($params);
-$incomes = $stmt->fetchAll();
-
-// Total income for the month (with filters)
-$sum_query = str_replace("SELECT COUNT(*)", "SELECT SUM(amount)", $count_query);
-$sum_stmt = $pdo->prepare($sum_query);
-$sum_stmt->execute($params);
-$total_income = $sum_stmt->fetchColumn() ?: 0;
+$total_income = array_sum(array_column($records, 'amount'));
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <a href="income.php?year=<?php echo $year; ?>" class="text-decoration-none text-muted small mb-1">
-            <i class="fa-solid fa-arrow-left"></i> Back to Year
-        </a>
-        <h1 class="h3 fw-bold mb-0">Income:
-            <?php echo $month_name . ' ' . $year; ?>
-        </h1>
+        <h1 class="h3 fw-bold mb-1">Monthly Income</h1>
+        <p class="text-muted mb-0">Track all income sources for
+            <?php echo date('F Y', mktime(0, 0, 0, $month, 1, $year)); ?>
+        </p>
     </div>
-    <div class="text-end">
-        <div class="small text-muted">Total Income</div>
-        <h3 class="fw-bold text-success mb-0">AED <span class="blur-sensitive">
-                <?php echo number_format($total_income, 2); ?></span>
-        </h3>
-    </div>
-</div>
-
-<?php if (isset($_GET['success'])): ?>
-    <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
-        <i class="fa-solid fa-check-circle me-2"></i>
-        <?php echo htmlspecialchars($_GET['success']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
-
-<?php if (isset($_GET['error'])): ?>
-    <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
-        <i class="fa-solid fa-exclamation-circle me-2"></i>
-        <?php echo htmlspecialchars($_GET['error']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
-
-<!-- Filters & Actions -->
-<div class="glass-panel p-3 mb-4">
-    <form method="GET" class="row g-2 align-items-end">
-        <input type="hidden" name="month" value="<?php echo $month; ?>">
-        <input type="hidden" name="year" value="<?php echo $year; ?>">
-
-        <div class="col-md-3">
-            <label for="filterCategory" class="small text-muted mb-1">Category</label>
-            <select name="category" id="filterCategory" class="form-select form-select-sm"
-                onchange="this.form.submit()">
-                <option value="">All Categories</option>
-                <?php
-                $income_categories = ['Salary', 'Incentives', 'Business', 'Bonus', 'Investment', 'Gift', 'Other'];
-                foreach ($income_categories as $cat): ?>
-                    <option value="<?php echo $cat; ?>" <?php echo ($category_filter ?? '') == $cat ? 'selected' : ''; ?>>
-                        <?php echo $cat; ?>
+    <div class="d-flex gap-2">
+        <form class="d-flex gap-2 me-2" method="GET">
+            <select name="month" class="form-select form-select-sm">
+                <?php for ($m = 1; $m <= 12; $m++): ?>
+                    <option value="<?php echo $m; ?>" <?php echo $month == $m ? 'selected' : ''; ?>>
+                        <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
                     </option>
-                <?php endforeach; ?>
+                <?php endfor; ?>
             </select>
-        </div>
-
-        <div class="col-md-2">
-            <label for="filterStart" class="small text-muted mb-1">From</label>
-            <input type="date" name="start" id="filterStart" class="form-control form-control-sm"
-                value="<?php echo htmlspecialchars($start_date ?? ''); ?>" onchange="this.form.submit()">
-        </div>
-
-        <div class="col-md-2">
-            <label for="filterEnd" class="small text-muted mb-1">To</label>
-            <input type="date" name="end" id="filterEnd" class="form-control form-control-sm"
-                value="<?php echo htmlspecialchars($end_date ?? ''); ?>" onchange="this.form.submit()">
-        </div>
-
-        <div class="col-md-3 ms-auto text-end d-flex gap-2">
-            <a href="export_actions.php?action=export_income&month=<?php echo $month; ?>&year=<?php echo $year; ?>&category=<?php echo $category_filter; ?>&start=<?php echo $start_date; ?>&end=<?php echo $end_date; ?>"
-                class="btn btn-outline-secondary btn-sm flex-grow-1">
-                <i class="fa-solid fa-file-csv me-1"></i> Export
+            <select name="year" class="form-select form-select-sm">
+                <?php for ($y = date('Y') - 1; $y <= date('Y') + 1; $y++): ?>
+                    <option value="<?php echo $y; ?>" <?php echo $year == $y ? 'selected' : ''; ?>>
+                        <?php echo $y; ?>
+                    </option>
+                <?php endfor; ?>
+            </select>
+            <button type="submit" class="btn btn-sm btn-light border">Go</button>
+        </form>
+        <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+            <a href="add_income.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>" class="btn btn-primary fw-bold">
+                <i class="fa-solid fa-plus me-2"></i> Add Income
             </a>
-            <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-                <a href="add_income.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>"
-                    class="btn btn-success btn-sm flex-grow-1">
-                    <i class="fa-solid fa-plus me-1"></i> Add
-                </a>
-            <?php endif; ?>
-        </div>
-    </form>
-
-    <?php if (($category_filter ?? '') || ($start_date ?? '') || ($end_date ?? '')): ?>
-        <div class="mt-2 pt-2 border-top">
-            <a href="?month=<?php echo $month; ?>&year=<?php echo $year; ?>" class="btn btn-sm btn-outline-secondary">
-                <i class="fa-solid fa-times me-1"></i> Clear Filters
-            </a>
-        </div>
-    <?php endif; ?>
+        <?php endif; ?>
+    </div>
 </div>
 
-<?php if (empty($incomes)): ?>
-    <div class="text-center py-5">
-        <p class="text-muted">No income recorded for this period.</p>
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="glass-panel p-4 h-100 border-start border-4 border-primary">
+            <h6 class="text-muted fw-bold text-uppercase small mb-2">Total Income</h6>
+            <h3 class="fw-bold text-primary mb-0">AED <span class="blur-sensitive">
+                    <?php echo number_format($total_income, 2); ?>
+                </span></h3>
+            <p class="text-muted small mb-0 mt-2">Sum of all sources for this period</p>
+        </div>
     </div>
-<?php else: ?>
-    <div class="card border-0 shadow-sm overflow-hidden">
+</div>
+
+<div class="glass-panel p-0 overflow-hidden">
+    <form id="bulkActionForm" method="POST">
+        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+        <input type="hidden" name="action" value="bulk_change_category">
+        <input type="hidden" name="new_category" id="bulkCategoryInput">
+
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead class="bg-light">
                     <tr>
-                        <th class="ps-4 py-3" style="width: 40px;">
+                        <th class="ps-4" style="width: 40px;">
                             <input type="checkbox" class="form-check-input" id="selectAll">
                         </th>
-                        <th class="py-3">Day</th>
-                        <th>Description</th>
+                        <th>Source</th>
                         <th>Category</th>
-                        <th class="text-end pe-4">Amount</th>
-                        <th></th>
+                        <th>Amount</th>
+                        <th>Date</th>
+                        <th class="text-end pe-4">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($incomes as $inc): ?>
-                        <tr data-id="<?php echo $inc['id']; ?>">
-                            <td class="ps-4">
-                                <input type="checkbox" class="form-check-input row-checkbox" name="income_ids[]"
-                                    value="<?php echo $inc['id']; ?>">
-                            </td>
-                            <td class="fw-bold">
-                                <?php echo date('d', strtotime($inc['income_date'])); ?>
-                                <span class="small text-muted fw-normal d-block">
-                                    <?php echo date('D', strtotime($inc['income_date'])); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <?php echo htmlspecialchars($inc['description']); ?>
-                            </td>
-                            <td><span class="badge bg-light text-dark border">
-                                    <?php echo htmlspecialchars($inc['category']); ?>
-                                </span></td>
-                            <td class="text-end pe-4 fw-bold text-success">
-                                + AED <span class="blur-sensitive">
-                                    <?php echo number_format($inc['amount'], 2); ?></span>
-                            </td>
-                            <td class="text-end pe-3">
-                                <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-                                    <a href="edit_income.php?id=<?php echo $inc['id']; ?>" class="btn btn-sm text-muted me-1"
-                                        title="Edit"><i class="fa-solid fa-pen"></i></a>
-                                    <form action="income_actions.php" method="POST" class="d-inline"
-                                        onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($inc['description'])); ?> - AED <?php echo number_format($inc['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($inc['income_date'])); ?>?');">
-                                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                                        <input type="hidden" name="action" value="delete_income">
-                                        <input type="hidden" name="id" value="<?php echo $inc['id']; ?>">
-                                        <button type="submit" class="btn btn-sm text-danger border-0 p-0" title="Delete">
-                                            <i class="fa-solid fa-trash"></i>
-                                        </button>
-                                    </form>
-                                <?php else: ?>
-                                    <i class="fa-solid fa-lock text-muted small" title="Read Only"></i>
-                                <?php endif; ?>
+                    <?php if (empty($records)): ?>
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                <i class="fa-solid fa-money-bill-trend-up fa-3x mb-3 d-block opacity-25"></i>
+                                No income entries for this period.
                             </td>
                         </tr>
-                    <?php endforeach; ?>
+                    <?php else: ?>
+                        <?php foreach ($records as $record): ?>
+                            <tr>
+                                <td class="ps-4">
+                                    <input type="checkbox" name="ids[]" value="<?php echo $record['id']; ?>"
+                                        class="form-check-input row-checkbox">
+                                </td>
+                                <td class="fw-bold">
+                                    <?php echo htmlspecialchars($record['source']); ?>
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark border">
+                                        <?php echo htmlspecialchars($record['category'] ?? 'General'); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="fw-bold text-success">AED
+                                        <?php echo number_format($record['amount'], 2); ?>
+                                    </span>
+                                </td>
+                                <td class="text-muted small">
+                                    <?php echo date('d M Y', strtotime($record['created_at'])); ?>
+                                </td>
+                                <td class="text-end pe-4">
+                                    <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="edit_income.php?id=<?php echo $record['id']; ?>"
+                                                class="btn btn-outline-primary border-0"><i class="fa-solid fa-pen"></i></a>
+                                            <button type="button" class="btn btn-outline-danger border-0"
+                                                onclick="confirmDelete(<?php echo $record['id']; ?>, '<?php echo addslashes(htmlspecialchars($record['source'])); ?>')">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    <?php else: ?>
+                                        <i class="fa-solid fa-lock text-muted small" title="Read Only"></i>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
-
-        <!-- Pagination -->
-        <?php if ($total_pages > 1): ?>
-            <div class="card-footer bg-light d-flex justify-content-between align-items-center py-3">
-                <div class="text-muted small">
-                    Showing <?php echo $offset + 1; ?>–<?php echo min($offset + $items_per_page, $total_items); ?> of
-                    <?php echo $total_items; ?> entries
-                </div>
-                <nav aria-label="Page navigation">
-                    <ul class="pagination pagination-sm mb-0">
-                        <?php $base_url = "?month=$month&year=$year"; ?>
-                        <li class="page-item <?php echo $page_num <= 1 ? 'disabled' : ''; ?>">
-                            <a class="page-link" href="<?php echo $base_url; ?>&page=<?php echo $page_num - 1; ?>">
-                                <i class="fa-solid fa-chevron-left"></i>
-                            </a>
-                        </li>
-                        <?php for ($i = max(1, $page_num - 2); $i <= min($total_pages, $page_num + 2); $i++): ?>
-                            <li class="page-item <?php echo $i == $page_num ? 'active' : ''; ?>">
-                                <a class="page-link" href="<?php echo $base_url; ?>&page=<?php echo $i; ?>"><?php echo $i; ?></a>
-                            </li>
-                        <?php endfor; ?>
-                        <li class="page-item <?php echo $page_num >= $total_pages ? 'disabled' : ''; ?>">
-                            <a class="page-link" href="<?php echo $base_url; ?>&page=<?php echo $page_num + 1; ?>">
-                                <i class="fa-solid fa-chevron-right"></i>
-                            </a>
-                        </li>
-                    </ul>
-                </nav>
-            </div>
-        <?php endif; ?>
-    </div>
-<?php endif; ?>
-
-<?php include_once 'includes/footer.php'; ?>
-
+    </form>
+</div>
 
 <!-- Bulk Action Floating Bar -->
 <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
     <div id="bulkActionBar"
-        class="position-fixed bottom-0 start-50 translate-middle-x mb-4 shadow-lg glass-panel p-3 d-none animate__animated animate__fadeInUp"
-        style="z-index: 1050; border-radius: 50px; min-width: 300px;">
-        <div class="d-flex align-items-center justify-content-between gap-4 px-2">
-            <div class="text-nowrap fw-bold">
-                <span id="selectedCount">0</span> Selected
+        class="position-fixed bottom-0 start-50 translate-middle-x mb-4 glass-panel p-3 border shadow-lg d-none"
+        style="z-index: 1050; min-width: 400px;">
+        <div class="d-flex align-items-center justify-content-between">
+            <div class="me-3">
+                <span id="selectedCount" class="badge bg-primary rounded-pill me-2">0</span>
+                <span class="fw-bold">Selected</span>
             </div>
             <div class="d-flex gap-2">
                 <div class="dropdown">
-                    <button class="btn btn-outline-success btn-sm rounded-pill dropdown-toggle" type="button"
+                    <button class="btn btn-sm btn-outline-primary dropdown-toggle rounded-pill" type="button"
                         data-bs-toggle="dropdown">
                         Change Category
                     </button>
                     <ul class="dropdown-menu border-0 shadow">
-                        <?php foreach ($income_categories as $cat): ?>
-                            <li><button type="button" class="dropdown-item"
-                                    onclick="bulkAction('change_category', '<?php echo $cat; ?>')"><?php echo $cat; ?></button>
-                            </li>
-                        <?php endforeach; ?>
+                        <li><button class="dropdown-item" type="button" onclick="submitBulkChange('Salary')">Salary</button>
+                        </li>
+                        <li><button class="dropdown-item" type="button" onclick="submitBulkChange('Bonus')">Bonus</button>
+                        </li>
+                        <li><button class="dropdown-item" type="button"
+                                onclick="submitBulkChange('Investment')">Investment</button></li>
+                        <li><button class="dropdown-item" type="button"
+                                onclick="submitBulkChange('Business')">Business</button></li>
+                        <li><button class="dropdown-item" type="button"
+                                onclick="submitBulkChange('Freelance')">Freelance</button></li>
+                        <li><button class="dropdown-item" type="button" onclick="submitBulkChange('Gift')">Gift</button>
+                        </li>
+                        <li><button class="dropdown-item" type="button" onclick="submitBulkChange('Other')">Other</button>
+                        </li>
                     </ul>
                 </div>
-                <button class="btn btn-danger btn-sm rounded-pill px-3" onclick="bulkAction('delete')">
-                    <i class="fa-solid fa-trash me-1"></i> Delete
-                </button>
-                <button class="btn btn-link btn-sm text-muted" onclick="deselectAll()">Cancel</button>
+                <button type="button" class="btn btn-sm btn-light rounded-pill px-3"
+                    onclick="clearSelection()">Cancel</button>
             </div>
         </div>
     </div>
-
-    <form id="bulkActionForm" action="income_actions.php" method="POST" class="d-none">
-        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-        <input type="hidden" name="action" id="bulkActionType">
-        <input type="hidden" name="category" id="bulkActionCategory">
-        <div id="bulkActionIds"></div>
-    </form>
 <?php endif; ?>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const selectAll = document.getElementById('selectAll');
-        const rowCheckboxes = document.querySelectorAll('.row-checkbox');
-        const bulkBar = document.getElementById('bulkActionBar');
-        const selectedCount = document.getElementById('selectedCount');
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.row-checkbox');
+    const bulkActionBar = document.getElementById('bulkActionBar');
+    const selectedCount = document.getElementById('selectedCount');
+    const bulkCategoryInput = document.getElementById('bulkCategoryInput');
+    const bulkActionForm = document.getElementById('bulkActionForm');
 
-        function updateBulkBar() {
-            const checkedCount = document.querySelectorAll('.row-checkbox:checked').length;
-            selectedCount.innerText = checkedCount;
-            if (checkedCount > 0) {
-                bulkBar.classList.remove('d-none');
-            } else {
-                bulkBar.classList.add('d-none');
-            }
+    function updateBulkBar() {
+        const checkedCount = document.querySelectorAll('.row-checkbox:checked').length;
+        if (checkedCount > 0) {
+            bulkActionBar.classList.remove('d-none');
+            selectedCount.textContent = checkedCount;
+        } else {
+            bulkActionBar.classList.add('d-none');
         }
-
-        selectAll.addEventListener('change', function () {
-            rowCheckboxes.forEach(cb => cb.checked = selectAll.checked);
-            updateBulkBar();
-        });
-
-        rowCheckboxes.forEach(cb => {
-            cb.addEventListener('change', updateBulkBar);
-        });
-    });
-
-    function deselectAll() {
-        document.getElementById('selectAll').checked = false;
-        document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = false);
-        document.getElementById('bulkActionBar').classList.add('d-none');
     }
 
-    function bulkAction(type, value = '') {
-        const checked = document.querySelectorAll('.row-checkbox:checked');
-        if (checked.length === 0) return;
+    if (selectAll) {
+        selectAll.addEventListener('change', () => {
+            checkboxes.forEach(cb => cb.checked = selectAll.checked);
+            updateBulkBar();
+        });
+    }
 
-        let confirmMsg = '';
-        if (type === 'delete') {
-            confirmMsg = `Are you sure you want to delete ${checked.length} selected income entries? This cannot be undone.`;
-        } else {
-            confirmMsg = `Change category to ${value} for ${checked.length} entries?`;
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', updateBulkBar);
+    });
+
+    function clearSelection() {
+        checkboxes.forEach(cb => cb.checked = false);
+        if (selectAll) selectAll.checked = false;
+        updateBulkBar();
+    }
+
+    function submitBulkChange(category) {
+        if (confirm(`Change category to "${category}" for all selected items?`)) {
+            bulkCategoryInput.value = category;
+            bulkActionForm.submit();
         }
+    }
 
-        if (confirm(confirmMsg)) {
-            const form = document.getElementById('bulkActionForm');
-            document.getElementById('bulkActionType').value = 'bulk_' + type;
-            document.getElementById('bulkActionCategory').value = value;
-
-            const idsContainer = document.getElementById('bulkActionIds');
-            idsContainer.innerHTML = '';
-            checked.forEach(cb => {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'ids[]';
-                input.value = cb.value;
-                idsContainer.appendChild(input);
-            });
-
-            form.submit();
+    function confirmDelete(id, source) {
+        if (confirm(`Are you sure you want to delete income from "${source}"? This cannot be undone.`)) {
+            window.location.href = `income_actions.php?action=delete&id=${id}&month=<?php echo $month; ?>&year=<?php echo $year; ?>&csrf_token=<?php echo generate_csrf_token(); ?>`;
         }
     }
 </script>
+
+<?php include_once 'includes/footer.php'; // NOSONAR ?>

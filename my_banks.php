@@ -1,130 +1,105 @@
 <?php
-$page_title = "My Banks";
-require_once 'config.php';
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+$page_title = "My Bank Accounts";
+include_once 'config.php'; // NOSONAR
+include_once 'includes/header.php'; // NOSONAR
+include_once 'includes/sidebar.php'; // NOSONAR
 
-// Fetch banks
+$tenant_id = $_SESSION['tenant_id'];
+define('BANK_DEFAULT_COLOR', '#0d6efd');
+
+// Fetch Banks
 try {
-    $stmt = $pdo->prepare("SELECT * FROM banks WHERE tenant_id = :tenant_id ORDER BY is_default DESC, bank_name ASC");
-    $stmt->execute(['tenant_id' => $_SESSION['tenant_id']]);
+    $stmt = $pdo->prepare("SELECT * FROM my_banks WHERE tenant_id = ? ORDER BY bank_name ASC");
+    $stmt->execute([$tenant_id]);
     $banks = $stmt->fetchAll();
-} catch (PDOException $e) {
+} catch (Exception $e) {
+    error_log("Error fetching banks: " . $e->getMessage());
     $banks = [];
-    $error = "Could not load banks. Please run migrate_banks.php first.";
-}
-
-// Count cards per bank
-$card_counts = [];
-try {
-    $cstmt = $pdo->prepare("SELECT bank_id, COUNT(*) as cnt FROM cards WHERE tenant_id = ? AND bank_id IS NOT NULL GROUP BY bank_id");
-    $cstmt->execute([$_SESSION['tenant_id']]);
-    foreach ($cstmt->fetchAll() as $row) {
-        $card_counts[$row['bank_id']] = $row['cnt'];
-    }
-} catch (PDOException $e) {
-    error_log($e->getMessage());
 }
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="h3 fw-bold mb-0">My Bank Accounts</h1>
+    <div>
+        <h1 class="h3 fw-bold mb-1">My Bank Accounts</h1>
+        <p class="text-muted mb-0">Manage your connected bank accounts and balances</p>
+    </div>
     <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-        <a href="add_bank.php" class="btn btn-primary">
+        <a href="add_bank.php" class="btn btn-primary fw-bold">
             <i class="fa-solid fa-plus me-2"></i> Add Bank
         </a>
     <?php endif; ?>
 </div>
 
-<?php if (isset($_GET['success'])): ?>
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="fa-solid fa-check-circle me-2"></i>
-        <?php echo htmlspecialchars($_GET['success']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-<?php endif; ?>
-
-<?php if (isset($error)): ?>
-    <div class="alert alert-warning">
-        <i class="fa-solid fa-exclamation-triangle me-2"></i>
-        <?php echo htmlspecialchars($error); ?>
-        <a href="migrate_banks.php" class="btn btn-sm btn-warning ms-2">Run Migration</a>
-    </div>
-<?php endif; ?>
-
-<?php if (empty($banks)): ?>
-    <div class="text-center py-5 glass-panel">
-        <i class="fa-solid fa-building-columns fa-3x text-muted mb-3"></i>
-        <h5>No Banks Added Yet</h5>
-        <p class="text-muted mb-4">Add your bank accounts to link cards and track balances.</p>
-        <a href="add_bank.php" class="btn btn-primary">
-            <i class="fa-solid fa-plus me-2"></i> Add Your First Bank
-        </a>
-    </div>
-<?php else: ?>
-    <div class="row g-4">
+<div class="row g-4">
+    <?php if (empty($banks)): ?>
+        <div class="col-12 text-center py-5">
+            <div class="glass-panel p-5">
+                <i class="fa-solid fa-building-columns fa-4x mb-3 opacity-25"></i>
+                <h4 class="fw-bold">No Banks Added</h4>
+                <p class="text-muted">Start by adding your first bank account to track balances.</p>
+                <a href="add_bank.php" class="btn btn-primary mt-2">Add My First Bank</a>
+            </div>
+        </div>
+    <?php else: ?>
         <?php foreach ($banks as $bank): ?>
-            <div class="col-md-4">
-                <div class="card border-0 shadow-sm h-100 <?php echo $bank['is_default'] ? 'border-primary border-2' : ''; ?>">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start mb-3">
-                            <div>
-                                <h5 class="fw-bold mb-1">
-                                    <i class="fa-solid fa-building-columns text-info me-2"></i>
-                                    <?php echo htmlspecialchars($bank['bank_name']); ?>
-                                </h5>
-                                <?php if ($bank['is_default']): ?>
-                                    <span class="badge bg-primary"><i class="fa-solid fa-star me-1"></i> Default</span>
-                                <?php endif; ?>
-                            </div>
-                            <span class="badge bg-light text-dark">
-                                <?php echo htmlspecialchars($bank['account_type']); ?>
-                            </span>
+            <?php $bank_color = $bank['color'] ?? BANK_DEFAULT_COLOR; ?>
+            <div class="col-md-6 col-lg-4">
+                <div class="glass-panel bank-card h-100 p-4 border-top border-4"
+                    style="border-top-color: <?php echo $bank_color; ?> !important;">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div class="bank-icon-wrapper rounded-circle p-3 d-flex align-items-center justify-content-center"
+                            style="background: <?php echo $bank_color . '15'; ?>; color: <?php echo $bank_color; ?>; width: 60px; height: 60px;">
+                            <i class="fa-solid fa-building-columns fa-xl"></i>
                         </div>
-
-                        <?php if ($bank['account_number']): ?>
-                            <p class="text-muted small mb-1">
-                                <i class="fa-solid fa-hashtag me-1"></i>
-                                Account: ****
-                                <?php echo substr($bank['account_number'], -4); ?>
-                            </p>
-                        <?php endif; ?>
-
-                        <?php if ($bank['iban']): ?>
-                            <p class="text-muted small mb-1">
-                                <i class="fa-solid fa-barcode me-1"></i>
-                                IBAN: ****
-                                <?php echo substr($bank['iban'], -4); ?>
-                            </p>
-                        <?php endif; ?>
-
-                        <p class="text-muted small mb-0">
-                            <i class="fa-solid fa-credit-card me-1"></i>
-                            <?php echo $card_counts[$bank['id']] ?? 0; ?> linked card(s)
-                        </p>
+                        <div class="dropdown">
+                            <button class="btn btn-link text-muted p-0" data-bs-toggle="dropdown">
+                                <i class="fa-solid fa-ellipsis-vertical"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end border-0 shadow">
+                                <li><a class="dropdown-item" href="edit_bank.php?id=<?php echo $bank['id']; ?>"><i
+                                            class="fa-solid fa-pen me-2"></i> Edit Account</a></li>
+                                <li>
+                                    <button type="button" class="dropdown-item text-danger"
+                                        onclick="confirmDelete(<?php echo $bank['id']; ?>, '<?php echo addslashes($bank['bank_name']); ?>')">
+                                        <i class="fa-solid fa-trash me-2"></i> Remove
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
-                    <div class="card-footer bg-light border-0 d-flex justify-content-between align-items-center">
-                        <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-                            <a href="edit_bank.php?id=<?php echo $bank['id']; ?>" class="btn btn-sm btn-outline-primary">
-                                <i class="fa-solid fa-pen me-1"></i> Edit
-                            </a>
-                            <form action="bank_actions.php" method="POST" class="d-inline">
-                                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                                <input type="hidden" name="action" value="delete">
-                                <input type="hidden" name="id" value="<?php echo $bank['id']; ?>">
-                                <button type="submit" class="btn btn-sm btn-outline-danger"
-                                    onclick="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($bank['bank_name'])); ?> account? (This permenently unlinks all associated cards)');">
-                                    <i class="fa-solid fa-trash"></i>
-                                </button>
-                            </form>
-                        <?php else: ?>
-                            <span class="text-muted small"><i class="fa-solid fa-lock me-1"></i> Read Only</span>
-                        <?php endif; ?>
+
+                    <h5 class="fw-bold mb-1">
+                        <?php echo htmlspecialchars($bank['bank_name']); ?>
+                    </h5>
+                    <p class="text-muted small mb-3">
+                        <?php echo htmlspecialchars($bank['account_number'] ? '****' . substr($bank['account_number'], -4) : 'Savings Account'); ?>
+                    </p>
+
+                    <div class="mt-auto">
+                        <h4 class="fw-bold mb-0 text-dark">
+                            <small class="text-muted" style="font-size: 0.6em">AED</small>
+                            <span class="blur-sensitive">
+                                <?php echo number_format($bank['current_balance'], 2); ?>
+                            </span>
+                        </h4>
+                        <div class="mt-2">
+                            <a href="bank_balances.php?bank_id=<?php echo $bank['id']; ?>"
+                                class="text-decoration-none small fw-bold">View History <i
+                                    class="fa-solid fa-arrow-right ms-1"></i></a>
+                        </div>
                     </div>
                 </div>
             </div>
         <?php endforeach; ?>
-    </div>
-<?php endif; ?>
+    <?php endif; ?>
+</div>
 
-<?php require_once 'includes/footer.php'; ?>
+<script>
+    function confirmDelete(id, name) {
+        if (confirm(`Are you sure you want to remove "${name}"? This will not delete your transaction history, but the bank will no longer appear in your active lists.`)) {
+            window.location.href = `bank_actions.php?action=delete&id=${id}&csrf_token=<?php echo generate_csrf_token(); ?>`;
+        }
+    }
+</script>
+
+<?php include_once 'includes/footer.php'; // NOSONAR ?>

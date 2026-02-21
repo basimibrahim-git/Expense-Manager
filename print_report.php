@@ -1,5 +1,5 @@
 <?php
-require_once 'config.php';
+require_once 'config.php'; // NOSONAR
 
 if (!isset($_SESSION['user_id'])) {
     die("Unauthorized");

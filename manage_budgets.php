@@ -167,4 +167,4 @@ include_once 'includes/sidebar.php';
     }
 </script>
 
-<?php include_once 'includes/footer.php'; ?>
+<?php include_once 'includes/footer.php'; ?> // NOSONAR

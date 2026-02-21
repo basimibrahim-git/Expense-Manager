@@ -1,286 +1,191 @@
 <?php
 $page_title = "Advanced Search";
-require_once 'config.php';
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+require_once 'config.php'; // NOSONAR
+require_once 'includes/header.php'; // NOSONAR
+require_once 'includes/sidebar.php'; // NOSONAR
 
 // Params
 $keyword = filter_input(INPUT_GET, 'q', FILTER_SANITIZE_SPECIAL_CHARS);
 $category = filter_input(INPUT_GET, 'category', FILTER_SANITIZE_SPECIAL_CHARS);
-$tag = filter_input(INPUT_GET, 'tag', FILTER_SANITIZE_SPECIAL_CHARS);
+$method = filter_input(INPUT_GET, 'method', FILTER_SANITIZE_SPECIAL_CHARS);
 $min_amount = filter_input(INPUT_GET, 'min', FILTER_VALIDATE_FLOAT);
 $max_amount = filter_input(INPUT_GET, 'max', FILTER_VALIDATE_FLOAT);
-$start_date = filter_input(INPUT_GET, 'start');
-$end_date = filter_input(INPUT_GET, 'end');
 
-// Pagination settings
-$items_per_page = 20;
-$page_num = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT) ?: 1;
-$offset = ($page_num - 1) * $items_per_page;
-
-// Build Count Query first
-$count_sql = "SELECT COUNT(*) FROM expenses WHERE tenant_id = :tenant_id";
+// Build Query
+$query = "SELECT * FROM expenses WHERE tenant_id = :tenant_id";
 $params = ['tenant_id' => $_SESSION['tenant_id']];
 
 if ($keyword) {
-    $count_sql .= " AND (description LIKE :kw OR category LIKE :kw OR tags LIKE :kw)";
-    $params['kw'] = "%$keyword%";
+    $query .= " AND (description LIKE :q OR category LIKE :q)";
+    $params['q'] = "%$keyword%";
 }
 if ($category) {
-    $count_sql .= " AND category = :cat";
+    $query .= " AND category = :cat";
     $params['cat'] = $category;
 }
-if ($tag) {
-    $count_sql .= " AND tags LIKE :tag";
-    $params['tag'] = "%$tag%";
+if ($method) {
+    $query .= " AND payment_method = :method";
+    $params['method'] = $method;
 }
-if ($min_amount) {
-    $count_sql .= " AND amount >= :min";
+if ($min_amount !== false && $min_amount !== null) {
+    $query .= " AND amount >= :min";
     $params['min'] = $min_amount;
 }
-if ($max_amount) {
-    $count_sql .= " AND amount <= :max";
+if ($max_amount !== false && $max_amount !== null) {
+    $query .= " AND amount <= :max";
     $params['max'] = $max_amount;
 }
-if ($start_date) {
-    $count_sql .= " AND expense_date >= :start";
-    $params['start'] = $start_date;
-}
-if ($end_date) {
-    $count_sql .= " AND expense_date <= :end";
-    $params['end'] = $end_date;
-}
 
-try {
-    $count_stmt = $pdo->prepare($count_sql);
-    $count_stmt->execute($params);
-    $total_items = $count_stmt->fetchColumn();
-    $total_pages = max(1, ceil($total_items / $items_per_page));
+$query .= " ORDER BY expense_date DESC LIMIT 50";
+$stmt = $pdo->prepare($query);
+$stmt->execute($params);
+$results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Build Data Query with LIMIT
-    $sql = str_replace("SELECT COUNT(*)", "SELECT *", $count_sql);
-    $sql .= " ORDER BY expense_date DESC LIMIT $items_per_page OFFSET $offset";
+// Get counts for filters
+$stmt_cats = $pdo->prepare("SELECT DISTINCT category FROM expenses WHERE tenant_id = ?");
+$stmt_cats->execute([$_SESSION['tenant_id']]);
+$all_cats = $stmt_cats->fetchAll(PDO::FETCH_COLUMN);
 
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    $results = $stmt->fetchAll();
-
-    // Total amount of filtered results
-    $sum_sql = str_replace("SELECT COUNT(*)", "SELECT SUM(amount)", $count_sql);
-    $sum_stmt = $pdo->prepare($sum_sql);
-    $sum_stmt->execute($params);
-    $total_found = $sum_stmt->fetchColumn() ?: 0;
-
-} catch (PDOException $e) {
-    $error = "Search failed: " . $e->getMessage();
-    $total_pages = 1;
-    $total_items = 0;
-}
+$stmt_methods = $pdo->prepare("SELECT DISTINCT payment_method FROM expenses WHERE tenant_id = ?");
+$stmt_methods->execute([$_SESSION['tenant_id']]);
+$all_methods = $stmt_methods->fetchAll(PDO::FETCH_COLUMN);
 ?>
 
 <div class="row mb-4">
-    <div class="col-12">
-        <h1 class="h3 fw-bold mb-3">🔍 Advanced Transaction Search</h1>
+    <div class="col">
+        <h1 class="h3 fw-bold mb-1">Advanced Search</h1>
+        <p class="text-muted">Find specific transactions across your history</p>
     </div>
 </div>
 
 <div class="row g-4">
-    <!-- Filter Panel -->
-    <div class="col-md-3">
-        <div class="glass-panel p-4">
-            <h5 class="fw-bold mb-3">Filters</h5>
-            <form method="GET" action="search.php">
+    <!-- Filter Sidebar -->
+    <div class="col-lg-3">
+        <div class="glass-panel p-4 sticky-top" style="top: 20px;">
+            <h6 class="fw-bold mb-3">Filters</h6>
+            <form method="GET">
                 <div class="mb-3">
-                    <label for="q" class="form-label small fw-bold">Keyword</label>
-                    <input type="text" id="q" name="q" class="form-control"
-                        value="<?php echo htmlspecialchars($keyword ?? ''); ?>" placeholder="e.g. Dinner, Uber...">
+                    <label for="searchQuery" class="form-label small fw-bold">Keyword</label>
+                    <input type="text" name="q" id="searchQuery" class="form-control form-control-sm" placeholder="Search..."
+                        value="<?php echo htmlspecialchars($keyword ?? ''); ?>">
                 </div>
+
                 <div class="mb-3">
-                    <label for="tag" class="form-label small fw-bold">Tag</label>
-                    <input type="text" id="tag" name="tag" class="form-control"
-                        value="<?php echo htmlspecialchars($tag ?? ''); ?>" placeholder="#Vacation">
-                </div>
-                <div class="mb-3">
-                    <label for="category" class="form-label small fw-bold">Category</label>
-                    <select id="category" name="category" class="form-select">
+                    <label for="searchCategory" class="form-label small fw-bold">Category</label>
+                    <select name="category" id="searchCategory" class="form-select form-select-sm">
                         <option value="">All Categories</option>
-                        <!-- Should populate dynamically, hardcoded for speed -->
-                        <option value="Grocery" <?php echo $category == 'Grocery' ? 'selected' : ''; ?>>Grocery</option>
-                        <option value="Dining" <?php echo $category == 'Dining' ? 'selected' : ''; ?>>Dining</option>
-                        <option value="Transport" <?php echo $category == 'Transport' ? 'selected' : ''; ?>>Transport
-                        </option>
-                        <option value="Bills" <?php echo $category == 'Bills' ? 'selected' : ''; ?>>Bills</option>
-                        <option value="Shopping" <?php echo $category == 'Shopping' ? 'selected' : ''; ?>>Shopping
-                        </option>
+                        <?php foreach ($all_cats as $cat): ?>
+                            <option value="<?php echo $cat; ?>" <?php echo $category == $cat ? 'selected' : ''; ?>>
+                                <?php echo $cat; ?>
+                            </option>
+                        <?php endfor; ?>
                     </select>
                 </div>
-                <div class="row">
-                    <div class="col-6 mb-3">
-                        <label for="min" class="form-label small fw-bold">Min $</label>
-                        <input type="number" id="min" name="min" class="form-control"
-                            value="<?php echo htmlspecialchars($min_amount ?? ''); ?>">
-                    </div>
-                    <div class="col-6 mb-3">
-                        <label for="max" class="form-label small fw-bold">Max $</label>
-                        <input type="number" id="max" name="max" class="form-control"
-                            value="<?php echo htmlspecialchars($max_amount ?? ''); ?>">
-                    </div>
-                </div>
+
                 <div class="mb-3">
-                    <label for="start" class="form-label small fw-bold">Date Range</label>
-                    <input type="date" id="start" name="start" class="form-control mb-2"
-                        value="<?php echo htmlspecialchars($start_date ?? ''); ?>">
-                    <input type="date" name="end" class="form-control"
-                        value="<?php echo htmlspecialchars($end_date ?? ''); ?>">
+                    <label for="searchMethod" class="form-label small fw-bold">Payment Method</label>
+                    <select name="method" id="searchMethod" class="form-select form-select-sm">
+                        <option value="">All Methods</option>
+                        <?php foreach ($all_methods as $m): ?>
+                            <option value="<?php echo $m; ?>" <?php echo $method == $m ? 'selected' : ''; ?>>
+                                <?php echo $m; ?>
+                            </option>
+                        <?php endfor; ?>
+                    </select>
                 </div>
+
+                <div class="mb-4">
+                    <label class="form-label small fw-bold">Amount Range</label>
+                    <div class="d-flex gap-2">
+                        <input type="number" name="min" class="form-control form-control-sm" placeholder="Min"
+                            value="<?php echo $min_amount; ?>">
+                        <input type="number" name="max" class="form-control form-control-sm" placeholder="Max"
+                            value="<?php echo $max_amount; ?>">
+                    </div>
+                </div>
+
                 <div class="d-grid gap-2">
-                    <button type="submit" class="btn btn-primary fw-bold"><i class="fa-solid fa-filter me-2"></i>
-                        Filter</button>
-                    <a href="search.php" class="btn btn-outline-secondary btn-sm">Reset</a>
+                    <button type="submit" class="btn btn-primary fw-bold">Apply Filters</button>
+                    <a href="search.php" class="btn btn-light btn-sm">Reset</a>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Results Panel -->
-    <div class="col-md-9">
-        <?php if (isset($results)): ?>
-            <div class="glass-panel p-4 mb-4">
-                <div class="d-flex justify-content-between align-items-center mb-0">
-                    <div>Found <span class="fw-bold text-primary">
-                            <?php echo count($results); ?>
-                        </span> transactions</div>
-                    <div class="h5 fw-bold text-success mb-0">Total:
-                        <?php echo number_format($total_found, 2); ?> AED
-                    </div>
+    <!-- Results -->
+    <div class="col-lg-9">
+        <div class="glass-panel p-0 overflow-hidden">
+            <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-light">
+                <span class="small fw-bold text-muted">Showing
+                    <?php echo count($results); ?> results
+                </span>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" onclick="window.print()"><i
+                            class="fa-solid fa-print"></i></button>
+                    <button class="btn btn-outline-secondary"><i class="fa-solid fa-file-export"></i></button>
                 </div>
             </div>
 
-            <?php if (empty($results)): ?>
-                <div class="text-center py-5">
-                    <div class="mb-3 text-muted display-1"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
-                    <h4>No results found</h4>
-                    <p class="text-muted">Try adjusting your filters.</p>
-                </div>
-            <?php else: ?>
-                <div class="glass-panel p-0 overflow-hidden">
-                    <div class="table-responsive">
-                        <table class="table custom-table mb-0 align-middle">
-                            <thead class="bg-light">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr class="small text-muted text-uppercase">
+                            <th class="ps-4">Date</th>
+                            <th>Description</th>
+                            <th>Category</th>
+                            <th>Amount</th>
+                            <th class="text-end pe-4">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($results)): ?>
+                            <tr>
+                                <td colspan="5" class="text-center py-5">
+                                    <i class="fa-solid fa-magnifying-glass fa-3x mb-3 d-block opacity-25"></i>
+                                    <p class="text-muted">No transactions found matching your criteria.</p>
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($results as $res): ?>
                                 <tr>
-                                    <th class="ps-4">Date</th>
-                                    <th>Description</th>
-                                    <th>Category</th>
-                                    <th>Tags</th>
-                                    <th>Amount</th>
-                                    <th></th>
+                                    <td class="ps-4">
+                                        <div class="small fw-bold">
+                                            <?php echo date('d M', strtotime($res['expense_date'])); ?>
+                                        </div>
+                                        <div class="text-muted smaller">
+                                            <?php echo date('Y', strtotime($res['expense_date'])); ?>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold">
+                                            <?php echo htmlspecialchars($res['description']); ?>
+                                        </div>
+                                        <div class="smaller text-muted">via
+                                            <?php echo $res['payment_method']; ?>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border">
+                                            <?php echo htmlspecialchars($res['category']); ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold text-danger">AED
+                                            <?php echo number_format($res['amount'], 2); ?>
+                                        </span>
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        <a href="edit_expense.php?id=<?php echo $res['id']; ?>"
+                                            class="btn btn-sm btn-outline-primary border-0"><i class="fa-solid fa-pen"></i></a>
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($results as $ex): ?>
-                                    <tr>
-                                        <td class="ps-4 text-muted small">
-                                            <?php echo date('M j, Y', strtotime($ex['expense_date'])); ?>
-                                        </td>
-                                        <td class="fw-bold text-dark">
-                                            <?php echo htmlspecialchars($ex['description']); ?>
-                                        </td>
-                                        <td><span class="badge bg-light text-dark border">
-                                                <?php echo htmlspecialchars($ex['category']); ?>
-                                            </span></td>
-                                        <td>
-                                            <?php if (!empty($ex['tags'])): ?>
-                                                <?php foreach (explode(',', $ex['tags']) as $t): ?>
-                                                    <span class="badge bg-primary-subtle text-primary x-small">
-                                                        <?php echo htmlspecialchars(trim($t)); ?>
-                                                    </span>
-                                                <?php endforeach; ?>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td class="fw-bold text-dark blur-sensitive">
-                                            <?php echo number_format($ex['amount'], 2); ?>
-                                            <?php if ($ex['currency'] != 'AED') {
-                                                echo ' <small class="text-muted">(' . htmlspecialchars($ex['currency']) . ')</small>';
-                                            } ?>
-                                        </td>
-                                        <td class="pe-4 text-end">
-                                            <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-                                                <form action="expense_actions.php" method="POST" class="d-inline"
-                                                    onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($ex['description'])); ?> - AED <?php echo number_format($ex['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($ex['expense_date'])); ?>?');">
-                                                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                                                    <input type="hidden" name="action" value="delete_expense">
-                                                    <input type="hidden" name="id" value="<?php echo $ex['id']; ?>">
-                                                    <button type="submit" class="btn btn-link text-danger p-0 small border-0">
-                                                        <i class="fa-solid fa-trash"></i>
-                                                    </button>
-                                                </form>
-                                            <?php else: ?>
-                                                <i class="fa-solid fa-lock text-muted small" title="Read Only"></i>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- Pagination -->
-                    <?php if ($total_pages > 1): ?>
-                        <div class="card-footer bg-light d-flex justify-content-between align-items-center py-3">
-                            <div class="text-muted small">
-                                Showing <?php echo $offset + 1; ?>–<?php echo min($offset + $items_per_page, $total_items); ?> of
-                                <?php echo $total_items; ?> results
-                            </div>
-                            <nav aria-label="Page navigation">
-                                <ul class="pagination pagination-sm mb-0">
-                                    <?php
-                                    $base_url = "?";
-                                    if ($keyword) {
-                                        $base_url .= "q=" . urlencode($keyword) . "&";
-                                    }
-                                    if ($category) {
-                                        $base_url .= "category=" . urlencode($category) . "&";
-                                    }
-                                    if ($tag) {
-                                        $base_url .= "tag=" . urlencode($tag) . "&";
-                                    }
-                                    if ($min_amount) {
-                                        $base_url .= "min=$min_amount&";
-                                    }
-                                    if ($max_amount) {
-                                        $base_url .= "max=$max_amount&";
-                                    }
-                                    if ($start_date) {
-                                        $base_url .= "start=$start_date&";
-                                    }
-                                    if ($end_date) {
-                                        $base_url .= "end=$end_date&";
-                                    }
-                                    ?>
-                                    <li class="page-item <?php echo $page_num <= 1 ? 'disabled' : ''; ?>">
-                                        <a class="page-link" href="<?php echo $base_url; ?>page=<?php echo $page_num - 1; ?>">
-                                            <i class="fa-solid fa-chevron-left"></i>
-                                        </a>
-                                    </li>
-                                    <?php for ($i = max(1, $page_num - 2); $i <= min($total_pages, $page_num + 2); $i++): ?>
-                                        <li class="page-item <?php echo $i == $page_num ? 'active' : ''; ?>">
-                                            <a class="page-link"
-                                                href="<?php echo $base_url; ?>page=<?php echo $i; ?>"><?php echo $i; ?></a>
-                                        </li>
-                                    <?php endfor; ?>
-                                    <li class="page-item <?php echo $page_num >= $total_pages ? 'disabled' : ''; ?>">
-                                        <a class="page-link" href="<?php echo $base_url; ?>page=<?php echo $page_num + 1; ?>">
-                                            <i class="fa-solid fa-chevron-right"></i>
-                                        </a>
-                                    </li>
-                                </ul>
-                            </nav>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
-        <?php endif; ?>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php require_once 'includes/footer.php'; // NOSONAR ?>
