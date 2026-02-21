@@ -103,7 +103,7 @@ $categories = [
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="is_recurring" id="isRecurring"
                                 value="1" <?php echo $income['is_recurring'] ? 'checked' : ''; ?>
-                            onchange="toggleRecurrence()">
+                                onchange="toggleRecurrence()">
                             <label class="form-check-label fw-bold text-primary" for="isRecurring">
                                 Monthly Recurring?
                             </label>
@@ -119,15 +119,19 @@ $categories = [
                 </div>
 
                 <!-- Submit -->
-                <div class="d-grid gap-2">
+                <div class="d-grid gap-2 border-top pt-4 mt-2">
                     <button type="submit" class="btn btn-success py-3 fw-bold">
                         <i class="fa-solid fa-save me-2"></i> Update Income
                     </button>
-                    <a href="#"
-                        onclick="return confirmDelete('income_actions.php?action=delete_income&id=<?php echo $income['id']; ?>', 'Delete this income entry permanently?');"
-                        class="btn btn-outline-danger">
-                        <i class="fa-solid fa-trash me-2"></i> Delete Income
-                    </a>
+                    <form action="income_actions.php" method="POST" class="d-grid"
+                        onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($income['description'])); ?> - AED <?php echo number_format($income['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($income['income_date'])); ?> permanently?');">
+                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                        <input type="hidden" name="action" value="delete_income">
+                        <input type="hidden" name="id" value="<?php echo $income['id']; ?>">
+                        <button type="submit" class="btn btn-outline-danger py-2">
+                            <i class="fa-solid fa-trash me-2"></i> Delete Income
+                        </button>
+                    </form>
                 </div>
             </form>
         </div>

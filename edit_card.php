@@ -236,11 +236,15 @@ $all_banks = $banks_stmt->fetchAll();
                     <button type="submit" class="btn btn-primary py-3 fw-bold">
                         <i class="fa-solid fa-save me-2"></i> Update Card
                     </button>
-                    <a href="#"
-                        onclick="return confirmDelete('card_actions.php?action=delete_card&id=<?php echo $card['id']; ?>', 'Are you sure you want to delete this card?');"
-                        class="btn btn-outline-danger mt-2">
-                        <i class="fa-solid fa-trash me-2"></i> Delete Card
-                    </a>
+                    <form action="card_actions.php" method="POST" class="d-grid mt-2">
+                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                        <input type="hidden" name="action" value="delete_card">
+                        <input type="hidden" name="id" value="<?php echo $card['id']; ?>">
+                        <button type="submit" class="btn btn-outline-danger py-2"
+                            onclick="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($card['bank_name'] . ' ' . $card['card_name'])); ?>? This action CANNOT be undone.');">
+                            <i class="fa-solid fa-trash me-2"></i> Delete Card
+                        </button>
+                    </form>
                 </div>
             </form>
         </div>

@@ -42,11 +42,27 @@ header('Permissions-Policy: geolocation=(), camera=(), microphone=()');
 
     <script>
         // Dynamic Theme Logic
-        // Dynamic Theme Logic
         function applyTheme() {
-            // User requested to keep it same color as day (Permanent Day Mode)
+            const savedTheme = localStorage.getItem('userTheme') || 'theme-afternoon';
             document.body.classList.remove('theme-morning', 'theme-afternoon', 'theme-night');
-            document.body.classList.add('theme-afternoon');
+            document.body.classList.add(savedTheme);
+
+            // Update toggle button text if exists
+            const themeBtn = document.getElementById('themeToggleBtn');
+            if (themeBtn) {
+                if (savedTheme === 'theme-night') {
+                    themeBtn.innerHTML = '<i class="fa-solid fa-sun me-2"></i> Light Mode';
+                } else {
+                    themeBtn.innerHTML = '<i class="fa-solid fa-moon me-2"></i> Dark Mode';
+                }
+            }
+        }
+
+        function toggleTheme() {
+            const currentTheme = localStorage.getItem('userTheme') || 'theme-afternoon';
+            const newTheme = (currentTheme === 'theme-night') ? 'theme-afternoon' : 'theme-night';
+            localStorage.setItem('userTheme', newTheme);
+            applyTheme();
         }
 
         // Privacy Mode Logic
@@ -69,8 +85,6 @@ header('Permissions-Policy: geolocation=(), camera=(), microphone=()');
             if (localStorage.getItem('privacyMode') === 'true') {
                 document.body.classList.add('privacy-mode');
             }
-            // Re-check theme every min
-            setInterval(applyTheme, 60000);
         });
     </script>
 </head>

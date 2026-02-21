@@ -172,9 +172,15 @@ $difference = $actual_balance - $expected_balance;
                                 </small>
                             </div>
                         </div>
-                        <a href="#"
-                            onclick="return confirmDelete('balance_actions.php?action=delete_balance&id=<?php echo $b['id']; ?>', 'Delete this balance entry?');"
-                            class="text-danger small"><i class="fa-solid fa-trash"></i></a>
+                        <form action="balance_actions.php" method="POST" class="d-inline"
+                            onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($b['bank_name'])); ?> balance of <?php echo number_format($b['amount'], 2); ?> - recorded on <?php echo date('d M', strtotime($b['balance_date'])); ?>?');">
+                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                            <input type="hidden" name="action" value="delete_balance">
+                            <input type="hidden" name="id" value="<?php echo $b['id']; ?>">
+                            <button type="submit" class="btn btn-sm text-danger border-0 p-0" title="Delete">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </form>
                     </div>
                     <div class="mt-2">
                         <h4 class="fw-bold mb-0">

@@ -108,14 +108,19 @@ if (!$bank) {
                     </div>
                 </div>
 
-                <div class="d-grid gap-2">
+                <div class="d-grid gap-2 border-top pt-4 mt-2">
                     <button type="submit" class="btn btn-primary py-3 fw-bold">
                         <i class="fa-solid fa-save me-2"></i> Update Bank Account
                     </button>
-                    <a href="#" onclick="return confirmDelete('bank_actions.php?action=delete&id=<?php echo $bank['id']; ?>', 'Delete this bank account?');"
-                       class="btn btn-outline-danger">
-                        <i class="fa-solid fa-trash me-2"></i> Delete Bank
-                    </a>
+                    <form action="bank_actions.php" method="POST" class="d-grid">
+                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="id" value="<?php echo $bank['id']; ?>">
+                        <button type="submit" class="btn btn-outline-danger py-2"
+                                onclick="return confirmSubmit(this, 'Are you sure you want to delete the <?php echo addslashes(htmlspecialchars($bank['bank_name'])); ?> account?');">
+                            <i class="fa-solid fa-trash me-2"></i> Delete Bank Account
+                        </button>
+                    </form>
                 </div>
             </form>
         </div>

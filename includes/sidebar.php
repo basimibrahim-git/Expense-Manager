@@ -41,34 +41,44 @@
 
         <?php
         $tracker_pages = [
-            'company_tracker.php', 'monthly_incentives.php',
-            'zakath_tracker.php', 'zakath_calculator.php',
-            'interest_tracker.php', 'monthly_interest.php',
-            'sadaqa_tracker.php', 'monthly_sadaqa.php',
+            'company_tracker.php',
+            'monthly_incentives.php',
+            'zakath_tracker.php',
+            'zakath_calculator.php',
+            'interest_tracker.php',
+            'monthly_interest.php',
+            'sadaqa_tracker.php',
+            'monthly_sadaqa.php',
             'lending_tracker.php'
         ];
         $is_tracker_active = in_array($current_page, $tracker_pages);
         ?>
-        <a class="nav-link d-flex justify-content-between align-items-center <?php echo $is_tracker_active ? '' : 'collapsed'; ?>" 
-           data-bs-toggle="collapse" href="#trackersMenu" role="button" aria-expanded="<?php echo $is_tracker_active ? 'true' : 'false'; ?>">
+        <a class="nav-link d-flex justify-content-between align-items-center <?php echo $is_tracker_active ? '' : 'collapsed'; ?>"
+            data-bs-toggle="collapse" href="#trackersMenu" role="button"
+            aria-expanded="<?php echo $is_tracker_active ? 'true' : 'false'; ?>">
             <span><i class="fa-solid fa-toolbox"></i> Special Trackers</span>
             <i class="fa-solid fa-chevron-down small"></i>
         </a>
         <div class="collapse <?php echo $is_tracker_active ? 'show' : ''; ?>" id="trackersMenu">
             <div class="ps-3 border-start ms-3 border-2 mb-2">
-                <a href="company_tracker.php" class="nav-link py-1 <?php echo ($current_page == 'company_tracker.php' || $current_page == 'monthly_incentives.php') ? 'active text-primary' : 'text-muted'; ?>">
+                <a href="company_tracker.php"
+                    class="nav-link py-1 <?php echo ($current_page == 'company_tracker.php' || $current_page == 'monthly_incentives.php') ? 'active text-primary' : 'text-muted'; ?>">
                     Incentive Tracker
                 </a>
-                <a href="zakath_tracker.php" class="nav-link py-1 <?php echo ($current_page == 'zakath_tracker.php' || $current_page == 'zakath_calculator.php') ? 'active text-primary' : 'text-muted'; ?>">
+                <a href="zakath_tracker.php"
+                    class="nav-link py-1 <?php echo ($current_page == 'zakath_tracker.php' || $current_page == 'zakath_calculator.php') ? 'active text-primary' : 'text-muted'; ?>">
                     Zakath Tracker
                 </a>
-                <a href="interest_tracker.php" class="nav-link py-1 <?php echo ($current_page == 'interest_tracker.php' || $current_page == 'monthly_interest.php') ? 'active text-primary' : 'text-muted'; ?>">
+                <a href="interest_tracker.php"
+                    class="nav-link py-1 <?php echo ($current_page == 'interest_tracker.php' || $current_page == 'monthly_interest.php') ? 'active text-primary' : 'text-muted'; ?>">
                     Interest Tracker
                 </a>
-                <a href="sadaqa_tracker.php" class="nav-link py-1 <?php echo ($current_page == 'sadaqa_tracker.php' || $current_page == 'monthly_sadaqa.php') ? 'active text-primary' : 'text-muted'; ?>">
+                <a href="sadaqa_tracker.php"
+                    class="nav-link py-1 <?php echo ($current_page == 'sadaqa_tracker.php' || $current_page == 'monthly_sadaqa.php') ? 'active text-primary' : 'text-muted'; ?>">
                     Sadaqa Tracker
                 </a>
-                <a href="lending_tracker.php" class="nav-link py-1 <?php echo ($current_page == 'lending_tracker.php') ? 'active text-primary' : 'text-muted'; ?>">
+                <a href="lending_tracker.php"
+                    class="nav-link py-1 <?php echo ($current_page == 'lending_tracker.php') ? 'active text-primary' : 'text-muted'; ?>">
                     Money Lending
                 </a>
             </div>
@@ -83,6 +93,10 @@
     </div>
 
     <div class="mt-auto px-3 pb-3">
+        <button id="themeToggleBtn" onclick="toggleTheme()"
+            class="btn btn-outline-secondary w-100 border-0 text-start bg-light hover-shadow mb-2">
+            <i class="fa-solid fa-moon me-2"></i> Dark Mode
+        </button>
         <button id="privacyBtn" onclick="togglePrivacy()"
             class="btn btn-outline-secondary w-100 border-0 text-start bg-light hover-shadow mb-2">
             <i class="fa-solid fa-eye me-2"></i> Visible
@@ -102,7 +116,7 @@
         <button class="btn btn-white shadow-sm mobile-toggle-btn border text-primary fw-bold" onclick="toggleSidebar()">
             <i class="fa-solid fa-bars me-2"></i> Menu
         </button>
-        
+
         <div class="ms-auto glass-panel px-3 py-2 border-0 shadow-sm">
             <i class="fa-regular fa-calendar-check me-2 text-primary"></i>
             <span id="liveDateTime" class="fw-bold text-muted small" style="letter-spacing: 0.5px;">Loading...</span>
@@ -112,14 +126,14 @@
     <script>
         function updateLiveClock() {
             const now = new Date();
-            const options = { 
-                weekday: 'short', 
-                year: 'numeric', 
-                month: 'short', 
-                day: 'numeric', 
-                hour: '2-digit', 
-                minute: '2-digit', 
-                second: '2-digit' 
+            const options = {
+                weekday: 'short',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
             };
             document.getElementById('liveDateTime').innerText = now.toLocaleString('en-US', options);
         }

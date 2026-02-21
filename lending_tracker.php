@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 // Update status to Paid
                 $stmt = $pdo->prepare("UPDATE lending_tracker SET status = 'Paid' WHERE id = ? AND user_id = ?");
                 $stmt->execute([$id, $_SESSION['user_id']]);
-                
+
                 header("Location: lending_tracker.php?success=Marked as Paid");
                 exit;
             }
@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             if ($id) {
                 $stmt = $pdo->prepare("DELETE FROM lending_tracker WHERE id = ? AND user_id = ?");
                 $stmt->execute([$id, $_SESSION['user_id']]);
-                
+
                 // Reset IDs (Optional, harmless for this app)
                 $pdo->exec("SET @count = 0");
                 $pdo->exec("UPDATE lending_tracker SET id = @count:= @count + 1");
@@ -111,7 +111,8 @@ $summary = $stmt->fetch();
                 <i class="fa-solid fa-clock-rotate-left fa-3x text-warning"></i>
             </div>
             <h5 class="fw-bold text-muted mb-1">Pending Collection</h5>
-            <h3 class="fw-bold text-warning mb-0">AED <span class="blur-sensitive"><?php echo number_format($summary['pending_total'], 2); ?></span></h3>
+            <h3 class="fw-bold text-warning mb-0">AED <span
+                    class="blur-sensitive"><?php echo number_format($summary['pending_total'], 2); ?></span></h3>
             <div class="x-small text-muted mt-1">(Approx. consolidated in AED)</div>
         </div>
     </div>
@@ -121,7 +122,8 @@ $summary = $stmt->fetch();
                 <i class="fa-solid fa-check-circle fa-3x text-success"></i>
             </div>
             <h5 class="fw-bold text-muted mb-1">Recovered</h5>
-            <h3 class="fw-bold text-success mb-0">AED <span class="blur-sensitive"><?php echo number_format($summary['paid_total'], 2); ?></span></h3>
+            <h3 class="fw-bold text-success mb-0">AED <span
+                    class="blur-sensitive"><?php echo number_format($summary['paid_total'], 2); ?></span></h3>
         </div>
     </div>
 </div>
@@ -129,7 +131,8 @@ $summary = $stmt->fetch();
 <!-- Filter Tabs -->
 <ul class="nav nav-pills mb-3" id="pills-tab">
     <li class="nav-item">
-        <a class="nav-link <?php echo $filter_status == 'Pending' ? 'active' : ''; ?>" href="?status=Pending">Pending</a>
+        <a class="nav-link <?php echo $filter_status == 'Pending' ? 'active' : ''; ?>"
+            href="?status=Pending">Pending</a>
     </li>
     <li class="nav-item">
         <a class="nav-link <?php echo $filter_status == 'Paid' ? 'active' : ''; ?>" href="?status=Paid">Completed</a>
@@ -151,11 +154,11 @@ $summary = $stmt->fetch();
 <?php else: ?>
     <div class="row g-3">
         <?php foreach ($records as $r): ?>
-            <?php 
-                // Color Logic
-                $is_overdue = ($r['status'] == 'Pending' && !empty($r['due_date']) && strtotime($r['due_date']) < time());
-                $border_class = $r['status'] == 'Paid' ? 'border-success' : ($is_overdue ? 'border-danger' : 'border-warning');
-                $curr = $r['currency'] ?? 'AED';
+            <?php
+            // Color Logic
+            $is_overdue = ($r['status'] == 'Pending' && !empty($r['due_date']) && strtotime($r['due_date']) < time());
+            $border_class = $r['status'] == 'Paid' ? 'border-success' : ($is_overdue ? 'border-danger' : 'border-warning');
+            $curr = $r['currency'] ?? 'AED';
             ?>
             <div class="col-12 col-md-6 col-xl-4">
                 <div class="glass-panel p-3 h-100 position-relative border-start border-4 <?php echo $border_class; ?>">
@@ -168,7 +171,8 @@ $summary = $stmt->fetch();
                         </div>
                         <div class="text-end">
                             <h5 class="fw-bold text-primary mb-0">
-                                <?php echo $curr; ?> <span class="blur-sensitive"><?php echo number_format($r['amount'], 2); ?></span>
+                                <?php echo $curr; ?> <span
+                                    class="blur-sensitive"><?php echo number_format($r['amount'], 2); ?></span>
                             </h5>
                             <?php if ($r['status'] == 'Pending'): ?>
                                 <span class="badge bg-warning-subtle text-warning-emphasis">Pending</span>
@@ -189,22 +193,23 @@ $summary = $stmt->fetch();
                             <?php if ($r['status'] == 'Paid'): ?>
                                 <i class="fa-solid fa-check me-1"></i> Recovered
                             <?php elseif (!empty($r['due_date'])): ?>
-                                <i class="fa-solid fa-calendar-check me-1"></i> Due: <?php echo date('M d, Y', strtotime($r['due_date'])); ?>
+                                <i class="fa-solid fa-calendar-check me-1"></i> Due:
+                                <?php echo date('M d, Y', strtotime($r['due_date'])); ?>
                                 <?php echo $is_overdue ? '(Overdue)' : ''; ?>
                             <?php else: ?>
                                 <i class="fa-solid fa-infinity me-1"></i> No Due Date
                             <?php endif; ?>
                         </div>
-                        
+
                         <div class="btn-group">
                             <?php if ($r['status'] == 'Pending'): ?>
-                                <button type="button" class="btn btn-sm btn-success" 
-                                        onclick="openPayModal(<?php echo $r['id']; ?>, '<?php echo htmlspecialchars($r['borrower_name']); ?>')">
+                                <button type="button" class="btn btn-sm btn-success"
+                                    onclick="openPayModal(<?php echo $r['id']; ?>, '<?php echo htmlspecialchars($r['borrower_name']); ?>')">
                                     <i class="fa-solid fa-check"></i> Paid
                                 </button>
                             <?php endif; ?>
-                            <button type="button" class="btn btn-sm btn-outline-danger border-0" 
-                                    onclick="openDeleteModal(<?php echo $r['id']; ?>)">
+                            <button type="button" class="btn btn-sm btn-outline-danger border-0"
+                                onclick="openDeleteModal(<?php echo $r['id']; ?>, '<?php echo addslashes(htmlspecialchars($r['borrower_name'])); ?>', '<?php echo number_format($r['amount'], 2); ?>', '<?php echo $curr; ?>')">
                                 <i class="fa-solid fa-trash"></i>
                             </button>
                         </div>
@@ -230,7 +235,8 @@ $summary = $stmt->fetch();
 
                     <div class="mb-3">
                         <label class="form-label">Borrower Name <span class="text-danger">*</span></label>
-                        <input type="text" name="borrower_name" class="form-control" placeholder="e.g. John Doe" required>
+                        <input type="text" name="borrower_name" class="form-control" placeholder="e.g. John Doe"
+                            required>
                     </div>
 
                     <div class="row g-2 mb-3">
@@ -243,13 +249,15 @@ $summary = $stmt->fetch();
                         </div>
                         <div class="col-8">
                             <label class="form-label">Amount <span class="text-danger">*</span></label>
-                            <input type="number" step="0.01" name="amount" class="form-control" placeholder="0.00" required>
+                            <input type="number" step="0.01" name="amount" class="form-control" placeholder="0.00"
+                                required>
                         </div>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label">Lent Date <span class="text-danger">*</span></label>
-                        <input type="date" name="lent_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+                        <input type="date" name="lent_date" class="form-control" value="<?php echo date('Y-m-d'); ?>"
+                            required>
                     </div>
 
                     <div class="mb-3">
@@ -281,7 +289,7 @@ $summary = $stmt->fetch();
                     <i class="fa-solid fa-trash-can fa-3x"></i>
                 </div>
                 <h5 class="fw-bold mb-2">Delete Record?</h5>
-                <p class="text-muted small mb-4">This action cannot be undone.</p>
+                <p id="deleteLendingMsg" class="text-muted small mb-4">This action cannot be undone.</p>
                 <form method="POST">
                     <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
                     <input type="hidden" name="action" value="delete_lending">
@@ -305,7 +313,8 @@ $summary = $stmt->fetch();
                     <i class="fa-solid fa-circle-check fa-3x"></i>
                 </div>
                 <h5 class="fw-bold mb-2">Mark as Paid?</h5>
-                <p class="text-muted small mb-4">Confirm that <span id="payModalName" class="fw-bold"></span> has returned the money.</p>
+                <p class="text-muted small mb-4">Confirm that <span id="payModalName" class="fw-bold"></span> has
+                    returned the money.</p>
                 <form method="POST">
                     <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
                     <input type="hidden" name="action" value="mark_paid">
@@ -321,16 +330,17 @@ $summary = $stmt->fetch();
 </div>
 
 <script>
-function openDeleteModal(id) {
-    document.getElementById('deleteModalId').value = id;
-    new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
-}
+    function openDeleteModal(id, name, amount, curr) {
+        document.getElementById('deleteModalId').value = id;
+        document.getElementById('deleteLendingMsg').innerHTML = `Delete lending record for <strong>${name}</strong> (${curr} ${amount})? <br><span class="text-danger small">This cannot be undone.</span>`;
+        new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
+    }
 
-function openPayModal(id, name) {
-    document.getElementById('payModalId').value = id;
-    document.getElementById('payModalName').innerText = name;
-    new bootstrap.Modal(document.getElementById('payConfirmModal')).show();
-}
+    function openPayModal(id, name) {
+        document.getElementById('payModalId').value = id;
+        document.getElementById('payModalName').innerText = name;
+        new bootstrap.Modal(document.getElementById('payConfirmModal')).show();
+    }
 </script>
 
 <?php require_once 'includes/footer.php'; ?>

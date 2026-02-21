@@ -278,9 +278,15 @@ try {
                             <td class="text-end pe-3">
                                 <a href="edit_expense.php?id=<?php echo $expense['id']; ?>" class="btn btn-sm text-muted me-1"
                                     title="Edit"><i class="fa-solid fa-pen"></i></a>
-                                <a href="#"
-                                    onclick="return confirmDelete('expense_actions.php?action=delete_expense&id=<?php echo $expense['id']; ?>', 'Delete <?php echo addslashes(htmlspecialchars($expense['description'])); ?> - AED <?php echo number_format($expense['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($expense['expense_date'])); ?>?');"
-                                    class="btn btn-sm text-danger" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                                <form action="expense_actions.php" method="POST" class="d-inline"
+                                    onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($expense['description'])); ?> - AED <?php echo number_format($expense['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($expense['expense_date'])); ?>?');">
+                                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                    <input type="hidden" name="action" value="delete_expense">
+                                    <input type="hidden" name="id" value="<?php echo $expense['id']; ?>">
+                                    <button type="submit" class="btn btn-sm text-danger border-0 p-0" title="Delete">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </form>
                             </td>
                         </tr>
                     <?php endforeach; ?>

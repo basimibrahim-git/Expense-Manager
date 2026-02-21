@@ -110,17 +110,17 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         header("Location: add_expense.php?error=Failed to add expense: " . $e->getMessage());
         exit();
     }
-} elseif ($action == 'delete_expense' && isset($_GET['id'])) {
-    $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+} elseif ($action == 'delete_expense' && (isset($_POST['id']) || isset($_GET['id']))) {
+    $id = filter_input(isset($_POST['id']) ? INPUT_POST : INPUT_GET, 'id', FILTER_VALIDATE_INT);
     if ($id) {
         $stmt = $pdo->prepare("DELETE FROM expenses WHERE id = ? AND user_id = ?");
         $stmt->execute([$id, $_SESSION['user_id']]);
     }
     header("Location: expenses.php?success=Deleted");
     exit();
-} elseif ($action == 'delete_auto_expense' && isset($_GET['id'])) {
+} elseif ($action == 'delete_auto_expense' && (isset($_POST['id']) || isset($_GET['id']))) {
     // "Stop Tracking" just removes the subscription flag, keeping the expense record
-    $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+    $id = filter_input(isset($_POST['id']) ? INPUT_POST : INPUT_GET, 'id', FILTER_VALIDATE_INT);
     if ($id) {
         $stmt = $pdo->prepare("UPDATE expenses SET is_subscription = 0 WHERE id = ? AND user_id = ?");
         $stmt->execute([$id, $_SESSION['user_id']]);

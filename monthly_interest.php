@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $msg = "Record Updated";
                 }
             }
-            
+
             $month = date('n', strtotime($date));
             $year = date('Y', strtotime($date));
             // Redirect to the month of the *record* to see changes
@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt = $pdo->prepare("DELETE FROM interest_tracker WHERE id = ? AND user_id = ?");
             $stmt->execute([$id, $_SESSION['user_id']]);
         }
-        
+
         // Return to current view
         $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
         $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
@@ -90,7 +90,8 @@ foreach ($records as $r) {
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <a href="interest_tracker.php?year=<?php echo htmlspecialchars($year); ?>" class="text-decoration-none text-muted small mb-1">
+        <a href="interest_tracker.php?year=<?php echo htmlspecialchars($year); ?>"
+            class="text-decoration-none text-muted small mb-1">
             <i class="fa-solid fa-arrow-left"></i> Back to Year
         </a>
         <h1 class="h3 fw-bold mb-0">
@@ -101,7 +102,8 @@ foreach ($records as $r) {
         <div class="small text-muted">Net Interest</div>
         <h3 class="fw-bold <?php echo $total_interest > 0 ? 'text-danger' : 'text-success'; ?> mb-0">
             AED <span class="blur-sensitive"><?php echo number_format(abs($total_interest), 2); ?></span>
-            <?php if($total_interest <= 0 && !empty($records)) echo '<i class="fa-solid fa-check ms-1"></i>'; ?>
+            <?php if ($total_interest <= 0 && !empty($records))
+                echo '<i class="fa-solid fa-check ms-1"></i>'; ?>
         </h3>
     </div>
 </div>
@@ -146,11 +148,11 @@ foreach ($records as $r) {
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($records as $r): 
+                    <?php foreach ($records as $r):
                         $is_payment = $r['amount'] < 0;
                         $display_amount = abs($r['amount']);
                         $type_display = $is_payment ? '<span class="badge bg-success-subtle text-success">Payment</span>' : '<span class="badge bg-danger-subtle text-danger">Interest</span>';
-                    ?>
+                        ?>
                         <tr>
                             <td class="ps-4 fw-bold">
                                 <?php echo htmlspecialchars(date('d', strtotime($r['interest_date']))); ?>
@@ -168,12 +170,13 @@ foreach ($records as $r) {
                                 AED <span class="blur-sensitive"><?php echo number_format($display_amount, 2); ?></span>
                             </td>
                             <td class="text-end pe-3">
-                                <button type="button" class="btn btn-sm text-dark me-2" 
-                                    onclick='openEditModal(<?php echo htmlspecialchars(json_encode($r), ENT_QUOTES, 'UTF-8'); ?>)' title="Edit Date/Description/Amount">
+                                <button type="button" class="btn btn-sm text-dark me-2"
+                                    onclick='openEditModal(<?php echo htmlspecialchars(json_encode($r), ENT_QUOTES, 'UTF-8'); ?>)'
+                                    title="Edit Date/Description/Amount">
                                     <i class="fa-solid fa-pen-to-square"></i>
                                 </button>
-                                <button type="button" class="btn btn-sm text-danger" 
-                                    onclick="confirmDeleteInterest(<?php echo $r['id']; ?>)" title="Delete">
+                                <button type="button" class="btn btn-sm text-danger"
+                                    onclick="confirmDeleteInterest(<?php echo $r['id']; ?>, '<?php echo addslashes(htmlspecialchars($r['title'])); ?>', '<?php echo number_format($display_amount, 2); ?>')" title="Delete">
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
                             </td>
@@ -209,12 +212,14 @@ foreach ($records as $r) {
 
                     <div class="mb-3">
                         <label class="form-label">Title <span class="text-danger">*</span></label>
-                        <input type="text" name="title" id="recordTitle" class="form-control" placeholder="e.g. Bank Savings Interest" required>
+                        <input type="text" name="title" id="recordTitle" class="form-control"
+                            placeholder="e.g. Bank Savings Interest" required>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label">Amount <span class="text-danger">*</span></label>
-                        <input type="number" step="0.01" name="amount" id="recordAmount" class="form-control" placeholder="0.00" required>
+                        <input type="number" step="0.01" name="amount" id="recordAmount" class="form-control"
+                            placeholder="0.00" required>
                     </div>
 
                     <div class="mb-3">
@@ -223,7 +228,8 @@ foreach ($records as $r) {
                     </div>
 
                     <div class="d-grid">
-                        <button type="submit" class="btn btn-info text-white fw-bold" id="submitBtn">Save Record</button>
+                        <button type="submit" class="btn btn-info text-white fw-bold" id="submitBtn">Save
+                            Record</button>
                     </div>
                 </form>
             </div>
@@ -238,7 +244,7 @@ foreach ($records as $r) {
             <div class="modal-body text-center py-4">
                 <i class="fa-solid fa-trash-can text-danger fa-3x mb-3"></i>
                 <h5 class="fw-bold">Delete Record?</h5>
-                <p class="text-muted small">This cannot be undone.</p>
+                <p id="deleteInterestMsg" class="text-muted small">This cannot be undone.</p>
 
                 <form method="POST">
                     <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
@@ -252,53 +258,54 @@ foreach ($records as $r) {
                 </form>
             </div>
         </div>
-</div>
+    </div>
 </div>
 
 <?php require_once 'includes/footer.php'; ?>
 
 <script>
     const interestModal = new bootstrap.Modal(document.getElementById('interestModal'));
-    
+
     function openAddModal() {
         document.getElementById('modalTitle').innerText = 'Add Record';
         document.getElementById('formAction').value = 'add_interest';
         document.getElementById('recordId').value = '';
         document.getElementById('interestForm').reset();
-        
+
         // Default Date: Use current day, but clamp to max days of selected month
         <?php
-            $selected_day = min(date('d'), cal_days_in_month(CAL_GREGORIAN, $month, $year));
-            $default_date = sprintf('%04d-%02d-%02d', $year, $month, $selected_day);
+        $selected_day = min(date('d'), cal_days_in_month(CAL_GREGORIAN, $month, $year));
+        $default_date = sprintf('%04d-%02d-%02d', $year, $month, $selected_day);
         ?>
         document.getElementById('recordDate').value = '<?php echo htmlspecialchars($default_date); ?>';
-        
+
         interestModal.show();
     }
-    
+
     function openEditModal(record) {
         document.getElementById('modalTitle').innerText = 'Edit Record';
         document.getElementById('formAction').value = 'edit_interest';
         document.getElementById('recordId').value = record.id;
-        
+
         document.getElementById('recordTitle').value = record.title;
         document.getElementById('recordDate').value = record.interest_date;
-        
+
         // Determine type and amount
         const amount = parseFloat(record.amount);
         if (amount < 0) {
             document.getElementById('recordType').value = 'payment';
             document.getElementById('recordAmount').value = Math.abs(amount);
         } else {
-             document.getElementById('recordType').value = 'interest';
-             document.getElementById('recordAmount').value = amount;
+            document.getElementById('recordType').value = 'interest';
+            document.getElementById('recordAmount').value = amount;
         }
-        
+
         interestModal.show();
     }
 
-    function confirmDeleteInterest(id) {
+    function confirmDeleteInterest(id, title, amount) {
         document.getElementById('deleteInterestId').value = id;
+        document.getElementById('deleteInterestMsg').innerHTML = `Delete <strong>${title}</strong> (AED ${amount})? <br><span class="text-danger small">This cannot be undone.</span>`;
         new bootstrap.Modal(document.getElementById('deleteInterestModal')).show();
     }
 </script>

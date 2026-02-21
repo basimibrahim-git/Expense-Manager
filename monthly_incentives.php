@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($amount > 0 && !empty($title) && !empty($date)) {
             $stmt = $pdo->prepare("INSERT INTO company_incentives (user_id, title, amount, incentive_date) VALUES (?, ?, ?, ?)");
             $stmt->execute([$_SESSION['user_id'], $title, $amount, $date]);
-            
+
             $month = date('n', strtotime($date));
             $year = date('Y', strtotime($date));
             header("Location: monthly_incentives.php?month=$month&year=$year&success=Incentive Added");
@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt = $pdo->prepare("DELETE FROM company_incentives WHERE id = ? AND user_id = ?");
             $stmt->execute([$id, $_SESSION['user_id']]);
         }
-        
+
         // Fixed Open Redirect: Redirect to known parent page
         $back_url = "company_tracker.php?year=" . ($year ?? date('Y'));
         header("Location: $back_url");
@@ -71,7 +71,8 @@ foreach ($incentives as $inc) {
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <a href="company_tracker.php?year=<?php echo htmlspecialchars($year); ?>" class="text-decoration-none text-muted small mb-1">
+        <a href="company_tracker.php?year=<?php echo htmlspecialchars($year); ?>"
+            class="text-decoration-none text-muted small mb-1">
             <i class="fa-solid fa-arrow-left"></i> Back to Year
         </a>
         <h1 class="h3 fw-bold mb-0">
@@ -80,7 +81,8 @@ foreach ($incentives as $inc) {
     </div>
     <div class="text-end">
         <div class="small text-muted">Total Incentives</div>
-        <h3 class="fw-bold text-success mb-0">AED <span class="blur-sensitive"><?php echo number_format($total_incentives, 2); ?></span></h3>
+        <h3 class="fw-bold text-success mb-0">AED <span
+                class="blur-sensitive"><?php echo number_format($total_incentives, 2); ?></span></h3>
     </div>
 </div>
 
@@ -138,8 +140,9 @@ foreach ($incentives as $inc) {
                                 AED <span class="blur-sensitive"><?php echo number_format($inc['amount'], 2); ?></span>
                             </td>
                             <td class="text-end pe-3">
-                                <button type="button" class="btn btn-sm text-danger" 
-                                    onclick="confirmDeleteIncentive(<?php echo $inc['id']; ?>)" title="Delete">
+                                <button type="button" class="btn btn-sm text-danger"
+                                    onclick="confirmDeleteIncentive(<?php echo $inc['id']; ?>, '<?php echo addslashes(htmlspecialchars($inc['title'])); ?>', '<?php echo number_format($inc['amount'], 2); ?>')"
+                                    title="Delete">
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
                             </td>
@@ -176,7 +179,9 @@ foreach ($incentives as $inc) {
 
                     <div class="mb-3">
                         <label class="form-label">Date <span class="text-danger">*</span></label>
-                        <input type="date" name="incentive_date" class="form-control" value="<?php echo htmlspecialchars(date('Y') . '-' . str_pad($month, 2, '0', STR_PAD_LEFT) . '-' . date('d')); ?>" required>
+                        <input type="date" name="incentive_date" class="form-control"
+                            value="<?php echo htmlspecialchars(date('Y') . '-' . str_pad($month, 2, '0', STR_PAD_LEFT) . '-' . date('d')); ?>"
+                            required>
 
                     </div>
 
@@ -196,7 +201,7 @@ foreach ($incentives as $inc) {
             <div class="modal-body text-center py-4">
                 <i class="fa-solid fa-trash-can text-danger fa-3x mb-3"></i>
                 <h5 class="fw-bold">Delete Incentive?</h5>
-                <p class="text-muted small">This cannot be undone.</p>
+                <p id="deleteIncentiveMsg" class="text-muted small">This cannot be undone.</p>
 
                 <form method="POST">
                     <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
@@ -214,8 +219,9 @@ foreach ($incentives as $inc) {
 </div>
 
 <script>
-    function confirmDeleteIncentive(id) {
+    function confirmDeleteIncentive(id, title, amount) {
         document.getElementById('deleteIncentiveId').value = id;
+        document.getElementById('deleteIncentiveMsg').innerHTML = `Are you sure you want to delete <strong>${title}</strong> (AED ${amount})? <br><span class="text-danger small">This cannot be undone.</span>`;
         new bootstrap.Modal(document.getElementById('deleteIncentiveModal')).show();
     }
 </script>

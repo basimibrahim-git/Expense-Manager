@@ -158,14 +158,19 @@ $categories = ['Grocery', 'Food', 'Transport', 'Shopping', 'Utilities', 'Travel'
                 </div>
 
                 <!-- Submit -->
-                <div class="d-grid gap-2">
+                <div class="d-grid gap-2 border-top pt-4 mt-2">
                     <button type="submit" class="btn btn-primary py-3 fw-bold">
                         <i class="fa-solid fa-save me-2"></i> Update Expense
                     </button>
-                    <a href="#" onclick="return confirmDelete('expense_actions.php?action=delete_expense&id=<?php echo $expense['id']; ?>', 'Delete <?php echo addslashes(htmlspecialchars($expense['description'])); ?> - AED <?php echo number_format($expense['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($expense['expense_date'])); ?> permanently?');"
-                       class="btn btn-outline-danger">
-                        <i class="fa-solid fa-trash me-2"></i> Delete Expense
-                    </a>
+                    <form action="expense_actions.php" method="POST" class="d-grid"
+                        onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($expense['description'])); ?> - AED <?php echo number_format($expense['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($expense['expense_date'])); ?> permanently?');">
+                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                        <input type="hidden" name="action" value="delete_expense">
+                        <input type="hidden" name="id" value="<?php echo $expense['id']; ?>">
+                        <button type="submit" class="btn btn-outline-danger py-2">
+                            <i class="fa-solid fa-trash me-2"></i> Delete Expense
+                        </button>
+                    </form>
                 </div>
             </form>
         </div>

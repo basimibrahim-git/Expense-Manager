@@ -117,8 +117,8 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         header("Location: edit_card.php?id=$card_id&error=" . urlencode("Failed to update card details."));
         exit();
     }
-} elseif ($action == 'delete_card' && isset($_GET['id'])) {
-    $card_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+} elseif ($action == 'delete_card' && (isset($_POST['id']) || isset($_GET['id']))) {
+    $card_id = filter_input(isset($_POST['id']) ? INPUT_POST : INPUT_GET, 'id', FILTER_VALIDATE_INT);
     $user_id = $_SESSION['user_id'];
 
     if ($card_id) {

@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($amount > 0 && !empty($title) && !empty($date)) {
             $stmt = $pdo->prepare("INSERT INTO sadaqa_tracker (user_id, title, amount, sadaqa_date) VALUES (?, ?, ?, ?)");
             $stmt->execute([$_SESSION['user_id'], $title, $amount, $date]);
-            
+
             $month = date('n', strtotime($date));
             $year = date('Y', strtotime($date));
             header("Location: monthly_sadaqa.php?month=$month&year=$year&success=Sadaqa Added");
@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt = $pdo->prepare("DELETE FROM sadaqa_tracker WHERE id = ? AND user_id = ?");
             $stmt->execute([$id, $_SESSION['user_id']]);
         }
-        
+
         // Fixed Open Redirect: Redirect to known parent page
         $back_url = "sadaqa_tracker.php?year=" . ($year ?? date('Y'));
         header("Location: $back_url");
@@ -71,7 +71,8 @@ foreach ($records as $r) {
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <a href="sadaqa_tracker.php?year=<?php echo htmlspecialchars($year); ?>" class="text-decoration-none text-muted small mb-1">
+        <a href="sadaqa_tracker.php?year=<?php echo htmlspecialchars($year); ?>"
+            class="text-decoration-none text-muted small mb-1">
             <i class="fa-solid fa-arrow-left"></i> Back to Year
         </a>
         <h1 class="h3 fw-bold mb-0">
@@ -80,7 +81,8 @@ foreach ($records as $r) {
     </div>
     <div class="text-end">
         <div class="small text-muted">Total Sadaqa</div>
-        <h3 class="fw-bold text-success mb-0">AED <span class="blur-sensitive"><?php echo number_format($total_sadaqa, 2); ?></span></h3>
+        <h3 class="fw-bold text-success mb-0">AED <span
+                class="blur-sensitive"><?php echo number_format($total_sadaqa, 2); ?></span></h3>
     </div>
 </div>
 
@@ -138,8 +140,9 @@ foreach ($records as $r) {
                                 AED <span class="blur-sensitive"><?php echo number_format($r['amount'], 2); ?></span>
                             </td>
                             <td class="text-end pe-3">
-                                <button type="button" class="btn btn-sm text-danger" 
-                                    onclick="confirmDeleteSadaqa(<?php echo $r['id']; ?>)" title="Delete">
+                                <button type="button" class="btn btn-sm text-danger"
+                                    onclick="confirmDeleteSadaqa(<?php echo $r['id']; ?>, '<?php echo addslashes(htmlspecialchars($r['title'])); ?>', '<?php echo number_format($r['amount'], 2); ?>')"
+                                    title="Delete">
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
                             </td>
@@ -166,7 +169,8 @@ foreach ($records as $r) {
 
                     <div class="mb-3">
                         <label class="form-label">Description <span class="text-danger">*</span></label>
-                        <input type="text" name="title" class="form-control" placeholder="e.g. Masjid Donation" required>
+                        <input type="text" name="title" class="form-control" placeholder="e.g. Masjid Donation"
+                            required>
                     </div>
 
                     <div class="mb-3">
@@ -176,7 +180,9 @@ foreach ($records as $r) {
 
                     <div class="mb-3">
                         <label class="form-label">Date <span class="text-danger">*</span></label>
-                        <input type="date" name="sadaqa_date" class="form-control" value="<?php echo htmlspecialchars(date('Y') . '-' . str_pad($month, 2, '0', STR_PAD_LEFT) . '-' . date('d')); ?>" required>
+                        <input type="date" name="sadaqa_date" class="form-control"
+                            value="<?php echo htmlspecialchars(date('Y') . '-' . str_pad($month, 2, '0', STR_PAD_LEFT) . '-' . date('d')); ?>"
+                            required>
                     </div>
 
                     <div class="d-grid">
@@ -195,7 +201,7 @@ foreach ($records as $r) {
             <div class="modal-body text-center py-4">
                 <i class="fa-solid fa-trash-can text-danger fa-3x mb-3"></i>
                 <h5 class="fw-bold">Delete Record?</h5>
-                <p class="text-muted small">This cannot be undone.</p>
+                <p id="deleteSadaqaMsg" class="text-muted small">This cannot be undone.</p>
 
                 <form method="POST">
                     <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
@@ -213,8 +219,9 @@ foreach ($records as $r) {
 </div>
 
 <script>
-    function confirmDeleteSadaqa(id) {
+    function confirmDeleteSadaqa(id, title, amount) {
         document.getElementById('deleteSadaqaId').value = id;
+        document.getElementById('deleteSadaqaMsg').innerHTML = `Delete <strong>${title}</strong> (AED ${amount})? <br><span class="text-danger small">This cannot be undone.</span>`;
         new bootstrap.Modal(document.getElementById('deleteSadaqaModal')).show();
     }
 </script>

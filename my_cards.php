@@ -154,11 +154,15 @@ try {
                     <a href="edit_card.php?id=<?php echo $card['id']; ?>" class="btn btn-sm btn-light text-muted" title="Edit">
                         <i class="fa-solid fa-pen"></i>
                     </a>
-                    <a href="#"
-                        onclick="return confirmDelete('card_actions.php?action=delete_card&id=<?php echo $card['id']; ?>', 'Delete this card?');"
-                        class="btn btn-sm btn-light text-danger" title="Delete">
-                        <i class="fa-solid fa-trash"></i>
-                    </a>
+                    <form action="card_actions.php" method="POST" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                        <input type="hidden" name="action" value="delete_card">
+                        <input type="hidden" name="id" value="<?php echo $card['id']; ?>">
+                        <button type="submit" class="btn btn-sm btn-light text-danger" title="Delete"
+                            onclick="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($card['bank_name'] . ' ' . $card['card_name'])); ?>? (This will permanently remove card details)');">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </form>
                 </div>
             </div>
         <?php endforeach; ?>

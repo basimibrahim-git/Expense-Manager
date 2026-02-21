@@ -43,8 +43,8 @@ if ($action == 'add_balance' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
-} elseif ($action == 'delete_balance' && isset($_GET['id'])) {
-    $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+} elseif ($action == 'delete_balance' && (isset($_POST['id']) || isset($_GET['id']))) {
+    $id = filter_input(isset($_POST['id']) ? INPUT_POST : INPUT_GET, 'id', FILTER_VALIDATE_INT);
     if ($id) {
         $stmt = $pdo->prepare("DELETE FROM bank_balances WHERE id = ? AND user_id = ?");
         $stmt->execute([$id, $_SESSION['user_id']]);

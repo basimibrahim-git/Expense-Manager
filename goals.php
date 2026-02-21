@@ -137,7 +137,8 @@ $total_target = array_sum(array_column($goals, 'target_amount'));
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end border-0 shadow">
                                 <li>
-                                    <form method="POST" onsubmit="return confirmSubmit(this, 'Delete this goal?');">
+                                    <form method="POST"
+                                        onsubmit="return confirmSubmit(this, 'Delete goal: <?php echo addslashes(htmlspecialchars($goal['name'])); ?> (Target: AED <?php echo number_format($goal['target_amount'], 2); ?>)?');">
                                         <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
                                         <input type="hidden" name="action" value="delete_goal">
                                         <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">

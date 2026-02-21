@@ -28,24 +28,25 @@ try {
 */
 
 // Handle Status Update
-if (isset($_GET['mark_paid']) && isset($_GET['id'])) {
-    $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
-    if ($id) {
-        $stmt = $pdo->prepare("UPDATE zakath_calculations SET status = 'Paid' WHERE id = ? AND user_id = ?");
-        $stmt->execute([$id, $_SESSION['user_id']]);
-        header("Location: zakath_tracker.php?success=Marked as Paid");
-        exit;
-    }
-}
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
+    verify_csrf_token($_POST['csrf_token'] ?? '');
 
-// Handle Delete
-if (isset($_GET['delete']) && isset($_GET['id'])) {
-    $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
-    if ($id) {
-        $stmt = $pdo->prepare("DELETE FROM zakath_calculations WHERE id = ? AND user_id = ?");
-        $stmt->execute([$id, $_SESSION['user_id']]);
-        header("Location: zakath_tracker.php?deleted=1");
-        exit;
+    if ($_POST['action'] == 'mark_paid') {
+        $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
+        if ($id) {
+            $stmt = $pdo->prepare("UPDATE zakath_calculations SET status = 'Paid' WHERE id = ? AND user_id = ?");
+            $stmt->execute([$id, $_SESSION['user_id']]);
+            header("Location: zakath_tracker.php?success=Marked as Paid");
+            exit;
+        }
+    } elseif ($_POST['action'] == 'delete_zakath') {
+        $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
+        if ($id) {
+            $stmt = $pdo->prepare("DELETE FROM zakath_calculations WHERE id = ? AND user_id = ?");
+            $stmt->execute([$id, $_SESSION['user_id']]);
+            header("Location: zakath_tracker.php?deleted=1");
+            exit;
+        }
     }
 }
 
@@ -59,7 +60,8 @@ $records = $stmt->fetchAll();
 
 $total_pending = 0;
 foreach ($records as $r) {
-    if ($r['status'] == 'Pending') $total_pending += $r['total_zakath'];
+    if ($r['status'] == 'Pending')
+        $total_pending += $r['total_zakath'];
 }
 ?>
 
@@ -130,20 +132,30 @@ foreach ($records as $r) {
 
                     <div class="d-flex gap-2 mt-auto">
                         <?php if ($rec['status'] == 'Pending'): ?>
-                            <a href="?mark_paid=1&id=<?php echo $rec['id']; ?>" class="btn btn-success btn-sm flex-grow-1">
-                                <i class="fa-solid fa-check me-1"></i> Mark Paid
-                            </a>
+                            <form action="" method="POST" class="flex-grow-1">
+                                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                <input type="hidden" name="action" value="mark_paid">
+                                <input type="hidden" name="id" value="<?php echo $rec['id']; ?>">
+                                <button type="submit" class="btn btn-success btn-sm w-100"
+                                    onclick="return confirmSubmit(this, 'Mark <?php echo addslashes(htmlspecialchars($rec['cycle_name'])); ?> (AED <?php echo number_format($rec['total_zakath'], 2); ?>) as Paid?');">
+                                    <i class="fa-solid fa-check me-1"></i> Mark Paid
+                                </button>
+                            </form>
                         <?php else: ?>
                             <button class="btn btn-light btn-sm flex-grow-1" disabled>Paid on <?php echo date('M d, Y', strtotime($rec['created_at'])); ?></button>
                         <?php endif; ?>
                         
-                        <a href="?delete=1&id=<?php echo $rec['id']; ?>" 
-                           onclick="return confirm('Delete this record?')" 
-                           class="btn btn-outline-danger btn-sm">
-                            <i class="fa-solid fa-trash"></i>
-                        </a>
+                        <form action="" method="POST">
+                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                            <input type="hidden" name="action" value="delete_zakath">
+                            <input type="hidden" name="id" value="<?php echo $rec['id']; ?>">
+                            <button type="submit" class="btn btn-outline-danger btn-sm"
+                                onclick="return confirmSubmit(this, 'Delete Zakath record for <?php echo addslashes(htmlspecialchars($rec['cycle_name'])); ?>? This cannot be undone.');">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </form>
                     </div>
-                    
+
                     <div class="position-absolute top-0 end-0 m-3 text-muted small" style="font-size: 0.7rem;">
                         <?php echo date('M d, Y', strtotime($rec['created_at'])); ?>
                     </div>

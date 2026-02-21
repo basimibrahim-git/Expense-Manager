@@ -104,11 +104,15 @@ try {
                         <a href="edit_bank.php?id=<?php echo $bank['id']; ?>" class="btn btn-sm btn-outline-primary">
                             <i class="fa-solid fa-pen me-1"></i> Edit
                         </a>
-                        <a href="#"
-                            onclick="return confirmDelete('bank_actions.php?action=delete&id=<?php echo $bank['id']; ?>', 'Delete this bank account?');"
-                            class="btn btn-sm btn-outline-danger">
-                            <i class="fa-solid fa-trash"></i>
-                        </a>
+                        <form action="bank_actions.php" method="POST" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                            <input type="hidden" name="action" value="delete">
+                            <input type="hidden" name="id" value="<?php echo $bank['id']; ?>">
+                            <button type="submit" class="btn btn-sm btn-outline-danger"
+                                onclick="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($bank['bank_name'])); ?> account? (This permenently unlinks all associated cards)');">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>

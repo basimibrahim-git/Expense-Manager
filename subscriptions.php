@@ -130,11 +130,15 @@ $yearly_burn = $monthly_burn * 12;
                                 </span>
                             </td>
                             <td class="text-end pe-3">
-                                <a href="#"
-                                    onclick="return confirmDelete('expense_actions.php?action=delete_auto_expense&id=<?php echo $sub['id']; ?>', 'Stop tracking this subscription?', 'Stop Tracking');"
-                                    class="btn btn-sm text-danger">
-                                    <i class="fa-solid fa-trash"></i>
-                                </a>
+                                <form action="expense_actions.php" method="POST" class="d-inline"
+                                    onsubmit="return confirmSubmit(this, 'Stop tracking <?php echo addslashes(htmlspecialchars($sub['description'])); ?> - AED <?php echo number_format($sub['amount'], 2); ?>/month?');">
+                                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                    <input type="hidden" name="action" value="delete_auto_expense">
+                                    <input type="hidden" name="id" value="<?php echo $sub['id']; ?>">
+                                    <button type="submit" class="btn btn-sm text-danger border-0 p-0" title="Stop Tracking">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </form>
                             </td>
                         </tr>
                     <?php endforeach; ?>

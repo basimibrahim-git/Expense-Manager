@@ -196,7 +196,7 @@ foreach ($reminders as $rem) {
                 if ($is_rem) {
                     echo "<button type='button' class='btn btn-link p-0 text-danger ms-1' 
                             style='font-size: 0.9em; line-height: 1;' 
-                            onclick=\"confirmDeleteReminder({$evt['id']})\">
+                            onclick=\"confirmDeleteReminder({$evt['id']}, '" . addslashes(htmlspecialchars($evt['title'])) . "')\">
                             <i class='fa-solid fa-times'></i>
                           </button>";
                 }
@@ -207,7 +207,7 @@ foreach ($reminders as $rem) {
             echo "</div>";
         }
         ?>
-    </div>
+</div>
 </div>
 
 <style>
@@ -325,7 +325,7 @@ foreach ($reminders as $rem) {
             <div class="modal-body text-center py-4">
                 <i class="fa-solid fa-trash-can text-danger fa-3x mb-3"></i>
                 <h5 class="fw-bold">Delete Reminder?</h5>
-                <p class="text-muted small">This cannot be undone.</p>
+                <p id="deleteReminderMsg" class="text-muted small">This cannot be undone.</p>
 
                 <form method="POST">
                     <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
@@ -343,8 +343,9 @@ foreach ($reminders as $rem) {
 </div>
 
 <script>
-    function confirmDeleteReminder(id) {
+    function confirmDeleteReminder(id, title) {
         document.getElementById('deleteReminderId').value = id;
+        document.getElementById('deleteReminderMsg').innerHTML = `Delete reminder: <strong>${title}</strong>? <br><span class="text-danger small">This cannot be undone.</span>`;
         new bootstrap.Modal(document.getElementById('deleteReminderModal')).show();
     }
 </script>

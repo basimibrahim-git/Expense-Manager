@@ -68,7 +68,7 @@ $total_income = $sum_stmt->fetchColumn() ?: 0;
                 <?php echo number_format($total_income, 2); ?></span>
         </h3>
     </div>
-    </div>
+</div>
 </div>
 
 <?php if (isset($_GET['success'])): ?>
@@ -175,9 +175,15 @@ $total_income = $sum_stmt->fetchColumn() ?: 0;
                             <td class="text-end pe-3">
                                 <a href="edit_income.php?id=<?php echo $inc['id']; ?>" class="btn btn-sm text-muted me-1"
                                     title="Edit"><i class="fa-solid fa-pen"></i></a>
-                                <a href="#"
-                                    onclick="return confirmDelete('income_actions.php?action=delete_income&id=<?php echo $inc['id']; ?>', 'Delete this income entry?');"
-                                    class="btn btn-sm text-danger" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                                <form action="income_actions.php" method="POST" class="d-inline"
+                                    onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($inc['description'])); ?> - AED <?php echo number_format($inc['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($inc['income_date'])); ?>?');">
+                                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                    <input type="hidden" name="action" value="delete_income">
+                                    <input type="hidden" name="id" value="<?php echo $inc['id']; ?>">
+                                    <button type="submit" class="btn btn-sm text-danger border-0 p-0" title="Delete">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </form>
                             </td>
                         </tr>
                     <?php endforeach; ?>

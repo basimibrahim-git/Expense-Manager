@@ -84,8 +84,8 @@ elseif ($action == 'update_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 // DELETE BANK
-elseif ($action == 'delete' && isset($_GET['id'])) {
-    $bank_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+elseif ($action == 'delete' && (isset($_POST['id']) || isset($_GET['id']))) {
+    $bank_id = filter_input(isset($_POST['id']) ? INPUT_POST : INPUT_GET, 'id', FILTER_VALIDATE_INT);
 
     if ($bank_id) {
         // Unlink cards first
