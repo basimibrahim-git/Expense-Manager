@@ -102,6 +102,27 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     // Try to return to where they were
     header("Location: income.php?success=Deleted");
     exit();
+} elseif ($action == 'bulk_delete' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ids']) && is_array($_POST['ids'])) {
+    $ids = array_map('intval', $_POST['ids']);
+    if (!empty($ids)) {
+        $placeholders = str_repeat('?,', count($ids) - 1) . '?';
+        $stmt = $pdo->prepare("DELETE FROM income WHERE id IN ($placeholders) AND user_id = ?");
+        $stmt->execute(array_merge($ids, [$_SESSION['user_id']]));
+    }
+    $redirect = $_SERVER['HTTP_REFERER'] ?? 'income.php';
+    header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Bulk deleted");
+    exit();
+} elseif ($action == 'bulk_change_category' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ids']) && is_array($_POST['ids'])) {
+    $ids = array_map('intval', $_POST['ids']);
+    $category = htmlspecialchars($_POST['category']);
+    if (!empty($ids) && !empty($category)) {
+        $placeholders = str_repeat('?,', count($ids) - 1) . '?';
+        $stmt = $pdo->prepare("UPDATE income SET category = ? WHERE id IN ($placeholders) AND user_id = ?");
+        $stmt->execute(array_merge([$category], $ids, [$_SESSION['user_id']]));
+    }
+    $redirect = $_SERVER['HTTP_REFERER'] ?? 'income.php';
+    header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Bulk category updated");
+    exit();
 } elseif ($action == 'update_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $user_id = $_SESSION['user_id'];
     $income_id = filter_input(INPUT_POST, 'income_id', FILTER_VALIDATE_INT);

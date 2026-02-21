@@ -119,10 +119,14 @@ $total_income = $sum_stmt->fetchColumn() ?: 0;
                 value="<?php echo htmlspecialchars($end_date ?? ''); ?>" onchange="this.form.submit()">
         </div>
 
-        <div class="col-md-3 ms-auto text-end">
+        <div class="col-md-3 ms-auto text-end d-flex gap-2">
+            <a href="export_actions.php?action=export_income&month=<?php echo $month; ?>&year=<?php echo $year; ?>&category=<?php echo $category_filter; ?>&start=<?php echo $start_date; ?>&end=<?php echo $end_date; ?>"
+                class="btn btn-outline-secondary btn-sm flex-grow-1">
+                <i class="fa-solid fa-file-csv me-1"></i> Export
+            </a>
             <a href="add_income.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>"
-                class="btn btn-success btn-sm w-100">
-                <i class="fa-solid fa-plus me-1"></i> Add Income
+                class="btn btn-success btn-sm flex-grow-1">
+                <i class="fa-solid fa-plus me-1"></i> Add
             </a>
         </div>
     </form>
@@ -146,7 +150,10 @@ $total_income = $sum_stmt->fetchColumn() ?: 0;
             <table class="table table-hover align-middle mb-0">
                 <thead class="bg-light">
                     <tr>
-                        <th class="ps-4 py-3">Day</th>
+                        <th class="ps-4 py-3" style="width: 40px;">
+                            <input type="checkbox" class="form-check-input" id="selectAll">
+                        </th>
+                        <th class="py-3">Day</th>
                         <th>Description</th>
                         <th>Category</th>
                         <th class="text-end pe-4">Amount</th>
@@ -155,8 +162,12 @@ $total_income = $sum_stmt->fetchColumn() ?: 0;
                 </thead>
                 <tbody>
                     <?php foreach ($incomes as $inc): ?>
-                        <tr>
-                            <td class="ps-4 fw-bold">
+                        <tr data-id="<?php echo $inc['id']; ?>">
+                            <td class="ps-4">
+                                <input type="checkbox" class="form-check-input row-checkbox" name="income_ids[]"
+                                    value="<?php echo $inc['id']; ?>">
+                            </td>
+                            <td class="fw-bold">
                                 <?php echo date('d', strtotime($inc['income_date'])); ?>
                                 <span class="small text-muted fw-normal d-block">
                                     <?php echo date('D', strtotime($inc['income_date'])); ?>
@@ -224,3 +235,103 @@ $total_income = $sum_stmt->fetchColumn() ?: 0;
 <?php endif; ?>
 
 <?php require_once 'includes/footer.php'; ?>
+
+<!-- Bulk Action Floating Bar -->
+<div id="bulkActionBar"
+    class="position-fixed bottom-0 start-50 translate-middle-x mb-4 shadow-lg glass-panel p-3 d-none animate__animated animate__fadeInUp"
+    style="z-index: 1050; border-radius: 50px; min-width: 300px;">
+    <div class="d-flex align-items-center justify-content-between gap-4 px-2">
+        <div class="text-nowrap fw-bold">
+            <span id="selectedCount">0</span> Selected
+        </div>
+        <div class="d-flex gap-2">
+            <div class="dropdown">
+                <button class="btn btn-outline-success btn-sm rounded-pill dropdown-toggle" type="button"
+                    data-bs-toggle="dropdown">
+                    Change Category
+                </button>
+                <ul class="dropdown-menu border-0 shadow">
+                    <?php foreach ($income_categories as $cat): ?>
+                        <li><a class="dropdown-item" href="#"
+                                onclick="bulkAction('change_category', '<?php echo $cat; ?>')"><?php echo $cat; ?></a></li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+            <button class="btn btn-danger btn-sm rounded-pill px-3" onclick="bulkAction('delete')">
+                <i class="fa-solid fa-trash me-1"></i> Delete
+            </button>
+            <button class="btn btn-link btn-sm text-muted" onclick="deselectAll()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<form id="bulkActionForm" action="income_actions.php" method="POST" class="d-none">
+    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+    <input type="hidden" name="action" id="bulkActionType">
+    <input type="hidden" name="category" id="bulkActionCategory">
+    <div id="bulkActionIds"></div>
+</form>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const selectAll = document.getElementById('selectAll');
+        const rowCheckboxes = document.querySelectorAll('.row-checkbox');
+        const bulkBar = document.getElementById('bulkActionBar');
+        const selectedCount = document.getElementById('selectedCount');
+
+        function updateBulkBar() {
+            const checkedCount = document.querySelectorAll('.row-checkbox:checked').length;
+            selectedCount.innerText = checkedCount;
+            if (checkedCount > 0) {
+                bulkBar.classList.remove('d-none');
+            } else {
+                bulkBar.classList.add('d-none');
+            }
+        }
+
+        selectAll.addEventListener('change', function () {
+            rowCheckboxes.forEach(cb => cb.checked = selectAll.checked);
+            updateBulkBar();
+        });
+
+        rowCheckboxes.forEach(cb => {
+            cb.addEventListener('change', updateBulkBar);
+        });
+    });
+
+    function deselectAll() {
+        document.getElementById('selectAll').checked = false;
+        document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = false);
+        document.getElementById('bulkActionBar').classList.add('d-none');
+    }
+
+    function bulkAction(type, value = '') {
+        const checked = document.querySelectorAll('.row-checkbox:checked');
+        if (checked.length === 0) return;
+
+        let confirmMsg = '';
+        if (type === 'delete') {
+            confirmMsg = `Are you sure you want to delete ${checked.length} selected income entries? This cannot be undone.`;
+        } else {
+            confirmMsg = `Change category to ${value} for ${checked.length} entries?`;
+        }
+
+        if (confirm(confirmMsg)) {
+            const form = document.getElementById('bulkActionForm');
+            document.getElementById('bulkActionType').value = 'bulk_' + type;
+            document.getElementById('bulkActionCategory').value = value;
+
+            const idsContainer = document.getElementById('bulkActionIds');
+            idsContainer.innerHTML = '';
+            checked.forEach(cb => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids[]';
+                input.value = cb.value;
+                idsContainer.appendChild(input);
+            });
+
+            form.submit();
+        }
+    }
+</script>

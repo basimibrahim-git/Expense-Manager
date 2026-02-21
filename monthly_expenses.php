@@ -193,10 +193,14 @@ try {
                 value="<?php echo htmlspecialchars($end_date ?? ''); ?>" onchange="this.form.submit()">
         </div>
 
-        <div class="col-6 col-md-2 text-end">
+        <div class="col-6 col-md-2 text-end d-flex gap-2">
+            <a href="export_actions.php?action=export_expenses&month=<?php echo $month; ?>&year=<?php echo $year; ?>&category=<?php echo $category_filter; ?>&payment_method=<?php echo $payment_filter; ?>&card_id=<?php echo $card_filter; ?>&start=<?php echo $start_date; ?>&end=<?php echo $end_date; ?>"
+                class="btn btn-outline-secondary btn-sm flex-grow-1">
+                <i class="fa-solid fa-file-csv me-1"></i> Export
+            </a>
             <a href="add_expense.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>"
-                class="btn btn-primary btn-sm w-100">
-                <i class="fa-solid fa-plus me-1"></i> Add Expense
+                class="btn btn-primary btn-sm flex-grow-1">
+                <i class="fa-solid fa-plus me-1"></i> Add
             </a>
         </div>
     </form>
@@ -220,7 +224,10 @@ try {
             <table class="table table-hover align-middle mb-0">
                 <thead class="bg-light">
                     <tr>
-                        <th class="ps-4 py-3">Day</th>
+                        <th class="ps-4 py-3" style="width: 40px;">
+                            <input type="checkbox" class="form-check-input" id="selectAll">
+                        </th>
+                        <th class="py-3">Day</th>
                         <th>Description</th>
                         <th>Category</th>
                         <th>Payment</th>
@@ -229,67 +236,69 @@ try {
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($expenses as $expense): ?>
-                        <tr>
-                            <td class="ps-4 fw-bold">
-                                <?php echo date('d', strtotime($expense['expense_date'])); ?>
-                                <span class="small text-muted fw-normal d-block">
-                                    <?php echo date('D', strtotime($expense['expense_date'])); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <?php echo htmlspecialchars($expense['description']); ?>
-                                <?php if (!empty($expense['tags'])): ?>
-                                    <div class="mt-1">
-                                        <?php foreach (explode(',', $expense['tags']) as $tag): ?>
-                                            <span class="badge bg-secondary-subtle text-secondary me-1" style="font-size: 0.7em;">
-                                                <?php echo htmlspecialchars(trim($tag)); ?>
-                                            </span>
-                                        <?php endforeach; ?>
-                                    </div>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <span class="badge bg-light text-dark border">
-                                    <?php echo htmlspecialchars($expense['category']); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <?php if ($expense['payment_method'] == 'Card'): ?>
-                                    <div class="small">
-                                        <i class="fa-solid fa-credit-card text-primary me-1"></i>
-                                        <?php echo htmlspecialchars($expense['bank_name']); ?>
-                                    </div>
-                                <?php else: ?>
-                                    <div class="small text-secondary">
-                                        <i class="fa-solid fa-coins me-1"></i> Cash
-                                    </div>
-                                <?php endif; ?>
-                            </td>
-                            <td class="text-end pe-4 fw-bold">
-                                AED <span class="blur-sensitive">
-                                    <?php echo number_format($expense['amount'], 2); ?></span>
-                                <?php if (!empty($expense['currency']) && $expense['currency'] != 'AED'): ?>
-                                    <div class="small text-muted fw-normal mt-1" style="font-size: 0.75em;">
-                                        (<?php echo htmlspecialchars($expense['currency'] . ' ' . number_format($expense['original_amount'], 2)); ?>)
-                                    </div>
-                                <?php endif; ?>
-                            </td>
-                            <td class="text-end pe-3">
-                                <a href="edit_expense.php?id=<?php echo $expense['id']; ?>" class="btn btn-sm text-muted me-1"
-                                    title="Edit"><i class="fa-solid fa-pen"></i></a>
-                                <form action="expense_actions.php" method="POST" class="d-inline"
-                                    onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($expense['description'])); ?> - AED <?php echo number_format($expense['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($expense['expense_date'])); ?>?');">
-                                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                                    <input type="hidden" name="action" value="delete_expense">
-                                    <input type="hidden" name="id" value="<?php echo $expense['id']; ?>">
-                                    <button type="submit" class="btn btn-sm text-danger border-0 p-0" title="Delete">
-                                        <i class="fa-solid fa-trash"></i>
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
+                    <tr data-id="<?php echo $expense['id']; ?>">
+                        <td class="ps-4">
+                            <input type="checkbox" class="form-check-input row-checkbox" name="expense_ids[]"
+                                value="<?php echo $expense['id']; ?>">
+                        </td>
+                        <td class="fw-bold">
+                            <?php echo date('d', strtotime($expense['expense_date'])); ?>
+                            <span class="small text-muted fw-normal d-block">
+                                <?php echo date('D', strtotime($expense['expense_date'])); ?>
+                            </span>
+                        </td>
+                        <td>
+                            <?php echo htmlspecialchars($expense['description']); ?>
+                            <?php if (!empty($expense['tags'])): ?>
+                                <div class="mt-1">
+                                    <?php foreach (explode(',', $expense['tags']) as $tag): ?>
+                                        <span class="badge bg-secondary-subtle text-secondary me-1" style="font-size: 0.7em;">
+                                            <?php echo htmlspecialchars(trim($tag)); ?>
+                                        </span>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-dark border">
+                                <?php echo htmlspecialchars($expense['category']); ?>
+                            </span>
+                        </td>
+                        <td>
+                            <?php if ($expense['payment_method'] == 'Card'): ?>
+                                <div class="small">
+                                    <i class="fa-solid fa-credit-card text-primary me-1"></i>
+                                    <?php echo htmlspecialchars($expense['bank_name']); ?>
+                                </div>
+                            <?php else: ?>
+                                <div class="small text-secondary">
+                                    <i class="fa-solid fa-coins me-1"></i> Cash
+                                </div>
+                            <?php endif; ?>
+                        </td>
+                        <td class="text-end pe-4 fw-bold">
+                            AED <span class="blur-sensitive">
+                                <?php echo number_format($expense['amount'], 2); ?></span>
+                            <?php if (!empty($expense['currency']) && $expense['currency'] != 'AED'): ?>
+                                <div class="small text-muted fw-normal mt-1" style="font-size: 0.75em;">
+                                    (<?php echo htmlspecialchars($expense['currency'] . ' ' . number_format($expense['original_amount'], 2)); ?>)
+                                </div>
+                            <?php endif; ?>
+                        </td>
+                        <td class="text-end pe-3">
+                            <a href="edit_expense.php?id=<?php echo $expense['id']; ?>" class="btn btn-sm text-muted me-1"
+                                title="Edit"><i class="fa-solid fa-pen"></i></a>
+                            <form action="expense_actions.php" method="POST" class="d-inline"
+                                onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($expense['description'])); ?> - AED <?php echo number_format($expense['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($expense['expense_date'])); ?>?');">
+                                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                <input type="hidden" name="action" value="delete_expense">
+                                <input type="hidden" name="id" value="<?php echo $expense['id']; ?>">
+                                <button type="submit" class="btn btn-sm text-danger border-0 p-0" title="Delete">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -333,3 +342,103 @@ try {
 <?php endif; ?>
 
 <?php require_once 'includes/footer.php'; ?>
+
+<!-- Bulk Action Floating Bar -->
+<div id="bulkActionBar"
+    class="position-fixed bottom-0 start-50 translate-middle-x mb-4 shadow-lg glass-panel p-3 d-none animate__animated animate__fadeInUp"
+    style="z-index: 1050; border-radius: 50px; min-width: 300px;">
+    <div class="d-flex align-items-center justify-content-between gap-4 px-2">
+        <div class="text-nowrap fw-bold">
+            <span id="selectedCount">0</span> Selected
+        </div>
+        <div class="d-flex gap-2">
+            <div class="dropdown">
+                <button class="btn btn-outline-primary btn-sm rounded-pill dropdown-toggle" type="button"
+                    data-bs-toggle="dropdown">
+                    Change Category
+                </button>
+                <ul class="dropdown-menu border-0 shadow">
+                    <?php foreach ($categories as $cat): ?>
+                        <li><a class="dropdown-item" href="#"
+                                onclick="bulkAction('change_category', '<?php echo $cat; ?>')"><?php echo $cat; ?></a></li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+            <button class="btn btn-danger btn-sm rounded-pill px-3" onclick="bulkAction('delete')">
+                <i class="fa-solid fa-trash me-1"></i> Delete
+            </button>
+            <button class="btn btn-link btn-sm text-muted" onclick="deselectAll()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<form id="bulkActionForm" action="expense_actions.php" method="POST" class="d-none">
+    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+    <input type="hidden" name="action" id="bulkActionType">
+    <input type="hidden" name="category" id="bulkActionCategory">
+    <div id="bulkActionIds"></div>
+</form>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const selectAll = document.getElementById('selectAll');
+        const rowCheckboxes = document.querySelectorAll('.row-checkbox');
+        const bulkBar = document.getElementById('bulkActionBar');
+        const selectedCount = document.getElementById('selectedCount');
+
+        function updateBulkBar() {
+            const checkedCount = document.querySelectorAll('.row-checkbox:checked').length;
+            selectedCount.innerText = checkedCount;
+            if (checkedCount > 0) {
+                bulkBar.classList.remove('d-none');
+            } else {
+                bulkBar.classList.add('d-none');
+            }
+        }
+
+        selectAll.addEventListener('change', function () {
+            rowCheckboxes.forEach(cb => cb.checked = selectAll.checked);
+            updateBulkBar();
+        });
+
+        rowCheckboxes.forEach(cb => {
+            cb.addEventListener('change', updateBulkBar);
+        });
+    });
+
+    function deselectAll() {
+        document.getElementById('selectAll').checked = false;
+        document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = false);
+        document.getElementById('bulkActionBar').classList.add('d-none');
+    }
+
+    function bulkAction(type, value = '') {
+        const checked = document.querySelectorAll('.row-checkbox:checked');
+        if (checked.length === 0) return;
+
+        let confirmMsg = '';
+        if (type === 'delete') {
+            confirmMsg = `Are you sure you want to delete ${checked.length} selected expenses? This cannot be undone.`;
+        } else {
+            confirmMsg = `Change category to ${value} for ${checked.length} expenses?`;
+        }
+
+        if (confirm(confirmMsg)) {
+            const form = document.getElementById('bulkActionForm');
+            document.getElementById('bulkActionType').value = 'bulk_' + type;
+            document.getElementById('bulkActionCategory').value = value;
+
+            const idsContainer = document.getElementById('bulkActionIds');
+            idsContainer.innerHTML = '';
+            checked.forEach(cb => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids[]';
+                input.value = cb.value;
+                idsContainer.appendChild(input);
+            });
+
+            form.submit();
+        }
+    }
+</script>

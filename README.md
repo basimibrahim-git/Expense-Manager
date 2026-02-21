@@ -29,8 +29,15 @@
 ### 💼 Professional Tools
 - **Company Tracker**: Monitor annual incentives, bonuses, and sales performance grids.
 - **Lending Tracker**: Keep track of money lent to friends and family with repayment status.
+- **Reminders Engine**: Integrated alert system for license expiries, bills, and renewals.
 
-### 📱 Mobile & PWA Ready
+### �️ Power User Features
+- **Dark Mode**: Premium, high-contrast dark theme with browser-level persistence.
+- **Bulk Actions**: Batch manage transactions with a floating action bar for rapid deletion or category updates.
+- **Universal Export**: One-click CSV portability across every module (Expenses, Income, all Trackers, and Reminders).
+- **Consolidated Analytics**: Filter-aware data views that respect date ranges and categories across exports.
+
+### �📱 Mobile & PWA Ready
 - **Installable Web App**: Native-like experience on iOS and Android with offline fallback.
 - **Responsive Design**: Mobile-first glassmorphism UI that adapts to any screen size.
 
@@ -49,7 +56,8 @@ This application is built with a robust, standard LAMP/LEMP stack:
   - **Chart.js**: Data visualization.
   - **Bootstrap 5**: Responsive layout framework.
 - **Security**:
-  - **CSRF Protection**: Token-based security for all forms.
+  - **CSRF Protection**: Token-based security for all forms and sensitive actions.
+  - **Secure Deletions**: Every deletion requires a POST request with detailed confirmation dialogs to prevent accidental loss.
   - **Input Sanitization**: Protection against XSS and SQL injection.
   - **Environment Variables**: Secure credential management via `.env`.
 - **Application Timezone**: Configurable timezone setting (`APP_TIMEZONE`) in `.env` (default: `Asia/Dubai`).

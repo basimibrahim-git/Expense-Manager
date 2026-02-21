@@ -46,9 +46,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         // Return to current view
-        $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
-        $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
-        header("Location: monthly_interest.php?month=$month&year=$year&success=Record Deleted");
+        header("Location: monthly_interest.php?month=$month&year=$year&success=Deleted");
+        exit;
+    } elseif ($action == 'bulk_delete_interest' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ids']) && is_array($_POST['ids'])) {
+        $ids = array_map('intval', $_POST['ids']);
+        if (!empty($ids)) {
+            $placeholders = str_repeat('?,', count($ids) - 1) . '?';
+            $stmt = $pdo->prepare("DELETE FROM interest_tracker WHERE id IN ($placeholders) AND user_id = ?");
+            $stmt->execute(array_merge($ids, [$_SESSION['user_id']]));
+        }
+        header("Location: monthly_interest.php?month=$month&year=$year&success=Bulk Deleted");
         exit;
     }
 }
@@ -120,9 +127,15 @@ foreach ($records as $r) {
             class="btn btn-outline-light text-dark"><i class="fa-solid fa-chevron-right"></i></a>
     </div>
 
-    <button class="btn btn-info text-white" onclick="openAddModal()">
-        <i class="fa-solid fa-plus me-2"></i> Add Record
-    </button>
+    <div class="d-flex gap-2">
+        <a href="export_actions.php?action=export_interest&month=<?php echo $month; ?>&year=<?php echo $year; ?>"
+            class="btn btn-outline-secondary">
+            <i class="fa-solid fa-file-csv me-1"></i> Export
+        </a>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#interestModal">
+            <i class="fa-solid fa-plus me-2"></i> Add Record
+        </button>
+    </div>
 </div>
 
 <!-- List View -->
@@ -138,45 +151,49 @@ foreach ($records as $r) {
     <div class="card border-0 shadow-sm overflow-hidden">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-                <thead class="bg-light">
+                <thead class="bg-light text-secondary">
                     <tr>
-                        <th class="ps-4 py-3">Date</th>
+                        <th class="ps-4 py-3" style="width: 40px;">
+                            <input type="checkbox" class="form-check-input" id="selectAll">
+                        </th>
+                        <th class="py-3">Date</th>
                         <th>Description</th>
-                        <th class="text-center">Type</th>
-                        <th class="text-end pe-4">Amount</th>
+                        <th class="text-end pe-4">Income/Interest</th>
                         <th></th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($records as $r):
-                        $is_payment = $r['amount'] < 0;
-                        $display_amount = abs($r['amount']);
-                        $type_display = $is_payment ? '<span class="badge bg-success-subtle text-success">Payment</span>' : '<span class="badge bg-danger-subtle text-danger">Interest</span>';
-                        ?>
-                        <tr>
-                            <td class="ps-4 fw-bold">
-                                <?php echo htmlspecialchars(date('d', strtotime($r['interest_date']))); ?>
+                    <?php foreach ($records as $r): ?>
+                        <tr class="<?php echo $r['amount'] < 0 ? 'bg-danger-subtle' : ''; ?>">
+                            <td class="ps-4">
+                                <input type="checkbox" class="form-check-input row-checkbox" value="<?php echo $r['id']; ?>">
+                            </td>
+                            <td class="fw-bold">
+                                <?php echo date('d', strtotime($r['interest_date'])); ?>
                                 <span class="small text-muted fw-normal d-block">
-                                    <?php echo htmlspecialchars(date('D', strtotime($r['interest_date']))); ?>
+                                    <?php echo date('D', strtotime($r['interest_date'])); ?>
                                 </span>
                             </td>
                             <td>
-                                <?php echo htmlspecialchars($r['title']); ?>
+                                <span class="fw-bold">
+                                    <?php echo htmlspecialchars($r['title']); ?>
+                                </span>
+                                <?php if ($r['amount'] < 0): ?>
+                                    <span class="badge bg-danger ms-2" style="font-size: 0.7em;">Payment</span>
+                                <?php endif; ?>
                             </td>
-                            <td class="text-center">
-                                <?php echo $type_display; ?>
-                            </td>
-                            <td class="text-end pe-4 fw-bold <?php echo $is_payment ? 'text-success' : 'text-danger'; ?>">
-                                AED <span class="blur-sensitive"><?php echo number_format($display_amount, 2); ?></span>
+                            <td class="text-end pe-4 fw-bold <?php echo $r['amount'] < 0 ? 'text-danger' : 'text-success'; ?>">
+                                <?php echo $r['amount'] < 0 ? '-' : '+'; ?> AED <span class="blur-sensitive">
+                                    <?php echo number_format(abs($r['amount']), 2); ?></span>
                             </td>
                             <td class="text-end pe-3">
-                                <button type="button" class="btn btn-sm text-dark me-2"
-                                    onclick='openEditModal(<?php echo htmlspecialchars(json_encode($r), ENT_QUOTES, 'UTF-8'); ?>)'
-                                    title="Edit Date/Description/Amount">
-                                    <i class="fa-solid fa-pen-to-square"></i>
+                                <button type="button" class="btn btn-sm text-muted me-1"
+                                    onclick="editInterest(<?php echo htmlspecialchars(json_encode($r)); ?>)" title="Edit">
+                                    <i class="fa-solid fa-pen"></i>
                                 </button>
                                 <button type="button" class="btn btn-sm text-danger"
-                                    onclick="confirmDeleteInterest(<?php echo $r['id']; ?>, '<?php echo addslashes(htmlspecialchars($r['title'])); ?>', '<?php echo number_format($display_amount, 2); ?>')" title="Delete">
+                                    onclick="confirmDeleteInterest(<?php echo $r['id']; ?>, '<?php echo addslashes(htmlspecialchars($r['title'])); ?>', '<?php echo number_format(abs($r['amount']), 2); ?>')"
+                                    title="Delete">
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
                             </td>
@@ -263,6 +280,30 @@ foreach ($records as $r) {
 
 <?php require_once 'includes/footer.php'; ?>
 
+<!-- Bulk Action Floating Bar -->
+<div id="bulkActionBar"
+    class="position-fixed bottom-0 start-50 translate-middle-x mb-4 shadow-lg glass-panel p-3 d-none animate__animated animate__fadeInUp"
+    style="z-index: 1050; border-radius: 50px; min-width: 300px;">
+    <div class="d-flex align-items-center justify-content-between gap-4 px-2">
+        <div class="text-nowrap fw-bold">
+            <span id="selectedCount">0</span> Selected
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-danger btn-sm rounded-pill px-3" onclick="bulkAction('delete')">
+                <i class="fa-solid fa-trash me-1"></i> Delete
+            </button>
+            <button class="btn btn-link btn-sm text-muted" onclick="deselectAll()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<form id="bulkActionForm" action="monthly_interest.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>"
+    method="POST" class="d-none">
+    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+    <input type="hidden" name="action" id="bulkActionType">
+    <div id="bulkActionIds"></div>
+</form>
+
 <script>
     const interestModal = new bootstrap.Modal(document.getElementById('interestModal'));
 
@@ -282,7 +323,7 @@ foreach ($records as $r) {
         interestModal.show();
     }
 
-    function openEditModal(record) {
+    function editInterest(record) {
         document.getElementById('modalTitle').innerText = 'Edit Record';
         document.getElementById('formAction').value = 'edit_interest';
         document.getElementById('recordId').value = record.id;
@@ -307,5 +348,61 @@ foreach ($records as $r) {
         document.getElementById('deleteInterestId').value = id;
         document.getElementById('deleteInterestMsg').innerHTML = `Delete <strong>${title}</strong> (AED ${amount})? <br><span class="text-danger small">This cannot be undone.</span>`;
         new bootstrap.Modal(document.getElementById('deleteInterestModal')).show();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const selectAll = document.getElementById('selectAll');
+        const rowCheckboxes = document.querySelectorAll('.row-checkbox');
+        const bulkBar = document.getElementById('bulkActionBar');
+        const selectedCount = document.getElementById('selectedCount');
+
+        function updateBulkBar() {
+            const checkedCount = document.querySelectorAll('.row-checkbox:checked').length;
+            selectedCount.innerText = checkedCount;
+            if (checkedCount > 0) {
+                bulkBar.classList.remove('d-none');
+            } else {
+                bulkBar.classList.add('d-none');
+            }
+        }
+
+        if (selectAll) {
+            selectAll.addEventListener('change', function () {
+                rowCheckboxes.forEach(cb => cb.checked = selectAll.checked);
+                updateBulkBar();
+            });
+        }
+
+        rowCheckboxes.forEach(cb => {
+            cb.addEventListener('change', updateBulkBar);
+        });
+    });
+
+    function deselectAll() {
+        if (document.getElementById('selectAll')) document.getElementById('selectAll').checked = false;
+        document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = false);
+        document.getElementById('bulkActionBar').classList.add('d-none');
+    }
+
+    function bulkAction(type) {
+        const checked = document.querySelectorAll('.row-checkbox:checked');
+        if (checked.length === 0) return;
+
+        if (confirm(`Are you sure you want to delete ${checked.length} selected records?`)) {
+            const form = document.getElementById('bulkActionForm');
+            document.getElementById('bulkActionType').value = 'bulk_' + type + '_interest';
+
+            const idsContainer = document.getElementById('bulkActionIds');
+            idsContainer.innerHTML = '';
+            checked.forEach(cb => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids[]';
+                input.value = cb.value;
+                idsContainer.appendChild(input);
+            });
+
+            form.submit();
+        }
     }
 </script>

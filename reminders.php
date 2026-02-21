@@ -51,9 +51,14 @@ $reminders = $stmt->fetchAll();
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 fw-bold mb-0">My Reminders</h1>
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addReminderModal">
-        <i class="fa-solid fa-plus me-2"></i> Add Reminder
-    </button>
+    <div class="d-flex gap-2">
+        <a href="export_actions.php?action=export_reminders" class="btn btn-outline-secondary">
+            <i class="fa-solid fa-file-csv me-1"></i> Export
+        </a>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addReminderModal">
+            <i class="fa-solid fa-plus me-2"></i> Add Reminder
+        </button>
+    </div>
 </div>
 
 <?php if (empty($reminders)): ?>

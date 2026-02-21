@@ -77,10 +77,14 @@ foreach ($records as $r) {
                 <h4 class="fw-bold text-danger mb-0">AED <?php echo number_format($total_pending, 2); ?></h4>
             </div>
         <?php endif; ?>
+        <a href="export_actions.php?action=export_zakath" class="btn btn-outline-secondary">
+            <i class="fa-solid fa-file-csv me-1"></i> Export
+        </a>
         <a href="zakath_calculator.php" class="btn btn-primary d-flex align-items-center gap-2">
             <i class="fa-solid fa-calculator"></i> New Calculation
         </a>
     </div>
+</div>
 </div>
 
 <?php if (empty($records)): ?>
@@ -142,9 +146,10 @@ foreach ($records as $r) {
                                 </button>
                             </form>
                         <?php else: ?>
-                            <button class="btn btn-light btn-sm flex-grow-1" disabled>Paid on <?php echo date('M d, Y', strtotime($rec['created_at'])); ?></button>
+                            <button class="btn btn-light btn-sm flex-grow-1" disabled>Paid on
+                                <?php echo date('M d, Y', strtotime($rec['created_at'])); ?></button>
                         <?php endif; ?>
-                        
+
                         <form action="" method="POST">
                             <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
                             <input type="hidden" name="action" value="delete_zakath">

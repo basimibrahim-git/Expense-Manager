@@ -28,8 +28,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         // Fixed Open Redirect: Redirect to known parent page
-        $back_url = "sadaqa_tracker.php?year=" . ($year ?? date('Y'));
-        header("Location: $back_url");
+        header("Location: monthly_sadaqa.php?month=$month&year=$year&success=Deleted");
+        exit;
+    } elseif ($_POST['action'] == 'bulk_delete_sadaqa') {
+        if (isset($_POST['ids']) && is_array($_POST['ids'])) {
+            $ids = array_map('intval', $_POST['ids']);
+            if (!empty($ids)) {
+                $placeholders = str_repeat('?,', count($ids) - 1) . '?';
+                $stmt = $pdo->prepare("DELETE FROM sadaqa_tracker WHERE id IN ($placeholders) AND user_id = ?");
+                $stmt->execute(array_merge($ids, [$_SESSION['user_id']]));
+            }
+        }
+        header("Location: monthly_sadaqa.php?month=$month&year=$year&success=Bulk Deleted");
         exit;
     }
 }
@@ -98,9 +108,15 @@ foreach ($records as $r) {
             class="btn btn-outline-light text-dark"><i class="fa-solid fa-chevron-right"></i></a>
     </div>
 
-    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addSadaqaModal">
-        <i class="fa-solid fa-plus me-2"></i> Add Sadaqa
-    </button>
+    <div class="d-flex gap-2">
+        <a href="export_actions.php?action=export_sadaqa&month=<?php echo $month; ?>&year=<?php echo $year; ?>"
+            class="btn btn-outline-secondary">
+            <i class="fa-solid fa-file-csv me-1"></i> Export
+        </a>
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addSadaqaModal">
+            <i class="fa-solid fa-plus me-2"></i> Add Sadaqa
+        </button>
+    </div>
 </div>
 
 <!-- List View -->
@@ -118,7 +134,10 @@ foreach ($records as $r) {
             <table class="table table-hover align-middle mb-0">
                 <thead class="bg-light">
                     <tr>
-                        <th class="ps-4 py-3">Date</th>
+                        <th class="ps-4 py-3" style="width: 40px;">
+                            <input type="checkbox" class="form-check-input" id="selectAll">
+                        </th>
+                        <th class="py-3">Date</th>
                         <th>Description</th>
                         <th class="text-end pe-4">Amount</th>
                         <th></th>
@@ -127,7 +146,10 @@ foreach ($records as $r) {
                 <tbody>
                     <?php foreach ($records as $r): ?>
                         <tr>
-                            <td class="ps-4 fw-bold">
+                            <td class="ps-4">
+                                <input type="checkbox" class="form-check-input row-checkbox" value="<?php echo $r['id']; ?>">
+                            </td>
+                            <td class="fw-bold">
                                 <?php echo htmlspecialchars(date('d', strtotime($r['sadaqa_date']))); ?>
                                 <span class="small text-muted fw-normal d-block">
                                     <?php echo htmlspecialchars(date('D', strtotime($r['sadaqa_date']))); ?>
@@ -218,12 +240,92 @@ foreach ($records as $r) {
     </div>
 </div>
 
+<?php require_once 'includes/footer.php'; ?>
+
+<!-- Bulk Action Floating Bar -->
+<div id="bulkActionBar"
+    class="position-fixed bottom-0 start-50 translate-middle-x mb-4 shadow-lg glass-panel p-3 d-none animate__animated animate__fadeInUp"
+    style="z-index: 1050; border-radius: 50px; min-width: 300px;">
+    <div class="d-flex align-items-center justify-content-between gap-4 px-2">
+        <div class="text-nowrap fw-bold">
+            <span id="selectedCount">0</span> Selected
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-danger btn-sm rounded-pill px-3" onclick="bulkAction('delete')">
+                <i class="fa-solid fa-trash me-1"></i> Delete
+            </button>
+            <button class="btn btn-link btn-sm text-muted" onclick="deselectAll()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<form id="bulkActionForm" action="monthly_sadaqa.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>"
+    method="POST" class="d-none">
+    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+    <input type="hidden" name="action" id="bulkActionType">
+    <div id="bulkActionIds"></div>
+</form>
+
 <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const selectAll = document.getElementById('selectAll');
+        const rowCheckboxes = document.querySelectorAll('.row-checkbox');
+        const bulkBar = document.getElementById('bulkActionBar');
+        const selectedCount = document.getElementById('selectedCount');
+
+        function updateBulkBar() {
+            const checkedCount = document.querySelectorAll('.row-checkbox:checked').length;
+            selectedCount.innerText = checkedCount;
+            if (checkedCount > 0) {
+                bulkBar.classList.remove('d-none');
+            } else {
+                bulkBar.classList.add('d-none');
+            }
+        }
+
+        if (selectAll) {
+            selectAll.addEventListener('change', function () {
+                rowCheckboxes.forEach(cb => cb.checked = selectAll.checked);
+                updateBulkBar();
+            });
+        }
+
+        rowCheckboxes.forEach(cb => {
+            cb.addEventListener('change', updateBulkBar);
+        });
+    });
+
+    function deselectAll() {
+        document.getElementById('selectAll').checked = false;
+        document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = false);
+        document.getElementById('bulkActionBar').classList.add('d-none');
+    }
+
+    function bulkAction(type) {
+        const checked = document.querySelectorAll('.row-checkbox:checked');
+        if (checked.length === 0) return;
+
+        if (confirm(`Are you sure you want to delete ${checked.length} selected records?`)) {
+            const form = document.getElementById('bulkActionForm');
+            document.getElementById('bulkActionType').value = 'bulk_' + type + '_sadaqa';
+
+            const idsContainer = document.getElementById('bulkActionIds');
+            idsContainer.innerHTML = '';
+            checked.forEach(cb => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids[]';
+                input.value = cb.value;
+                idsContainer.appendChild(input);
+            });
+
+            form.submit();
+        }
+    }
+
     function confirmDeleteSadaqa(id, title, amount) {
         document.getElementById('deleteSadaqaId').value = id;
         document.getElementById('deleteSadaqaMsg').innerHTML = `Delete <strong>${title}</strong> (AED ${amount})? <br><span class="text-danger small">This cannot be undone.</span>`;
         new bootstrap.Modal(document.getElementById('deleteSadaqaModal')).show();
     }
 </script>
-
-<?php require_once 'includes/footer.php'; ?>
