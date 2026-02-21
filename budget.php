@@ -9,13 +9,13 @@ $month = date('n');
 $year = date('Y');
 
 // 1. Get Total Income for this month
-$stmt = $pdo->prepare("SELECT SUM(amount) FROM income WHERE user_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ?");
-$stmt->execute([$user_id, $month, $year]);
+$stmt = $pdo->prepare("SELECT SUM(amount) FROM income WHERE tenant_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ?");
+$stmt->execute([$_SESSION['tenant_id'], $month, $year]);
 $total_income = $stmt->fetchColumn() ?: 0;
 
 // 2. Get Expenses grouped by Category
-$stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE user_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category");
-$stmt->execute([$user_id, $month, $year]);
+$stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category");
+$stmt->execute([$_SESSION['tenant_id'], $month, $year]);
 $expenses = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
 // 3. Define Buckets
@@ -164,20 +164,24 @@ $savings_color = getStatusColor($savings_pct, 20, true);
 <div class="glass-panel p-4 mb-5">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h5 class="fw-bold mb-0">Category Budgets vs Actuals</h5>
-        <a href="manage_budgets.php" class="btn btn-outline-primary btn-sm rounded-pill px-3">Manage Targets</a>
+        <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+            <a href="manage_budgets.php" class="btn btn-outline-primary btn-sm rounded-pill px-3">Manage Targets</a>
+        <?php endif; ?>
     </div>
 
     <?php
     // Fetch specifically defined budgets
-    $stmt = $pdo->prepare("SELECT category, amount FROM budgets WHERE user_id = ? AND month = ? AND year = ?");
-    $stmt->execute([$user_id, $month, $year]);
+    $stmt = $pdo->prepare("SELECT category, amount FROM budgets WHERE tenant_id = ? AND month = ? AND year = ?");
+    $stmt->execute([$_SESSION['tenant_id'], $month, $year]);
     $cat_budgets = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
     ?>
 
     <?php if (empty($cat_budgets)): ?>
         <div class="text-center py-4 bg-light rounded-4">
             <p class="text-muted mb-0">No specific category budgets defined for this month.</p>
-            <a href="manage_budgets.php" class="small text-primary">Set individual targets</a>
+            <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                <a href="manage_budgets.php" class="small text-primary">Set individual targets</a>
+            <?php endif; ?>
         </div>
     <?php else: ?>
         <div class="row g-4">

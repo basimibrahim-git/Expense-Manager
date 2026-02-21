@@ -10,10 +10,10 @@ $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y'); // De
 $stmt = $pdo->prepare("
     SELECT MONTH(income_date) as month, SUM(amount) as total 
     FROM income 
-    WHERE user_id = :user_id AND YEAR(income_date) = :year 
+    WHERE tenant_id = :tenant_id AND YEAR(income_date) = :year 
     GROUP BY MONTH(income_date)
 ");
-$stmt->execute(['user_id' => $_SESSION['user_id'], 'year' => $year]);
+$stmt->execute(['tenant_id' => $_SESSION['tenant_id'], 'year' => $year]);
 $monthly_totals = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
 $months = [
@@ -48,7 +48,7 @@ $current_year = date('Y');
         <a href="?year=<?php echo $year + 1; ?>" class="btn btn-outline-light text-dark"><i
                 class="fa-solid fa-chevron-right"></i></a>
     </div>
-    </div>
+</div>
 </div>
 
 <?php if (isset($_GET['success'])): ?>

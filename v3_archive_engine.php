@@ -12,10 +12,8 @@ $cutoff_date = date('Y-m-d', strtotime("-$retention_years years"));
 echo "🚀 Starting Archiving Engine (Retention: $retention_years years, Cutoff: $cutoff_date)\n";
 
 try {
-    // 1. Create Archive Tables
-    $pdo->exec("CREATE TABLE IF NOT EXISTS expenses_archive LIKE expenses");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS income_archive LIKE income");
-    echo "✔ Archive tables checked.\n";
+    // 1. Archive Tables (Handled by install.php)
+    echo "✔ Archive tables verification skipped (Assumed exists via installer).\n";
 
     // 2. Move Expenses
     $stmt = $pdo->prepare("INSERT INTO expenses_archive SELECT * FROM expenses WHERE expense_date < ?");

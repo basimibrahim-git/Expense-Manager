@@ -6,14 +6,20 @@ require_once 'config.php';
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
+    // Permission Check
+    if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+        header("Location: reminders.php?error=Unauthorized: Read-only access");
+        exit();
+    }
+
     if ($_POST['action'] == 'add_reminder') {
         $title = htmlspecialchars($_POST['title']);
         $date = $_POST['alert_date'] . ' ' . ($_POST['alert_time'] ?? '00:00:00');
         $recur_type = $_POST['recurrence_type'] ?? 'none';
         $color = $_POST['color'] ?? 'primary';
 
-        $stmt = $pdo->prepare("INSERT INTO reminders (user_id, title, alert_date, recurrence_type, color) VALUES (?, ?, ?, ?, ?)");
-        $stmt->execute([$_SESSION['user_id'], $title, $date, $recur_type, $color]);
+        $stmt = $pdo->prepare("INSERT INTO reminders (user_id, tenant_id, title, alert_date, recurrence_type, color) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $title, $date, $recur_type, $color]);
 
         header("Location: reminders.php?success=Reminder Added");
         exit;
@@ -24,16 +30,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $recur_type = $_POST['recurrence_type'] ?? 'none';
 
         if ($id) {
-            $stmt = $pdo->prepare("UPDATE reminders SET title=?, alert_date=?, recurrence_type=? WHERE id=? AND user_id=?");
-            $stmt->execute([$title, $date, $recur_type, $id, $_SESSION['user_id']]);
+            $stmt = $pdo->prepare("UPDATE reminders SET title=?, alert_date=?, recurrence_type=? WHERE id=? AND tenant_id=?");
+            $stmt->execute([$title, $date, $recur_type, $id, $_SESSION['tenant_id']]);
         }
         header("Location: reminders.php?success=Reminder Updated");
         exit;
     } elseif ($_POST['action'] == 'delete_reminder') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
         if ($id) {
-            $stmt = $pdo->prepare("DELETE FROM reminders WHERE id = ? AND user_id = ?");
-            $stmt->execute([$id, $_SESSION['user_id']]);
+            $stmt = $pdo->prepare("DELETE FROM reminders WHERE id = ? AND tenant_id = ?");
+            $stmt->execute([$id, $_SESSION['tenant_id']]);
         }
         header("Location: reminders.php?deleted=1");
         exit;
@@ -44,8 +50,8 @@ require_once 'includes/header.php';
 require_once 'includes/sidebar.php';
 
 // Fetch Reminders
-$stmt = $pdo->prepare("SELECT * FROM reminders WHERE user_id = ? ORDER BY alert_date ASC");
-$stmt->execute([$_SESSION['user_id']]);
+$stmt = $pdo->prepare("SELECT * FROM reminders WHERE tenant_id = ? ORDER BY alert_date ASC");
+$stmt->execute([$_SESSION['tenant_id']]);
 $reminders = $stmt->fetchAll();
 ?>
 
@@ -55,9 +61,11 @@ $reminders = $stmt->fetchAll();
         <a href="export_actions.php?action=export_reminders" class="btn btn-outline-secondary">
             <i class="fa-solid fa-file-csv me-1"></i> Export
         </a>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addReminderModal">
-            <i class="fa-solid fa-plus me-2"></i> Add Reminder
-        </button>
+        <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addReminderModal">
+                <i class="fa-solid fa-plus me-2"></i> Add Reminder
+            </button>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -116,20 +124,24 @@ $reminders = $stmt->fetchAll();
                                 </small>
                             </div>
                             <div class="d-flex gap-2">
-                                <button type="button"
-                                    class="btn btn-sm btn-link <?php echo htmlspecialchars($text_color); ?> p-0 opacity-50 hover-100"
-                                    onclick='editReminder(<?php echo intval($rem['id']); ?>, <?php echo json_encode($rem['title']); ?>, "<?php echo htmlspecialchars(date('Y-m-d', $target)); ?>", "<?php echo htmlspecialchars(date('H:i', $target)); ?>", "<?php echo htmlspecialchars($rem['recurrence_type']); ?>")'>
-                                    <i class="fa-solid fa-pen"></i>
-                                </button>
-                                <form method="POST" onsubmit="return confirm('Delete this reminder?');">
-                                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                                    <input type="hidden" name="action" value="delete_reminder">
-                                    <input type="hidden" name="id" value="<?php echo intval($rem['id']); ?>">
-                                    <button type="submit"
-                                        class="btn btn-sm btn-link <?php echo $text_color; ?> p-0 opacity-50 hover-100">
-                                        <i class="fa-solid fa-trash"></i>
+                                <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                                    <button type="button"
+                                        class="btn btn-sm btn-link <?php echo htmlspecialchars($text_color); ?> p-0 opacity-50 hover-100"
+                                        onclick='editReminder(<?php echo intval($rem['id']); ?>, <?php echo json_encode($rem['title']); ?>, "<?php echo htmlspecialchars(date('Y-m-d', $target)); ?>", "<?php echo htmlspecialchars(date('H:i', $target)); ?>", "<?php echo htmlspecialchars($rem['recurrence_type']); ?>")'>
+                                        <i class="fa-solid fa-pen"></i>
                                     </button>
-                                </form>
+                                    <form method="POST" onsubmit="return confirm('Delete this reminder?');">
+                                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                        <input type="hidden" name="action" value="delete_reminder">
+                                        <input type="hidden" name="id" value="<?php echo intval($rem['id']); ?>">
+                                        <button type="submit"
+                                            class="btn btn-sm btn-link <?php echo $text_color; ?> p-0 opacity-50 hover-100">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <i class="fa-solid fa-lock opacity-50 small" title="Read Only"></i>
+                                <?php endif; ?>
                             </div>
                         </div>
 

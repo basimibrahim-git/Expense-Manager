@@ -6,6 +6,12 @@ require_once 'config.php';
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
+    // Permission Check
+    if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+        header("Location: monthly_interest.php?month=" . date('n', strtotime($_POST['interest_date'] ?? 'now')) . "&year=" . date('Y', strtotime($_POST['interest_date'] ?? 'now')) . "&error=Unauthorized: Read-only access");
+        exit();
+    }
+
     $action = $_POST['action'] ?? '';
 
     if ($action == 'add_interest' || $action == 'edit_interest') {
@@ -21,13 +27,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         if ($amount_input > 0 && !empty($title) && !empty($date)) {
             if ($action == 'add_interest') {
-                $stmt = $pdo->prepare("INSERT INTO interest_tracker (user_id, title, amount, interest_date) VALUES (?, ?, ?, ?)");
-                $stmt->execute([$_SESSION['user_id'], $title, $amount, $date]);
+                $stmt = $pdo->prepare("INSERT INTO interest_tracker (user_id, tenant_id, title, amount, interest_date) VALUES (?, ?, ?, ?, ?)");
+                $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $title, $amount, $date]);
                 $msg = "Record Added";
             } else { // Edit
                 if ($id) {
-                    $stmt = $pdo->prepare("UPDATE interest_tracker SET title = ?, amount = ?, interest_date = ? WHERE id = ? AND user_id = ?");
-                    $stmt->execute([$title, $amount, $date, $id, $_SESSION['user_id']]);
+                    $stmt = $pdo->prepare("UPDATE interest_tracker SET title = ?, amount = ?, interest_date = ? WHERE id = ? AND tenant_id = ?");
+                    $stmt->execute([$title, $amount, $date, $id, $_SESSION['tenant_id']]);
                     $msg = "Record Updated";
                 }
             }
@@ -41,8 +47,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     } elseif ($action == 'delete_interest') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
         if ($id) {
-            $stmt = $pdo->prepare("DELETE FROM interest_tracker WHERE id = ? AND user_id = ?");
-            $stmt->execute([$id, $_SESSION['user_id']]);
+            $stmt = $pdo->prepare("DELETE FROM interest_tracker WHERE id = ? AND tenant_id = ?");
+            $stmt->execute([$id, $_SESSION['tenant_id']]);
         }
 
         // Return to current view
@@ -52,8 +58,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $ids = array_map('intval', $_POST['ids']);
         if (!empty($ids)) {
             $placeholders = str_repeat('?,', count($ids) - 1) . '?';
-            $stmt = $pdo->prepare("DELETE FROM interest_tracker WHERE id IN ($placeholders) AND user_id = ?");
-            $stmt->execute(array_merge($ids, [$_SESSION['user_id']]));
+            $stmt = $pdo->prepare("DELETE FROM interest_tracker WHERE id IN ($placeholders) AND tenant_id = ?");
+            $stmt->execute(array_merge($ids, [$_SESSION['tenant_id']]));
         }
         header("Location: monthly_interest.php?month=$month&year=$year&success=Bulk Deleted");
         exit;
@@ -84,8 +90,8 @@ if ($next_month > 12) {
 }
 
 // Fetch Records
-$stmt = $pdo->prepare("SELECT * FROM interest_tracker WHERE user_id = ? AND MONTH(interest_date) = ? AND YEAR(interest_date) = ? ORDER BY interest_date DESC");
-$stmt->execute([$_SESSION['user_id'], $month, $year]);
+$stmt = $pdo->prepare("SELECT * FROM interest_tracker WHERE tenant_id = ? AND MONTH(interest_date) = ? AND YEAR(interest_date) = ? ORDER BY interest_date DESC");
+$stmt->execute([$_SESSION['tenant_id'], $month, $year]);
 $records = $stmt->fetchAll();
 
 // Calculate Total

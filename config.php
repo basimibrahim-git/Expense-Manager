@@ -1,9 +1,8 @@
 <?php
 /**
  * Database Configuration
- * 
- * Please update the following constants with your remote database credentials.
  */
+define('BASE_URL', '/expenses/');
 
 // Load .env variables
 $envFile = __DIR__ . '/.env';
@@ -53,6 +52,16 @@ try {
     ];
 
     $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
+
+    // Sync DB timezone with PHP timezone
+    $now = new DateTime();
+    $mins = $now->getOffset() / 60;
+    $sgn = ($mins < 0 ? -1 : 1);
+    $mins = abs($mins);
+    $hrs = floor($mins / 60);
+    $mins -= $hrs * 60;
+    $offset = sprintf('%+d:%02d', $hrs * $sgn, $mins);
+    $pdo->exec("SET time_zone='$offset'");
 } catch (\PDOException $e) {
     // Production Error Handling
     error_log("Database Connection Error: " . $e->getMessage()); // Log to server error log

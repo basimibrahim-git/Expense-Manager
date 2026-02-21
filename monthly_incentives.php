@@ -6,14 +6,20 @@ require_once 'config.php';
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
+    // Permission Check
+    if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+        header("Location: monthly_incentives.php?month=" . date('n', strtotime($_POST['incentive_date'] ?? 'now')) . "&year=" . date('Y', strtotime($_POST['incentive_date'] ?? 'now')) . "&error=Unauthorized: Read-only access");
+        exit();
+    }
+
     if ($_POST['action'] == 'add_incentive') {
         $title = $_POST['title'];
         $amount = floatval($_POST['amount']);
         $date = $_POST['incentive_date'];
 
         if ($amount > 0 && !empty($title) && !empty($date)) {
-            $stmt = $pdo->prepare("INSERT INTO company_incentives (user_id, title, amount, incentive_date) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$_SESSION['user_id'], $title, $amount, $date]);
+            $stmt = $pdo->prepare("INSERT INTO company_incentives (user_id, tenant_id, title, amount, incentive_date) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $title, $amount, $date]);
 
             $month = date('n', strtotime($date));
             $year = date('Y', strtotime($date));
@@ -23,8 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     } elseif ($_POST['action'] == 'delete_incentive') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
         if ($id) {
-            $stmt = $pdo->prepare("DELETE FROM company_incentives WHERE id = ? AND user_id = ?");
-            $stmt->execute([$id, $_SESSION['user_id']]);
+            $stmt = $pdo->prepare("DELETE FROM company_incentives WHERE id = ? AND tenant_id = ?");
+            $stmt->execute([$id, $_SESSION['tenant_id']]);
         }
 
         header("Location: monthly_incentives.php?month=$month&year=$year&success=Deleted");
@@ -34,8 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $ids = array_map('intval', $_POST['ids']);
             if (!empty($ids)) {
                 $placeholders = str_repeat('?,', count($ids) - 1) . '?';
-                $stmt = $pdo->prepare("DELETE FROM company_incentives WHERE id IN ($placeholders) AND user_id = ?");
-                $stmt->execute(array_merge($ids, [$_SESSION['user_id']]));
+                $stmt = $pdo->prepare("DELETE FROM company_incentives WHERE id IN ($placeholders) AND tenant_id = ?");
+                $stmt->execute(array_merge($ids, [$_SESSION['tenant_id']]));
             }
         }
         header("Location: monthly_incentives.php?month=$month&year=$year&success=Bulk Deleted");
@@ -67,8 +73,8 @@ if ($next_month > 12) {
 }
 
 // Fetch Incentives
-$stmt = $pdo->prepare("SELECT * FROM company_incentives WHERE user_id = ? AND MONTH(incentive_date) = ? AND YEAR(incentive_date) = ? ORDER BY incentive_date DESC");
-$stmt->execute([$_SESSION['user_id'], $month, $year]);
+$stmt = $pdo->prepare("SELECT * FROM company_incentives WHERE tenant_id = ? AND MONTH(incentive_date) = ? AND YEAR(incentive_date) = ? ORDER BY incentive_date DESC");
+$stmt->execute([$_SESSION['tenant_id'], $month, $year]);
 $incentives = $stmt->fetchAll();
 
 // Calculate Total

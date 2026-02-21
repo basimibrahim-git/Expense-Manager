@@ -8,24 +8,18 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// 1. Auto-Binding
 // 1. Auto-Binding - Removed for security (use install.php)
 // Schema creation moved to install/install.php to prevent unexpected DDL on production requests.
-/*
-$pdo->exec("CREATE TABLE IF NOT EXISTS company_incentives (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    title VARCHAR(255) DEFAULT 'Monthly Incentive',
-    amount DECIMAL(10,2) NOT NULL,
-    incentive_date DATE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-)");
-*/
 
 // Handle POST Actions
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     verify_csrf_token($_POST['csrf_token'] ?? '');
+
+    // Permission Check
+    if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+        header("Location: company_tracker.php?year=" . ($_POST['year'] ?? '') . "&error=Unauthorized: Read-only access");
+        exit();
+    }
 
     // ADD NEW
     if ($_POST['action'] == 'quick_add') {
@@ -35,8 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 
         if (is_numeric($amount) && $month >= 1 && $month <= 12) {
             $date = "$year-$month-01";
-            $stmt = $pdo->prepare("INSERT INTO company_incentives (user_id, amount, incentive_date) VALUES (?, ?, ?)");
-            $stmt->execute([$_SESSION['user_id'], floatval($amount), $date]);
+            $stmt = $pdo->prepare("INSERT INTO company_incentives (user_id, tenant_id, amount, incentive_date) VALUES (?, ?, ?, ?)");
+            $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], floatval($amount), $date]);
             header("Location: company_tracker.php?year=$year&success=Incentive Added");
             exit;
         }
@@ -49,8 +43,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $year = intval($_POST['year']);
 
         if ($id > 0 && is_numeric($amount)) {
-            $stmt = $pdo->prepare("UPDATE company_incentives SET amount = ? WHERE id = ? AND user_id = ?");
-            $stmt->execute([floatval($amount), $id, $_SESSION['user_id']]);
+            $stmt = $pdo->prepare("UPDATE company_incentives SET amount = ? WHERE id = ? AND tenant_id = ?");
+            $stmt->execute([floatval($amount), $id, $_SESSION['tenant_id']]);
             header("Location: company_tracker.php?year=$year&success=Updated");
             exit;
         }
@@ -62,8 +56,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $year = intval($_POST['year']);
 
         if ($id > 0) {
-            $stmt = $pdo->prepare("DELETE FROM company_incentives WHERE id = ? AND user_id = ?");
-            $stmt->execute([$id, $_SESSION['user_id']]);
+            $stmt = $pdo->prepare("DELETE FROM company_incentives WHERE id = ? AND tenant_id = ?");
+            $stmt->execute([$id, $_SESSION['tenant_id']]);
             header("Location: company_tracker.php?year=$year&success=Deleted");
             exit;
         }
@@ -88,18 +82,20 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
     $stmt = $pdo->prepare("
         SELECT YEAR(incentive_date) as year, SUM(amount) as total 
         FROM company_incentives 
-        WHERE user_id = ? 
+        WHERE tenant_id = ? 
         GROUP BY YEAR(incentive_date)
     ");
-    $stmt->execute([$_SESSION['user_id']]);
+    $stmt->execute([$_SESSION['tenant_id']]);
     $year_totals = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
     ?>
 
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h4 fw-bold mb-0">Incentive Tracker</h1>
-        <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="showAddYear()">
-            <i class="fa-solid fa-plus me-1"></i> Add Year
-        </button>
+        <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+            <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="showAddYear()">
+                <i class="fa-solid fa-plus me-1"></i> Add Year
+            </button>
+        <?php endif; ?>
     </div>
 
     <div class="row g-3" id="yearGrid">
@@ -150,10 +146,10 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
     $stmt = $pdo->prepare("
         SELECT id, MONTH(incentive_date) as month, amount 
         FROM company_incentives 
-        WHERE user_id = :user_id AND YEAR(incentive_date) = :year 
+        WHERE tenant_id = :tenant_id AND YEAR(incentive_date) = :year 
         ORDER BY id ASC
     ");
-    $stmt->execute(['user_id' => $_SESSION['user_id'], 'year' => $year]);
+    $stmt->execute(['tenant_id' => $_SESSION['tenant_id'], 'year' => $year]);
     $all_incentives = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Process Data
@@ -252,20 +248,26 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
                     <div id="existingList" class="mb-3"></div>
 
                     <!-- Add New -->
-                    <form method="POST">
-                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                        <input type="hidden" name="action" value="quick_add">
-                        <input type="hidden" name="year" value="<?php echo $year; ?>">
-                        <input type="hidden" name="month" id="modalMonthNum">
+                    <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                        <form method="POST">
+                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                            <input type="hidden" name="action" value="quick_add">
+                            <input type="hidden" name="year" value="<?php echo $year; ?>">
+                            <input type="hidden" name="month" id="modalMonthNum">
 
-                        <div class="form-floating mb-2">
-                            <input type="number" step="0.01" name="amount" class="form-control text-center fw-bold"
-                                id="amountInput" placeholder="0.00" required>
-                            <label for="amountInput" class="w-100 text-center">Add Amount (AED)</label>
+                            <div class="form-floating mb-2">
+                                <input type="number" step="0.01" name="amount" class="form-control text-center fw-bold"
+                                    id="amountInput" placeholder="0.00" required>
+                                <label for="amountInput" class="w-100 text-center">Add Amount (AED)</label>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100 fw-bold rounded-pill btn-sm">Add New</button>
+                        </form>
+                    <?php else: ?>
+                        <div class="alert alert-light small p-2 mb-0">
+                            <i class="fa-solid fa-lock me-1"></i> Read Only View
                         </div>
-
-                        <button type="submit" class="btn btn-primary w-100 fw-bold rounded-pill btn-sm">Add New</button>
-                    </form>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -301,6 +303,7 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
         const monthlyData = <?php echo json_encode($monthly_data); ?>;
         const csrfToken = "<?php echo generate_csrf_token(); ?>";
         const currentYear = <?php echo $year; ?>;
+        const canEdit = <?php echo (($_SESSION['permission'] ?? 'edit') !== 'read_only') ? 'true' : 'false'; ?>;
         let deleteModalInstance = null;
 
         function openManageModal(monthNum, monthName) {
@@ -318,21 +321,30 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
                 items.forEach(item => {
                     const div = document.createElement('div');
                     div.className = 'd-flex gap-1 mb-2 align-items-center';
-                    div.innerHTML = `
-                    <form method="POST" class="flex-grow-1" style="margin:0;">
-                        <input type="hidden" name="csrf_token" value="${csrfToken}">
-                        <input type="hidden" name="action" value="update_incentive">
-                        <input type="hidden" name="id" value="${item.id}">
-                        <input type="hidden" name="year" value="${currentYear}">
-                        <div class="input-group input-group-sm">
-                            <span class="input-group-text bg-light border-0">AED</span>
-                            <input type="number" step="0.01" name="amount" value="${item.amount}" class="form-control fw-bold border-0 bg-light" onchange="this.form.submit()">
-                        </div>
-                    </form>
-                    <button type="button" class="btn btn-outline-danger btn-sm border-0" onclick="confirmDelete(${item.id}, '${item.amount}')">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
-                `;
+
+                    if (canEdit) {
+                        div.innerHTML = `
+                            <form method="POST" class="flex-grow-1" style="margin:0;">
+                                <input type="hidden" name="csrf_token" value="${csrfToken}">
+                                <input type="hidden" name="action" value="update_incentive">
+                                <input type="hidden" name="id" value="${item.id}">
+                                <input type="hidden" name="year" value="${currentYear}">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-light border-0">AED</span>
+                                    <input type="number" step="0.01" name="amount" value="${item.amount}" class="form-control fw-bold border-0 bg-light" onchange="this.form.submit()">
+                                </div>
+                            </form>
+                            <button type="button" class="btn btn-outline-danger btn-sm border-0" onclick="confirmDelete(${item.id}, '${item.amount}')">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        `;
+                    } else {
+                        div.innerHTML = `
+                            <div class="flex-grow-1 p-2 bg-light rounded text-start fw-bold">
+                                AED ${parseFloat(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                        `;
+                    }
                     container.appendChild(div);
                 });
                 container.innerHTML += `<hr class="my-2 opacity-25">`;

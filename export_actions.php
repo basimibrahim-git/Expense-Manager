@@ -20,11 +20,11 @@ if ($action == 'export_expenses') {
     $query = "SELECT e.*, c.bank_name, c.card_name 
               FROM expenses e 
               LEFT JOIN cards c ON e.card_id = c.id 
-              WHERE e.user_id = :user_id 
+              WHERE e.tenant_id = :tenant_id 
               AND MONTH(e.expense_date) = :month 
               AND YEAR(e.expense_date) = :year";
 
-    $params = ['user_id' => $_SESSION['user_id'], 'month' => $month, 'year' => $year];
+    $params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];
 
     if ($category_filter) {
         $query .= " AND e.category = :cat";
@@ -87,8 +87,8 @@ if ($action == 'export_expenses') {
     $start_date = filter_input(INPUT_GET, 'start');
     $end_date = filter_input(INPUT_GET, 'end');
 
-    $query = "SELECT * FROM income WHERE user_id = :user_id AND MONTH(income_date) = :month AND YEAR(income_date) = :year";
-    $params = ['user_id' => $_SESSION['user_id'], 'month' => $month, 'year' => $year];
+    $query = "SELECT * FROM income WHERE tenant_id = :tenant_id AND MONTH(income_date) = :month AND YEAR(income_date) = :year";
+    $params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];
 
     if ($category_filter) {
         $query .= " AND category = :cat";
@@ -135,8 +135,8 @@ if ($action == 'export_expenses') {
     $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
     $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 
-    $query = "SELECT * FROM sadaqa_tracker WHERE user_id = :user_id AND MONTH(sadaqa_date) = :month AND YEAR(sadaqa_date) = :year ORDER BY sadaqa_date DESC";
-    $params = ['user_id' => $_SESSION['user_id'], 'month' => $month, 'year' => $year];
+    $query = "SELECT * FROM sadaqa_tracker WHERE tenant_id = :tenant_id AND MONTH(sadaqa_date) = :month AND YEAR(sadaqa_date) = :year ORDER BY sadaqa_date DESC";
+    $params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];
 
     try {
         $stmt = $pdo->prepare($query);
@@ -161,8 +161,8 @@ if ($action == 'export_expenses') {
     $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
     $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 
-    $query = "SELECT * FROM company_incentives WHERE user_id = :user_id AND MONTH(incentive_date) = :month AND YEAR(incentive_date) = :year ORDER BY incentive_date DESC";
-    $params = ['user_id' => $_SESSION['user_id'], 'month' => $month, 'year' => $year];
+    $query = "SELECT * FROM company_incentives WHERE tenant_id = :tenant_id AND MONTH(incentive_date) = :month AND YEAR(incentive_date) = :year ORDER BY incentive_date DESC";
+    $params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];
 
     try {
         $stmt = $pdo->prepare($query);
@@ -187,8 +187,8 @@ if ($action == 'export_expenses') {
     $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
     $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 
-    $query = "SELECT * FROM interest_tracker WHERE user_id = :user_id AND MONTH(interest_date) = :month AND YEAR(interest_date) = :year ORDER BY interest_date DESC";
-    $params = ['user_id' => $_SESSION['user_id'], 'month' => $month, 'year' => $year];
+    $query = "SELECT * FROM interest_tracker WHERE tenant_id = :tenant_id AND MONTH(interest_date) = :month AND YEAR(interest_date) = :year ORDER BY interest_date DESC";
+    $params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];
 
     try {
         $stmt = $pdo->prepare($query);
@@ -215,8 +215,8 @@ if ($action == 'export_expenses') {
         die("Export failed: " . $e->getMessage());
     }
 } elseif ($action == 'export_zakath') {
-    $query = "SELECT * FROM zakath_calculations WHERE user_id = :user_id ORDER BY created_at DESC";
-    $params = ['user_id' => $_SESSION['user_id']];
+    $query = "SELECT * FROM zakath_calculations WHERE tenant_id = :tenant_id ORDER BY created_at DESC";
+    $params = ['tenant_id' => $_SESSION['tenant_id']];
 
     try {
         $stmt = $pdo->prepare($query);
@@ -247,8 +247,8 @@ if ($action == 'export_expenses') {
         die("Export failed: " . $e->getMessage());
     }
 } elseif ($action == 'export_reminders') {
-    $query = "SELECT * FROM reminders WHERE user_id = :user_id ORDER BY alert_date ASC";
-    $params = ['user_id' => $_SESSION['user_id']];
+    $query = "SELECT * FROM reminders WHERE tenant_id = :tenant_id ORDER BY alert_date ASC";
+    $params = ['tenant_id' => $_SESSION['tenant_id']];
 
     try {
         $stmt = $pdo->prepare($query);
@@ -270,8 +270,8 @@ if ($action == 'export_expenses') {
         die("Export failed: " . $e->getMessage());
     }
 } elseif ($action == 'export_lending') {
-    $query = "SELECT * FROM lending_tracker WHERE user_id = :user_id ORDER BY lent_date DESC";
-    $params = ['user_id' => $_SESSION['user_id']];
+    $query = "SELECT * FROM lending_tracker WHERE tenant_id = :tenant_id ORDER BY lent_date DESC";
+    $params = ['tenant_id' => $_SESSION['tenant_id']];
 
     try {
         $stmt = $pdo->prepare($query);

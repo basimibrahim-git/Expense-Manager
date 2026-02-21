@@ -9,6 +9,13 @@ $user_id = $_SESSION['user_id'];
 // Handle Form Submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     verify_csrf_token($_POST['csrf_token'] ?? '');
+
+    // Permission Check
+    if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+        header("Location: goals.php?error=Unauthorized: Read-only access");
+        exit();
+    }
+
     if ($_POST['action'] == 'add_goal') {
         $name = $_POST['name'];
         $target = $_POST['target_amount'];
@@ -16,8 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $date = $_POST['target_date'];
         $category = $_POST['category'] ?? 'General';
 
-        $stmt = $pdo->prepare("INSERT INTO sinking_funds (user_id, name, target_amount, current_saved, target_date, category) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$user_id, $name, $target, $saved, $date, $category]);
+        $stmt = $pdo->prepare("INSERT INTO sinking_funds (user_id, tenant_id, name, target_amount, current_saved, target_date, category) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $name, $target, $saved, $date, $category]);
 
         log_audit('add_goal', "Created Goal: $name (Target: $target AED)");
         echo "<script>window.location.href='goals.php?success=Goal created';</script>";
@@ -26,16 +33,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $id = $_POST['goal_id'];
         $amount = $_POST['amount'];
 
-        $stmt = $pdo->prepare("UPDATE sinking_funds SET current_saved = current_saved + ? WHERE id = ? AND user_id = ?");
-        $stmt->execute([$amount, $id, $user_id]);
+        $stmt = $pdo->prepare("UPDATE sinking_funds SET current_saved = current_saved + ? WHERE id = ? AND tenant_id = ?");
+        $stmt->execute([$amount, $id, $_SESSION['tenant_id']]);
 
         log_audit('add_goal_funds', "Added $amount AED to Goal ID: $id");
         echo "<script>window.location.href='goals.php?success=Funds added';</script>";
         exit;
     } elseif ($_POST['action'] == 'delete_goal') {
         $id = $_POST['goal_id'];
-        $stmt = $pdo->prepare("DELETE FROM sinking_funds WHERE id = ? AND user_id = ?");
-        $stmt->execute([$id, $user_id]);
+        $stmt = $pdo->prepare("DELETE FROM sinking_funds WHERE id = ? AND tenant_id = ?");
+        $stmt->execute([$id, $_SESSION['tenant_id']]);
 
         log_audit('delete_goal', "Deleted Goal ID: $id");
         echo "<script>window.location.href='goals.php?success=Goal deleted';</script>";
@@ -44,8 +51,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 }
 
 // Fetch Goals
-$stmt = $pdo->prepare("SELECT * FROM sinking_funds WHERE user_id = ? ORDER BY target_date ASC");
-$stmt->execute([$user_id]);
+$stmt = $pdo->prepare("SELECT * FROM sinking_funds WHERE tenant_id = ? ORDER BY target_date ASC");
+$stmt->execute([$_SESSION['tenant_id']]);
 $goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $total_saved = array_sum(array_column($goals, 'current_saved'));
@@ -57,9 +64,11 @@ $total_target = array_sum(array_column($goals, 'target_amount'));
         <h1 class="h3 fw-bold mb-1">Financial Goals</h1>
         <p class="text-muted mb-0">Sinking Funds & Big Purchases</p>
     </div>
-    <button class="btn btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#addGoalModal">
-        <i class="fa-solid fa-plus me-2"></i> New Goal
-    </button>
+    <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+        <button class="btn btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#addGoalModal">
+            <i class="fa-solid fa-plus me-2"></i> New Goal
+        </button>
+    <?php endif; ?>
 </div>
 
 <!-- Summary Row -->
@@ -133,23 +142,27 @@ $total_target = array_sum(array_column($goals, 'target_amount'));
                                 </div>
                             </div>
                         </div>
-                        <div class="dropdown">
-                            <button class="btn btn-link text-muted p-0" data-bs-toggle="dropdown">
-                                <i class="fa-solid fa-ellipsis-vertical"></i>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end border-0 shadow">
-                                <li>
-                                    <form method="POST"
-                                        onsubmit="return confirmSubmit(this, 'Delete goal: <?php echo addslashes(htmlspecialchars($goal['name'])); ?> (Target: AED <?php echo number_format($goal['target_amount'], 2); ?>)?');">
-                                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                                        <input type="hidden" name="action" value="delete_goal">
-                                        <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
-                                        <button type="submit" class="dropdown-item text-danger"><i
-                                                class="fa-solid fa-trash me-2"></i> Delete</button>
-                                    </form>
-                                </li>
-                            </ul>
-                        </div>
+                        <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                            <div class="dropdown">
+                                <button class="btn btn-link text-muted p-0" data-bs-toggle="dropdown">
+                                    <i class="fa-solid fa-ellipsis-vertical"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end border-0 shadow">
+                                    <li>
+                                        <form method="POST"
+                                            onsubmit="return confirmSubmit(this, 'Delete goal: <?php echo addslashes(htmlspecialchars($goal['name'])); ?> (Target: AED <?php echo number_format($goal['target_amount'], 2); ?>)?');">
+                                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                            <input type="hidden" name="action" value="delete_goal">
+                                            <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
+                                            <button type="submit" class="dropdown-item text-danger"><i
+                                                    class="fa-solid fa-trash me-2"></i> Delete</button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        <?php else: ?>
+                            <i class="fa-solid fa-lock text-muted small" title="Read Only"></i>
+                        <?php endif; ?>
                     </div>
 
                     <div class="mb-3">
@@ -173,14 +186,16 @@ $total_target = array_sum(array_column($goals, 'target_amount'));
                             </b> to hit goal
                         </div>
 
-                        <form method="POST" class="d-flex gap-2">
-                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                            <input type="hidden" name="action" value="add_funds">
-                            <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
-                            <input type="number" name="amount" class="form-control form-control-sm" placeholder="Add Amount"
-                                required>
-                            <button type="submit" class="btn btn-sm btn-success px-3"><i class="fa-solid fa-plus"></i></button>
-                        </form>
+                        <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                            <form method="POST" class="d-flex gap-2">
+                                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                <input type="hidden" name="action" value="add_funds">
+                                <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
+                                <input type="number" name="amount" class="form-control form-control-sm" placeholder="Add Amount"
+                                    required>
+                                <button type="submit" class="btn btn-sm btn-success px-3"><i class="fa-solid fa-plus"></i></button>
+                            </form>
+                        <?php endif; ?>
                     <?php else: ?>
                         <div class="alert alert-success border-0 small mb-0 text-center fw-bold">
                             <i class="fa-solid fa-check-circle me-1"></i> Goal Achieved!

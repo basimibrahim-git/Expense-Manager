@@ -17,29 +17,42 @@ $offset = ($page - 1) * $limit;
 // Filters
 $action_filter = $_GET['action_type'] ?? '';
 
-$where = "WHERE user_id = :user_id";
-$params = ['user_id' => $user_id];
+$where = "WHERE a.tenant_id = :tenant_id";
+$params = ['tenant_id' => $_SESSION['tenant_id']];
 
 if ($action_filter) {
-    $where .= " AND action = :action";
+    $where .= " AND a.action = :action";
     $params['action'] = $action_filter;
 }
 
 try {
     // Get total count for pagination
-    $countStmt = $pdo->prepare("SELECT COUNT(*) FROM audit_logs $where");
+    $countStmt = $pdo->prepare("SELECT COUNT(*) FROM audit_logs a $where");
     $countStmt->execute($params);
     $total_records = $countStmt->fetchColumn();
     $total_pages = ceil($total_records / $limit);
 
-    // Get logs
-    $stmt = $pdo->prepare("SELECT * FROM audit_logs $where ORDER BY created_at DESC LIMIT $limit OFFSET $offset");
+    // Get logs with User Names
+    $stmt = $pdo->prepare("
+        SELECT a.*, u.name as user_name 
+        FROM audit_logs a
+        LEFT JOIN users u ON a.user_id = u.id
+        $where 
+        ORDER BY a.created_at DESC 
+        LIMIT $limit OFFSET $offset
+    ");
     $stmt->execute($params);
     $logs = $stmt->fetchAll();
 
+    // Pre-format dates for JavaScript modal to ensure consistency
+    foreach ($logs as &$log) {
+        $log['display_time'] = date('d/m/Y, h:i:s A', strtotime($log['created_at']));
+    }
+    unset($log); // Break reference
+
     // Get unique actions for filter dropdown
-    $typeStmt = $pdo->prepare("SELECT DISTINCT action FROM audit_logs WHERE user_id = ? ORDER BY action ASC");
-    $typeStmt->execute([$user_id]);
+    $typeStmt = $pdo->prepare("SELECT DISTINCT action FROM audit_logs WHERE tenant_id = ? ORDER BY action ASC");
+    $typeStmt->execute([$_SESSION['tenant_id']]);
     $action_types = $typeStmt->fetchAll(PDO::FETCH_COLUMN);
 
 } catch (PDOException $e) {
@@ -90,6 +103,7 @@ require_once 'includes/sidebar.php';
                 <thead class="bg-light">
                     <tr>
                         <th class="ps-4 py-3">Timestamp</th>
+                        <th class="py-3">User</th>
                         <th class="py-3">Action</th>
                         <th class="py-3">Context / Description</th>
                         <th class="py-3">IP Address</th>
@@ -116,6 +130,11 @@ require_once 'includes/sidebar.php';
                                     </small>
                                 </td>
                                 <td>
+                                    <div class="fw-bold text-dark">
+                                        <?php echo htmlspecialchars($log['user_name'] ?? 'System / Unknown'); ?>
+                                    </div>
+                                </td>
+                                <td>
                                     <?php
                                     $badgeClass = 'bg-secondary';
                                     if (strpos($log['action'], 'delete') !== false)
@@ -131,7 +150,7 @@ require_once 'includes/sidebar.php';
                                         <?php echo ucwords(str_replace('_', ' ', $log['action'])); ?>
                                     </span>
                                 </td>
-                                <td class="text-truncate" style="max-width: 400px;">
+                                <td class="text-truncate" style="max-width: 300px;">
                                     <?php echo htmlspecialchars($log['context']); ?>
                                 </td>
                                 <td class="text-muted small">
@@ -179,11 +198,15 @@ require_once 'includes/sidebar.php';
             </div>
             <div class="modal-body p-4">
                 <div class="row g-4">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
+                        <label class="text-muted small fw-bold text-uppercase d-block mb-1">Performer</label>
+                        <div id="modalUserName" class="h5 fw-bold text-primary"></div>
+                    </div>
+                    <div class="col-md-4">
                         <label class="text-muted small fw-bold text-uppercase d-block mb-1">Action Type</label>
                         <div id="modalAction" class="h5 fw-bold"></div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label class="text-muted small fw-bold text-uppercase d-block mb-1">Occurrence</label>
                         <div id="modalTime" class="h5"></div>
                     </div>
@@ -215,8 +238,9 @@ require_once 'includes/sidebar.php';
     function viewAuditDetails(log) {
         const modal = new bootstrap.Modal(document.getElementById('auditDetailModal'));
 
+        document.getElementById('modalUserName').textContent = log.user_name || 'System / Unknown';
         document.getElementById('modalAction').textContent = log.action.replace(/_/g, ' ').toUpperCase();
-        document.getElementById('modalTime').textContent = new Date(log.created_at).toLocaleString();
+        document.getElementById('modalTime').textContent = log.display_time;
         document.getElementById('modalContext').textContent = log.context;
         document.getElementById('modalIP').textContent = log.ip_address;
         document.getElementById('modalUA').textContent = log.user_agent;

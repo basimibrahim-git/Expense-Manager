@@ -2,48 +2,31 @@
 $page_title = "Zakath Tracker";
 require_once 'config.php';
 
-// 1. Auto-Healing: Create zakath_calculations Table
-// Logic removed for security. Schema handled by install.php
-/*
-try {
-    $pdo->query("SELECT 1 FROM zakath_calculations LIMIT 1");
-} catch (PDOException $e) {
-    if ($e->getCode() == '42S02') { // Table not found
-        $pdo->exec("CREATE TABLE IF NOT EXISTS zakath_calculations (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
-            cycle_name VARCHAR(100) NOT NULL COMMENT 'e.g. Ramadan 2026',
-            cash_balance DECIMAL(15,2) DEFAULT 0,
-            gold_silver DECIMAL(15,2) DEFAULT 0,
-            investments DECIMAL(15,2) DEFAULT 0,
-            liabilities DECIMAL(15,2) DEFAULT 0,
-            total_zakath DECIMAL(15,2) NOT NULL,
-            status ENUM('Pending', 'Paid') DEFAULT 'Pending',
-            due_date DATE DEFAULT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )");
-    }
-}
-*/
+// 1. Auto-Healing: Create zakath_calculations Table (Handled by install.php)
 
 // Handle Status Update
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
+    // Permission Check
+    if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+        header("Location: zakath_tracker.php?error=Unauthorized: Read-only access");
+        exit();
+    }
+
     if ($_POST['action'] == 'mark_paid') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
         if ($id) {
-            $stmt = $pdo->prepare("UPDATE zakath_calculations SET status = 'Paid' WHERE id = ? AND user_id = ?");
-            $stmt->execute([$id, $_SESSION['user_id']]);
+            $stmt = $pdo->prepare("UPDATE zakath_calculations SET status = 'Paid' WHERE id = ? AND tenant_id = ?");
+            $stmt->execute([$id, $_SESSION['tenant_id']]);
             header("Location: zakath_tracker.php?success=Marked as Paid");
             exit;
         }
     } elseif ($_POST['action'] == 'delete_zakath') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
         if ($id) {
-            $stmt = $pdo->prepare("DELETE FROM zakath_calculations WHERE id = ? AND user_id = ?");
-            $stmt->execute([$id, $_SESSION['user_id']]);
+            $stmt = $pdo->prepare("DELETE FROM zakath_calculations WHERE id = ? AND tenant_id = ?");
+            $stmt->execute([$id, $_SESSION['tenant_id']]);
             header("Location: zakath_tracker.php?deleted=1");
             exit;
         }
@@ -54,8 +37,8 @@ require_once 'includes/header.php';
 require_once 'includes/sidebar.php';
 
 // Fetch Records
-$stmt = $pdo->prepare("SELECT * FROM zakath_calculations WHERE user_id = ? ORDER BY created_at DESC");
-$stmt->execute([$_SESSION['user_id']]);
+$stmt = $pdo->prepare("SELECT * FROM zakath_calculations WHERE tenant_id = ? ORDER BY created_at DESC");
+$stmt->execute([$_SESSION['tenant_id']]);
 $records = $stmt->fetchAll();
 
 $total_pending = 0;
@@ -80,9 +63,11 @@ foreach ($records as $r) {
         <a href="export_actions.php?action=export_zakath" class="btn btn-outline-secondary">
             <i class="fa-solid fa-file-csv me-1"></i> Export
         </a>
-        <a href="zakath_calculator.php" class="btn btn-primary d-flex align-items-center gap-2">
-            <i class="fa-solid fa-calculator"></i> New Calculation
-        </a>
+        <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+            <a href="zakath_calculator.php" class="btn btn-primary d-flex align-items-center gap-2">
+                <i class="fa-solid fa-calculator"></i> New Calculation
+            </a>
+        <?php endif; ?>
     </div>
 </div>
 </div>
@@ -135,30 +120,36 @@ foreach ($records as $r) {
                     </div>
 
                     <div class="d-flex gap-2 mt-auto">
-                        <?php if ($rec['status'] == 'Pending'): ?>
-                            <form action="" method="POST" class="flex-grow-1">
+                        <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                            <?php if ($rec['status'] == 'Pending'): ?>
+                                <form action="" method="POST" class="flex-grow-1">
+                                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                    <input type="hidden" name="action" value="mark_paid">
+                                    <input type="hidden" name="id" value="<?php echo $rec['id']; ?>">
+                                    <button type="submit" class="btn btn-success btn-sm w-100"
+                                        onclick="return confirmSubmit(this, 'Mark <?php echo addslashes(htmlspecialchars($rec['cycle_name'])); ?> (AED <?php echo number_format($rec['total_zakath'], 2); ?>) as Paid?');">
+                                        <i class="fa-solid fa-check me-1"></i> Mark Paid
+                                    </button>
+                                </form>
+                            <?php else: ?>
+                                <button class="btn btn-light btn-sm flex-grow-1" disabled>Paid on
+                                    <?php echo date('M d, Y', strtotime($rec['created_at'])); ?></button>
+                            <?php endif; ?>
+
+                            <form action="" method="POST">
                                 <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                                <input type="hidden" name="action" value="mark_paid">
+                                <input type="hidden" name="action" value="delete_zakath">
                                 <input type="hidden" name="id" value="<?php echo $rec['id']; ?>">
-                                <button type="submit" class="btn btn-success btn-sm w-100"
-                                    onclick="return confirmSubmit(this, 'Mark <?php echo addslashes(htmlspecialchars($rec['cycle_name'])); ?> (AED <?php echo number_format($rec['total_zakath'], 2); ?>) as Paid?');">
-                                    <i class="fa-solid fa-check me-1"></i> Mark Paid
+                                <button type="submit" class="btn btn-outline-danger btn-sm"
+                                    onclick="return confirmSubmit(this, 'Delete Zakath record for <?php echo addslashes(htmlspecialchars($rec['cycle_name'])); ?>? This cannot be undone.');">
+                                    <i class="fa-solid fa-trash"></i>
                                 </button>
                             </form>
                         <?php else: ?>
-                            <button class="btn btn-light btn-sm flex-grow-1" disabled>Paid on
-                                <?php echo date('M d, Y', strtotime($rec['created_at'])); ?></button>
+                            <span class="text-muted small w-100 text-center py-1">
+                                <i class="fa-solid fa-lock me-1"></i> Read Only
+                            </span>
                         <?php endif; ?>
-
-                        <form action="" method="POST">
-                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                            <input type="hidden" name="action" value="delete_zakath">
-                            <input type="hidden" name="id" value="<?php echo $rec['id']; ?>">
-                            <button type="submit" class="btn btn-outline-danger btn-sm"
-                                onclick="return confirmSubmit(this, 'Delete Zakath record for <?php echo addslashes(htmlspecialchars($rec['cycle_name'])); ?>? This cannot be undone.');">
-                                <i class="fa-solid fa-trash"></i>
-                            </button>
-                        </form>
                     </div>
 
                     <div class="position-absolute top-0 end-0 m-3 text-muted small" style="font-size: 0.7rem;">

@@ -12,8 +12,8 @@ if (!$income_id) {
 }
 
 // Fetch income
-$stmt = $pdo->prepare("SELECT * FROM income WHERE id = ? AND user_id = ?");
-$stmt->execute([$income_id, $_SESSION['user_id']]);
+$stmt = $pdo->prepare("SELECT * FROM income WHERE id = ? AND tenant_id = ?");
+$stmt->execute([$income_id, $_SESSION['tenant_id']]);
 $income = $stmt->fetch();
 
 if (!$income) {
@@ -118,24 +118,20 @@ $categories = [
                     </div>
                 </div>
 
-                <!-- Submit -->
-                <div class="d-grid gap-2 border-top pt-4 mt-2">
-                    <button type="submit" class="btn btn-success py-3 fw-bold">
-                        <i class="fa-solid fa-save me-2"></i> Update Income
-                    </button>
-                    <form action="income_actions.php" method="POST" class="d-grid"
-                        onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($income['description'])); ?> - AED <?php echo number_format($income['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($income['income_date'])); ?> permanently?');">
-                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                        <input type="hidden" name="action" value="delete_income">
-                        <input type="hidden" name="id" value="<?php echo $income['id']; ?>">
-                        <button type="submit" class="btn btn-outline-danger py-2">
-                            <i class="fa-solid fa-trash me-2"></i> Delete Income
-                        </button>
-                    </form>
-                </div>
-            </form>
         </div>
+        </form>
+        <form action="income_actions.php" method="POST" class="d-grid mt-2"
+            onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($income['description'])); ?> - AED <?php echo number_format($income['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($income['income_date'])); ?> permanently?');">
+            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+            <input type="hidden" name="action" value="delete_income">
+            <input type="hidden" name="id" value="<?php echo $income['id']; ?>">
+            <button type="submit" class="btn btn-outline-danger py-2">
+                <i class="fa-solid fa-trash me-2"></i> Delete Income
+            </button>
+        </form>
+        </form>
     </div>
+</div>
 </div>
 
 <script>

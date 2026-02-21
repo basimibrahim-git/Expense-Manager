@@ -12,7 +12,16 @@ $action = $_POST['action'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
+
+    // Permission Check: Read-Only users cannot perform POST actions
+    if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+        $redirect = $_SERVER['HTTP_REFERER'] ?? 'dashboard.php';
+        header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "error=Unauthorized: Read-only access");
+        exit();
+    }
 }
+
+$tenant_id = $_SESSION['tenant_id'];
 
 if ($action == 'save_budgets' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $month = intval($_POST['month']);
@@ -28,14 +37,14 @@ if ($action == 'save_budgets' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             // If amount is 0/empty, we can either keep it or delete it.
             // Let's use INSERT ... ON DUPLICATE KEY UPDATE
             if ($amount > 0) {
-                $stmt = $pdo->prepare("INSERT INTO budgets (user_id, category, amount, month, year) 
-                                     VALUES (?, ?, ?, ?, ?) 
+                $stmt = $pdo->prepare("INSERT INTO budgets (user_id, tenant_id, category, amount, month, year) 
+                                     VALUES (?, ?, ?, ?, ?, ?) 
                                      ON DUPLICATE KEY UPDATE amount = VALUES(amount)");
-                $stmt->execute([$user_id, htmlspecialchars($category), $amount, $month, $year]);
+                $stmt->execute([$user_id, $tenant_id, htmlspecialchars($category), $amount, $month, $year]);
             } else {
                 // Delete if entry exists and new amount is 0
-                $stmt = $pdo->prepare("DELETE FROM budgets WHERE user_id = ? AND category = ? AND month = ? AND year = ?");
-                $stmt->execute([$user_id, $category, $month, $year]);
+                $stmt = $pdo->prepare("DELETE FROM budgets WHERE tenant_id = ? AND category = ? AND month = ? AND year = ?");
+                $stmt->execute([$tenant_id, $category, $month, $year]);
             }
         }
 

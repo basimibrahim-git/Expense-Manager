@@ -4,25 +4,7 @@ require_once 'config.php';
 require_once 'includes/header.php';
 require_once 'includes/sidebar.php';
 
-// 1. Auto-Healing: Create sadaqa_tracker Table
-// Logic removed for security. Schema handled by install.php
-/*
-try {
-    $pdo->query("SELECT 1 FROM sadaqa_tracker LIMIT 1");
-} catch (PDOException $e) {
-    if ($e->getCode() == '42S02') { // Table not found
-        $pdo->exec("CREATE TABLE IF NOT EXISTS sadaqa_tracker (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
-            title VARCHAR(255) NOT NULL,
-            amount DECIMAL(10,2) NOT NULL,
-            sadaqa_date DATE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )");
-    }
-}
-*/
+// 1. Auto-Healing: Create sadaqa_tracker Table (Handled by install.php)
 
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 
@@ -30,10 +12,10 @@ $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 $stmt = $pdo->prepare("
     SELECT MONTH(sadaqa_date) as month, SUM(amount) as total 
     FROM sadaqa_tracker 
-    WHERE user_id = :user_id AND YEAR(sadaqa_date) = :year 
+    WHERE tenant_id = :tenant_id AND YEAR(sadaqa_date) = :year 
     GROUP BY MONTH(sadaqa_date)
 ");
-$stmt->execute(['user_id' => $_SESSION['user_id'], 'year' => $year]);
+$stmt->execute(['tenant_id' => $_SESSION['tenant_id'], 'year' => $year]);
 $monthly_totals = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
 $months = [

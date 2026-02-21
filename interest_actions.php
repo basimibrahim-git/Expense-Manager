@@ -4,6 +4,12 @@ require_once 'config.php';
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
+    // Permission Check
+    if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+        header("Location: interest_tracker.php?error=Unauthorized: Read-only access");
+        exit();
+    }
+
     $action = $_POST['action'] ?? '';
 
     if ($action == 'add_payment') {
@@ -59,8 +65,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // Store as NEGATIVE amount for payment
             $final_amount = -1 * abs($amount);
 
-            $stmt = $pdo->prepare("INSERT INTO interest_tracker (user_id, title, amount, interest_date) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$_SESSION['user_id'], $title, $final_amount, $interest_date]);
+            $stmt = $pdo->prepare("INSERT INTO interest_tracker (user_id, tenant_id, title, amount, interest_date) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $title, $final_amount, $interest_date]);
 
             log_audit('interest_payment', "Recorded Interest Payment: " . abs($amount) . " for " . ($target_month_year ?: $interest_date));
             header("Location: interest_tracker.php?year=" . date('Y', strtotime($interest_date)) . "&success=Payment Recorded");

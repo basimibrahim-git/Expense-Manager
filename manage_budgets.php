@@ -1,23 +1,29 @@
-<?php
 // manage_budgets.php
 require_once 'config.php';
 
 if (!isset($_SESSION['user_id'])) {
-    header("Location: index.php");
-    exit();
+header("Location: index.php");
+exit();
 }
 
-$user_id = $_SESSION['user_id'];
+// Permission Check
+if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+header("Location: budget.php?error=Unauthorized: Read-only access");
+exit();
+}
+
+$tenant_id = $_SESSION['tenant_id'];
 $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?: date('n');
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?: date('Y');
 
 // Fetch current budgets for the selected period
-$stmt = $pdo->prepare("SELECT category, amount, currency FROM budgets WHERE user_id = ? AND month = ? AND year = ?");
-$stmt->execute([$user_id, $month, $year]);
+$stmt = $pdo->prepare("SELECT category, amount, currency FROM budgets WHERE tenant_id = ? AND month = ? AND year = ?");
+$stmt->execute([$tenant_id, $month, $year]);
 $existing_budgets = $stmt->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
 
 // predefined categories for easy setup
-$categories = ['Grocery', 'Food', 'Medical', 'Shopping', 'Utilities', 'Transport', 'Travel', 'Entertainment', 'Education', 'Other'];
+$categories = ['Grocery', 'Food', 'Medical', 'Shopping', 'Utilities', 'Transport', 'Travel', 'Entertainment',
+'Education', 'Other'];
 
 require_once 'includes/header.php';
 require_once 'includes/sidebar.php';

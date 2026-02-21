@@ -14,12 +14,12 @@ $stmt = $pdo->prepare("
            SUM(CASE WHEN YEAR(expense_date) = ? THEN amount ELSE 0 END) as current_year,
            SUM(CASE WHEN YEAR(expense_date) = ? THEN amount ELSE 0 END) as previous_year
     FROM expenses 
-    WHERE user_id = ? 
+    WHERE tenant_id = ? 
     AND YEAR(expense_date) IN (?, ?)
     GROUP BY category
     ORDER BY current_year DESC
 ");
-$stmt->execute([$year, $prev_year, $user_id, $year, $prev_year]);
+$stmt->execute([$year, $prev_year, $_SESSION['tenant_id'], $year, $prev_year]);
 $yoy_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // 2. Fetch Heatmap Data (Spending by Day of Week vs Week of Month)
@@ -29,10 +29,10 @@ $stmt = $pdo->prepare("
            DAY(expense_date) as dom,
            SUM(amount) as total
     FROM expenses 
-    WHERE user_id = ? AND YEAR(expense_date) = ?
+    WHERE tenant_id = ? AND YEAR(expense_date) = ?
     GROUP BY dow, dom
 ");
-$stmt->execute([$user_id, $year]);
+$stmt->execute([$_SESSION['tenant_id'], $year]);
 $heatmap_raw = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $heatmap = array_fill(1, 31, array_fill(1, 7, 0)); // Initialize 31 days x 7 days-of-week
@@ -47,10 +47,10 @@ $stmt = $pdo->prepare("
            MONTH(expense_date) as month,
            SUM(amount) as total
     FROM expenses 
-    WHERE user_id = ? AND YEAR(expense_date) = ?
+    WHERE tenant_id = ? AND YEAR(expense_date) = ?
     GROUP BY dow, month
 ");
-$stmt->execute([$user_id, $year]);
+$stmt->execute([$_SESSION['tenant_id'], $year]);
 $heatmap_month_dow = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $heatmap_data = [];
@@ -200,32 +200,32 @@ foreach ($heatmap_month_dow as $row) {
         type: 'bar',
         data: {
             labels: <?php echo json_encode(array_column($yoy_data, 'category')); ?>,
-                datasets: [
-                    {
-                        label: '<?php echo $prev_year; ?>',
-                        data: <?php echo json_encode(array_column($yoy_data, 'previous_year')); ?>,
+            datasets: [
+                {
+                    label: '<?php echo $prev_year; ?>',
+                    data: <?php echo json_encode(array_column($yoy_data, 'previous_year')); ?>,
                     backgroundColor: 'rgba(108, 117, 125, 0.5)',
                     borderRadius: 4
                 },
-                    {
-                        label: '<?php echo $year; ?>',
-                        data: <?php echo json_encode(array_column($yoy_data, 'current_year')); ?>,
+                {
+                    label: '<?php echo $year; ?>',
+                    data: <?php echo json_encode(array_column($yoy_data, 'current_year')); ?>,
                     backgroundColor: 'rgba(13, 110, 253, 0.8)',
                     borderRadius: 4
                 }
-                ]
+            ]
         },
-    options: {
-        responsive: true,
+        options: {
+            responsive: true,
             maintainAspectRatio: false,
-                plugins: {
-            legend: { position: 'bottom' }
-        },
-        scales: {
-            y: { beginAtZero: true, grid: { borderDash: [5, 5] } },
-            x: { grid: { display: false } }
+            plugins: {
+                legend: { position: 'bottom' }
+            },
+            scales: {
+                y: { beginAtZero: true, grid: { borderDash: [5, 5] } },
+                x: { grid: { display: false } }
+            }
         }
-    }
     });
 </script>
 

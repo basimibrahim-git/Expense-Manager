@@ -19,8 +19,8 @@ $page_num = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT) ?: 1;
 $offset = ($page_num - 1) * $items_per_page;
 
 // Build Count Query first
-$count_sql = "SELECT COUNT(*) FROM expenses WHERE user_id = :user_id";
-$params = ['user_id' => $_SESSION['user_id']];
+$count_sql = "SELECT COUNT(*) FROM expenses WHERE tenant_id = :tenant_id";
+$params = ['tenant_id' => $_SESSION['tenant_id']];
 
 if ($keyword) {
     $count_sql .= " AND (description LIKE :kw OR category LIKE :kw OR tags LIKE :kw)";
@@ -203,14 +203,19 @@ try {
                                                 echo ' <small class="text-muted">(' . htmlspecialchars($ex['currency']) . ')</small>'; ?>
                                         </td>
                                         <td class="pe-4 text-end">
-                                            <form action="expense_actions.php" method="POST" class="d-inline"
-                                                onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($ex['description'])); ?> - AED <?php echo number_format($ex['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($ex['expense_date'])); ?>?');">
-                                                <input type="hidden" name="action" value="delete">
-                                                <input type="hidden" name="id" value="<?php echo $ex['id']; ?>">
-                                                <button type="submit" class="btn btn-link text-danger p-0 small border-0">
-                                                    <i class="fa-solid fa-trash"></i>
-                                                </button>
-                                            </form>
+                                            <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                                                <form action="expense_actions.php" method="POST" class="d-inline"
+                                                    onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($ex['description'])); ?> - AED <?php echo number_format($ex['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($ex['expense_date'])); ?>?');">
+                                                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                                    <input type="hidden" name="action" value="delete_expense">
+                                                    <input type="hidden" name="id" value="<?php echo $ex['id']; ?>">
+                                                    <button type="submit" class="btn btn-link text-danger p-0 small border-0">
+                                                        <i class="fa-solid fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            <?php else: ?>
+                                                <i class="fa-solid fa-lock text-muted small" title="Read Only"></i>
+                                            <?php endif; ?>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>

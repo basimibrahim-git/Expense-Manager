@@ -13,7 +13,7 @@ $stmt = $pdo->prepare("
     SELECT MONTH(balance_date) as month, 
     SUM(CASE WHEN currency='INR' THEN amount / 24 ELSE amount END) as total 
     FROM bank_balances b1
-    WHERE user_id = :user_id 
+    WHERE tenant_id = :tenant_id 
     AND YEAR(balance_date) = :year
     AND id = (
         SELECT MAX(id) 
@@ -21,11 +21,11 @@ $stmt = $pdo->prepare("
         WHERE b2.bank_name = b1.bank_name 
         AND MONTH(b2.balance_date) = MONTH(b1.balance_date) 
         AND YEAR(b2.balance_date) = YEAR(b1.balance_date)
-        AND b2.user_id = b1.user_id
+        AND b2.tenant_id = b1.tenant_id
     )
     GROUP BY MONTH(balance_date)
 ");
-$stmt->execute(['user_id' => $_SESSION['user_id'], 'year' => $year]);
+$stmt->execute(['tenant_id' => $_SESSION['tenant_id'], 'year' => $year]);
 $monthly_totals = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
 $months = [

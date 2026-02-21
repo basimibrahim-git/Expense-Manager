@@ -20,14 +20,15 @@ function log_audit($action, $context = null)
 
     try {
         $userId = $_SESSION['user_id'];
+        $tenantId = $_SESSION['tenant_id'] ?? null;
         $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
         $ua = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
 
         // Convert context to string if array/object
         $contextStr = is_string($context) ? $context : json_encode($context);
 
-        $stmt = $pdo->prepare("INSERT INTO audit_logs (user_id, action, context, ip_address, user_agent) VALUES (?, ?, ?, ?, ?)");
-        return $stmt->execute([$userId, $action, $contextStr, $ip, $ua]);
+        $stmt = $pdo->prepare("INSERT INTO audit_logs (tenant_id, user_id, action, context, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)");
+        return $stmt->execute([$tenantId, $userId, $action, $contextStr, $ip, $ua]);
     } catch (Exception $e) {
         // Fail silently in production to avoid breaking the main user flow, 
         // but log to error_log if configured.

@@ -67,7 +67,11 @@ if (isset($_SESSION['user_id'])) {
 
                     <button type="submit" class="btn btn-primary w-100 py-3 mb-3">Sign in</button>
 
-
+                    <div class="text-center">
+                        <span class="text-muted small">Don't have an account? </span>
+                        <a href="signup.php" class="text-decoration-none small fw-bold"
+                            style="color: var(--primary-color);">Sign up</a>
+                    </div>
                 </form>
             </div>
         </div>

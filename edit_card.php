@@ -14,13 +14,13 @@ if (!$card_id) {
 }
 
 // Fetch Card Data
-$stmt = $pdo->prepare("SELECT * FROM cards WHERE id = :id AND user_id = :user_id");
-$stmt->execute(['id' => $card_id, 'user_id' => $_SESSION['user_id']]);
+$stmt = $pdo->prepare("SELECT * FROM cards WHERE id = :id AND tenant_id = :tenant_id");
+$stmt->execute(['id' => $card_id, 'tenant_id' => $_SESSION['tenant_id']]);
 $card = $stmt->fetch();
 
 // Fetch all banks for the dropdown
-$banks_stmt = $pdo->prepare("SELECT id, bank_name FROM banks WHERE user_id = ? ORDER BY is_default DESC, bank_name ASC");
-$banks_stmt->execute([$_SESSION['user_id']]);
+$banks_stmt = $pdo->prepare("SELECT id, bank_name FROM banks WHERE tenant_id = ? ORDER BY is_default DESC, bank_name ASC");
+$banks_stmt->execute([$_SESSION['tenant_id']]);
 $all_banks = $banks_stmt->fetchAll();
 ?>
 
@@ -232,20 +232,17 @@ $all_banks = $banks_stmt->fetchAll();
                     <div class="form-text">Note down validation dates or specific cashback categories here.</div>
                 </div>
 
-                <div class="d-grid mt-4">
-                    <button type="submit" class="btn btn-primary py-3 fw-bold">
-                        <i class="fa-solid fa-save me-2"></i> Update Card
-                    </button>
-                    <form action="card_actions.php" method="POST" class="d-grid mt-2">
-                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                        <input type="hidden" name="action" value="delete_card">
-                        <input type="hidden" name="id" value="<?php echo $card['id']; ?>">
-                        <button type="submit" class="btn btn-outline-danger py-2"
-                            onclick="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($card['bank_name'] . ' ' . $card['card_name'])); ?>? This action CANNOT be undone.');">
-                            <i class="fa-solid fa-trash me-2"></i> Delete Card
-                        </button>
-                    </form>
                 </div>
+            </form>
+            <form action="card_actions.php" method="POST" class="d-grid mt-2">
+                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="action" value="delete_card">
+                <input type="hidden" name="id" value="<?php echo $card['id']; ?>">
+                <button type="submit" class="btn btn-outline-danger py-2"
+                    onclick="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($card['bank_name'] . ' ' . $card['card_name'])); ?>? This action CANNOT be undone.');">
+                    <i class="fa-solid fa-trash me-2"></i> Delete Card
+                </button>
+            </form>
             </form>
         </div>
     </div>

@@ -10,10 +10,10 @@ $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? 2026;
 $stmt = $pdo->prepare("
     SELECT MONTH(expense_date) as month, SUM(amount) as total 
     FROM expenses 
-    WHERE user_id = :user_id AND YEAR(expense_date) = :year 
+    WHERE tenant_id = :tenant_id AND YEAR(expense_date) = :year 
     GROUP BY MONTH(expense_date)
 ");
-$stmt->execute(['user_id' => $_SESSION['user_id'], 'year' => $year]);
+$stmt->execute(['tenant_id' => $_SESSION['tenant_id'], 'year' => $year]);
 $monthly_totals = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
 $months = [

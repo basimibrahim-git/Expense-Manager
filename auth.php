@@ -5,6 +5,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // CSRF Check
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
+    // Rate Limiting / Cooldown
+    $last_attempt = $_SESSION['last_auth_attempt'] ?? 0;
+    if (time() - $last_attempt < 2) { // 2 second cooldown
+        header("Location: index.php?error=" . urlencode("Too many attempts. Please slow down."));
+        exit();
+    }
+    $_SESSION['last_auth_attempt'] = time();
+
     $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
     $password = $_POST['password'];
 
@@ -16,7 +24,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     try {
         if (isset($pdo)) {
             // Real Database Logic
-            $stmt = $pdo->prepare("SELECT id, name, password FROM users WHERE email = :email");
+            $stmt = $pdo->prepare("SELECT id, name, password, tenant_id, role, permission FROM users WHERE email = :email");
             $stmt->execute(['email' => $email]);
             $user = $stmt->fetch();
 
@@ -24,6 +32,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 session_regenerate_id(true); // Prevent Session Fixation
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['user_name'] = $user['name'];
+                $_SESSION['tenant_id'] = $user['tenant_id'];
+                $_SESSION['role'] = $user['role'];
+                $_SESSION['permission'] = $user['permission'];
                 log_audit('login_success', "User Login: $email");
                 header("Location: dashboard.php");
                 exit();

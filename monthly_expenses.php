@@ -12,9 +12,9 @@ $card_filter = filter_input(INPUT_GET, 'card_id', FILTER_VALIDATE_INT);
 $start_date = filter_input(INPUT_GET, 'start');
 $end_date = filter_input(INPUT_GET, 'end');
 
-// Fetch user's cards for filter dropdown
-$cards_stmt = $pdo->prepare("SELECT id, bank_name, card_name FROM cards WHERE user_id = ? ORDER BY card_name");
-$cards_stmt->execute([$_SESSION['user_id']]);
+// Fetch family's cards for filter dropdown
+$cards_stmt = $pdo->prepare("SELECT id, bank_name, card_name FROM cards WHERE tenant_id = ? ORDER BY card_name");
+$cards_stmt->execute([$_SESSION['tenant_id']]);
 $user_cards = $cards_stmt->fetchAll();
 
 $month_name = date("F", mktime(0, 0, 0, $month, 10));
@@ -26,10 +26,10 @@ $offset = ($page_num - 1) * $items_per_page;
 
 // Count total for pagination
 $count_query = "SELECT COUNT(*) FROM expenses e 
-          WHERE e.user_id = :user_id 
+          WHERE e.tenant_id = :tenant_id 
           AND MONTH(e.expense_date) = :month 
           AND YEAR(e.expense_date) = :year";
-$count_params = ['user_id' => $_SESSION['user_id'], 'month' => $month, 'year' => $year];
+$count_params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];
 
 if ($category_filter) {
     $count_query .= " AND e.category = :cat";
@@ -58,14 +58,15 @@ $total_items = $count_stmt->fetchColumn();
 $total_pages = max(1, ceil($total_items / $items_per_page));
 
 // Build Query with LIMIT
-$query = "SELECT e.*, c.bank_name, c.card_name 
+$query = "SELECT e.*, c.bank_name, c.card_name, u.name as spender_name 
           FROM expenses e 
           LEFT JOIN cards c ON e.card_id = c.id 
-          WHERE e.user_id = :user_id 
+          LEFT JOIN users u ON e.spent_by_user_id = u.id
+          WHERE e.tenant_id = :tenant_id 
           AND MONTH(e.expense_date) = :month 
           AND YEAR(e.expense_date) = :year";
 
-$params = ['user_id' => $_SESSION['user_id'], 'month' => $month, 'year' => $year];
+$params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];
 
 if ($category_filter) {
     $query .= " AND e.category = :cat";
@@ -96,7 +97,7 @@ try {
     $expenses = $stmt->fetchAll();
 
     // Calculate total for this month (BASED ON FILTERS)
-    $total_query = "SELECT SUM(amount) FROM expenses e WHERE e.user_id = :user_id 
+    $total_query = "SELECT SUM(amount) FROM expenses e WHERE e.tenant_id = :tenant_id 
                     AND MONTH(e.expense_date) = :month 
                     AND YEAR(e.expense_date) = :year";
 
@@ -117,12 +118,12 @@ try {
     $view_total = $total_stmt->fetchColumn() ?: 0;
 
     // Fetch Category Budgets and Actuals for Progress Bars
-    $budget_stmt = $pdo->prepare("SELECT category, amount FROM budgets WHERE user_id = ? AND month = ? AND year = ?");
-    $budget_stmt->execute([$_SESSION['user_id'], $month, $year]);
+    $budget_stmt = $pdo->prepare("SELECT category, amount FROM budgets WHERE tenant_id = ? AND month = ? AND year = ?");
+    $budget_stmt->execute([$_SESSION['tenant_id'], $month, $year]);
     $cat_budgets = $budget_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
-    $actual_stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE user_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category");
-    $actual_stmt->execute([$_SESSION['user_id'], $month, $year]);
+    $actual_stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category");
+    $actual_stmt->execute([$_SESSION['tenant_id'], $month, $year]);
     $cat_actuals = $actual_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
 } catch (PDOException $e) {
@@ -213,10 +214,12 @@ try {
                 class="btn btn-outline-secondary btn-sm flex-grow-1">
                 <i class="fa-solid fa-file-csv me-1"></i> Export
             </a>
-            <a href="add_expense.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>"
-                class="btn btn-primary btn-sm flex-grow-1">
-                <i class="fa-solid fa-plus me-1"></i> Add
-            </a>
+            <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                <a href="add_expense.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>"
+                    class="btn btn-primary btn-sm flex-grow-1">
+                    <i class="fa-solid fa-plus me-1"></i> Add
+                </a>
+            <?php endif; ?>
         </div>
     </form>
 
@@ -282,75 +285,88 @@ try {
                         <th class="py-3">Day</th>
                         <th>Description</th>
                         <th>Category</th>
+                        <th>Spent By</th>
                         <th>Payment</th>
                         <th class="text-end pe-4">Amount</th>
                         <th></th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr data-id="<?php echo $expense['id']; ?>">
-                        <td class="ps-4">
-                            <input type="checkbox" class="form-check-input row-checkbox" name="expense_ids[]"
-                                value="<?php echo $expense['id']; ?>">
-                        </td>
-                        <td class="fw-bold">
-                            <?php echo date('d', strtotime($expense['expense_date'])); ?>
-                            <span class="small text-muted fw-normal d-block">
-                                <?php echo date('D', strtotime($expense['expense_date'])); ?>
-                            </span>
-                        </td>
-                        <td>
-                            <?php echo htmlspecialchars($expense['description']); ?>
-                            <?php if (!empty($expense['tags'])): ?>
-                                <div class="mt-1">
-                                    <?php foreach (explode(',', $expense['tags']) as $tag): ?>
-                                        <span class="badge bg-secondary-subtle text-secondary me-1" style="font-size: 0.7em;">
-                                            <?php echo htmlspecialchars(trim($tag)); ?>
-                                        </span>
-                                    <?php endforeach; ?>
+                    <?php foreach ($expenses as $expense): ?>
+                        <tr data-id="<?php echo $expense['id']; ?>">
+                            <td class="ps-4">
+                                <input type="checkbox" class="form-check-input row-checkbox" name="expense_ids[]"
+                                    value="<?php echo $expense['id']; ?>">
+                            </td>
+                            <td class="fw-bold">
+                                <?php echo date('d', strtotime($expense['expense_date'])); ?>
+                                <span class="small text-muted fw-normal d-block">
+                                    <?php echo date('D', strtotime($expense['expense_date'])); ?>
+                                </span>
+                            </td>
+                            <td>
+                                <?php echo htmlspecialchars($expense['description']); ?>
+                                <?php if (!empty($expense['tags'])): ?>
+                                    <div class="mt-1">
+                                        <?php foreach (explode(',', $expense['tags']) as $tag): ?>
+                                            <span class="badge bg-secondary-subtle text-secondary me-1" style="font-size: 0.7em;">
+                                                <?php echo htmlspecialchars(trim($tag)); ?>
+                                            </span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border">
+                                    <?php echo htmlspecialchars($expense['category']); ?>
+                                </span>
+                            </td>
+                            <td>
+                                <div class="small fw-bold text-muted">
+                                    <i class="fa-solid fa-user-tag me-1"></i>
+                                    <?php echo htmlspecialchars($expense['spender_name'] ?? 'Family Head'); ?>
                                 </div>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <span class="badge bg-light text-dark border">
-                                <?php echo htmlspecialchars($expense['category']); ?>
-                            </span>
-                        </td>
-                        <td>
-                            <?php if ($expense['payment_method'] == 'Card'): ?>
-                                <div class="small">
-                                    <i class="fa-solid fa-credit-card text-primary me-1"></i>
-                                    <?php echo htmlspecialchars($expense['bank_name']); ?>
-                                </div>
-                            <?php else: ?>
-                                <div class="small text-secondary">
-                                    <i class="fa-solid fa-coins me-1"></i> Cash
-                                </div>
-                            <?php endif; ?>
-                        </td>
-                        <td class="text-end pe-4 fw-bold">
-                            AED <span class="blur-sensitive">
-                                <?php echo number_format($expense['amount'], 2); ?></span>
-                            <?php if (!empty($expense['currency']) && $expense['currency'] != 'AED'): ?>
-                                <div class="small text-muted fw-normal mt-1" style="font-size: 0.75em;">
-                                    (<?php echo htmlspecialchars($expense['currency'] . ' ' . number_format($expense['original_amount'], 2)); ?>)
-                                </div>
-                            <?php endif; ?>
-                        </td>
-                        <td class="text-end pe-3">
-                            <a href="edit_expense.php?id=<?php echo $expense['id']; ?>" class="btn btn-sm text-muted me-1"
-                                title="Edit"><i class="fa-solid fa-pen"></i></a>
-                            <form action="expense_actions.php" method="POST" class="d-inline"
-                                onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($expense['description'])); ?> - AED <?php echo number_format($expense['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($expense['expense_date'])); ?>?');">
-                                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                                <input type="hidden" name="action" value="delete_expense">
-                                <input type="hidden" name="id" value="<?php echo $expense['id']; ?>">
-                                <button type="submit" class="btn btn-sm text-danger border-0 p-0" title="Delete">
-                                    <i class="fa-solid fa-trash"></i>
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
+                            </td>
+                            <td>
+                                <?php if ($expense['payment_method'] == 'Card'): ?>
+                                    <div class="small">
+                                        <i class="fa-solid fa-credit-card text-primary me-1"></i>
+                                        <?php echo htmlspecialchars($expense['bank_name']); ?>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="small text-secondary">
+                                        <i class="fa-solid fa-coins me-1"></i> Cash
+                                    </div>
+                                <?php endif; ?>
+                            </td>
+                            <td class="text-end pe-4 fw-bold">
+                                AED <span class="blur-sensitive">
+                                    <?php echo number_format($expense['amount'], 2); ?></span>
+                                <?php if (!empty($expense['currency']) && $expense['currency'] != 'AED'): ?>
+                                    <div class="small text-muted fw-normal mt-1" style="font-size: 0.75em;">
+                                        (<?php echo htmlspecialchars($expense['currency'] . ' ' . number_format($expense['original_amount'], 2)); ?>)
+                                    </div>
+                                <?php endif; ?>
+                            </td>
+                            <td class="text-end pe-3">
+                                <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                                    <a href="edit_expense.php?id=<?php echo $expense['id']; ?>" class="btn btn-sm text-muted me-1"
+                                        title="Edit"><i class="fa-solid fa-pen"></i></a>
+                                    <form action="expense_actions.php" method="POST" class="d-inline"
+                                        onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($expense['description'])); ?> - AED <?php echo number_format($expense['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($expense['expense_date'])); ?>?');">
+                                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                        <input type="hidden" name="action" value="delete_expense">
+                                        <input type="hidden" name="id" value="<?php echo $expense['id']; ?>">
+                                        <button type="submit" class="btn btn-sm text-danger border-0 p-0" title="Delete">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <i class="fa-solid fa-lock text-muted small" title="Read Only"></i>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
                 </tbody>
             </table>
         </div>
@@ -396,40 +412,42 @@ try {
 <?php require_once 'includes/footer.php'; ?>
 
 <!-- Bulk Action Floating Bar -->
-<div id="bulkActionBar"
-    class="position-fixed bottom-0 start-50 translate-middle-x mb-4 shadow-lg glass-panel p-3 d-none animate__animated animate__fadeInUp"
-    style="z-index: 1050; border-radius: 50px; min-width: 300px;">
-    <div class="d-flex align-items-center justify-content-between gap-4 px-2">
-        <div class="text-nowrap fw-bold">
-            <span id="selectedCount">0</span> Selected
-        </div>
-        <div class="d-flex gap-2">
-            <div class="dropdown">
-                <button class="btn btn-outline-primary btn-sm rounded-pill dropdown-toggle" type="button"
-                    data-bs-toggle="dropdown">
-                    Change Category
-                </button>
-                <ul class="dropdown-menu border-0 shadow">
-                    <?php foreach ($categories as $cat): ?>
-                        <li><a class="dropdown-item" href="#"
-                                onclick="bulkAction('change_category', '<?php echo $cat; ?>')"><?php echo $cat; ?></a></li>
-                    <?php endforeach; ?>
-                </ul>
+<?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+    <div id="bulkActionBar"
+        class="position-fixed bottom-0 start-50 translate-middle-x mb-4 shadow-lg glass-panel p-3 d-none animate__animated animate__fadeInUp"
+        style="z-index: 1050; border-radius: 50px; min-width: 300px;">
+        <div class="d-flex align-items-center justify-content-between gap-4 px-2">
+            <div class="text-nowrap fw-bold">
+                <span id="selectedCount">0</span> Selected
             </div>
-            <button class="btn btn-danger btn-sm rounded-pill px-3" onclick="bulkAction('delete')">
-                <i class="fa-solid fa-trash me-1"></i> Delete
-            </button>
-            <button class="btn btn-link btn-sm text-muted" onclick="deselectAll()">Cancel</button>
+            <div class="d-flex gap-2">
+                <div class="dropdown">
+                    <button class="btn btn-outline-primary btn-sm rounded-pill dropdown-toggle" type="button"
+                        data-bs-toggle="dropdown">
+                        Change Category
+                    </button>
+                    <ul class="dropdown-menu border-0 shadow">
+                        <?php foreach ($categories as $cat): ?>
+                            <li><a class="dropdown-item" href="#"
+                                    onclick="bulkAction('change_category', '<?php echo $cat; ?>')"><?php echo $cat; ?></a></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+                <button class="btn btn-danger btn-sm rounded-pill px-3" onclick="bulkAction('delete')">
+                    <i class="fa-solid fa-trash me-1"></i> Delete
+                </button>
+                <button class="btn btn-link btn-sm text-muted" onclick="deselectAll()">Cancel</button>
+            </div>
         </div>
     </div>
-</div>
 
-<form id="bulkActionForm" action="expense_actions.php" method="POST" class="d-none">
-    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-    <input type="hidden" name="action" id="bulkActionType">
-    <input type="hidden" name="category" id="bulkActionCategory">
-    <div id="bulkActionIds"></div>
-</form>
+    <form id="bulkActionForm" action="expense_actions.php" method="POST" class="d-none">
+        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+        <input type="hidden" name="action" id="bulkActionType">
+        <input type="hidden" name="category" id="bulkActionCategory">
+        <div id="bulkActionIds"></div>
+    </form>
+<?php endif; ?>
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {

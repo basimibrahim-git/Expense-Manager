@@ -10,7 +10,16 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
+
+    // Permission Check: Read-Only users cannot perform POST actions
+    if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+        $redirect = $_SERVER['HTTP_REFERER'] ?? 'dashboard.php';
+        header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "error=Unauthorized: Read-only access");
+        exit();
+    }
 }
+
+$tenant_id = $_SESSION['tenant_id'];
 
 if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $user_id = $_SESSION['user_id'];
@@ -44,8 +53,8 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $bank_id = filter_input(INPUT_POST, 'bank_id', FILTER_VALIDATE_INT) ?: null;
 
     try {
-        $stmt = $pdo->prepare("INSERT INTO cards (user_id, bank_name, card_name, card_type, network, tier, limit_amount, bill_day, statement_day, cashback_struct, bank_url, features, bank_id, first_four, last_four, fee_type, card_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$user_id, $bank_name, $card_name, $card_type, $network, $tier, $limit_amount, $bill_day, $statement_day, $cashback_struct, $bank_url, $features, $bank_id, $first_four, $last_four, $fee_type, $card_image]);
+        $stmt = $pdo->prepare("INSERT INTO cards (user_id, tenant_id, bank_name, card_name, card_type, network, tier, limit_amount, bill_day, statement_day, cashback_struct, bank_url, features, bank_id, first_four, last_four, fee_type, card_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$user_id, $tenant_id, $bank_name, $card_name, $card_type, $network, $tier, $limit_amount, $bill_day, $statement_day, $cashback_struct, $bank_url, $features, $bank_id, $first_four, $last_four, $fee_type, $card_image]);
 
         log_audit('add_card', "Added Card: $card_name ($bank_name)");
         header("Location: my_cards.php?success=Card added successfully");
@@ -96,12 +105,12 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     try {
         // If setting as default, clear other cards' default status first
         if ($is_default) {
-            $pdo->prepare("UPDATE cards SET is_default = 0 WHERE user_id = ?")->execute([$user_id]);
+            $pdo->prepare("UPDATE cards SET is_default = 0 WHERE tenant_id = ?")->execute([$tenant_id]);
         }
 
         // Ensure user owns the card
-        $stmt = $pdo->prepare("UPDATE cards SET bank_name=?, card_name=?, card_type=?, network=?, tier=?, limit_amount=?, bill_day=?, statement_day=?, cashback_struct=?, bank_url=?, features=?, is_default=?, bank_id=?, first_four=?, last_four=?, fee_type=?, card_image=? WHERE id=? AND user_id=?");
-        $stmt->execute([$bank_name, $card_name, $card_type, $network, $tier, $limit_amount, $bill_day, $statement_day, $cashback_struct, $bank_url, $features, $is_default, $bank_id, $first_four, $last_four, $fee_type, $card_image, $card_id, $user_id]);
+        $stmt = $pdo->prepare("UPDATE cards SET bank_name=?, card_name=?, card_type=?, network=?, tier=?, limit_amount=?, bill_day=?, statement_day=?, cashback_struct=?, bank_url=?, features=?, is_default=?, bank_id=?, first_four=?, last_four=?, fee_type=?, card_image=? WHERE id=? AND tenant_id=?");
+        $stmt->execute([$bank_name, $card_name, $card_type, $network, $tier, $limit_amount, $bill_day, $statement_day, $cashback_struct, $bank_url, $features, $is_default, $bank_id, $first_four, $last_four, $fee_type, $card_image, $card_id, $tenant_id]);
 
         log_audit('update_card', "Updated Card: $card_name (ID: $card_id)");
         if ($stmt->rowCount() > 0) {
@@ -119,14 +128,14 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         header("Location: edit_card.php?id=$card_id&error=" . urlencode("Failed to update card details."));
         exit();
     }
-} elseif ($action == 'delete_card' && (isset($_POST['id']) || isset($_GET['id']))) {
-    $card_id = filter_input(isset($_POST['id']) ? INPUT_POST : INPUT_GET, 'id', FILTER_VALIDATE_INT);
+} elseif ($action == 'delete_card' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['id'])) {
+    $card_id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
     $user_id = $_SESSION['user_id'];
 
     if ($card_id) {
         try {
-            $stmt = $pdo->prepare("DELETE FROM cards WHERE id = ? AND user_id = ?");
-            $stmt->execute([$card_id, $user_id]);
+            $stmt = $pdo->prepare("DELETE FROM cards WHERE id = ? AND tenant_id = ?");
+            $stmt->execute([$card_id, $tenant_id]);
             log_audit('delete_card', "Deleted Card ID: $card_id");
             header("Location: my_cards.php?success=Card deleted");
             exit();
@@ -151,8 +160,8 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     try {
-        $stmt = $pdo->prepare("INSERT INTO card_payments (user_id, card_id, bank_id, amount, payment_date) VALUES (?, ?, ?, ?, ?)");
-        $stmt->execute([$user_id, $card_id, $bank_id, $amount, $date]);
+        $stmt = $pdo->prepare("INSERT INTO card_payments (user_id, tenant_id, card_id, bank_id, amount, payment_date) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$user_id, $tenant_id, $card_id, $bank_id, $amount, $date]);
 
         log_audit('record_card_payment', "Recorded Card Payment: $amount (Card ID: $card_id)");
         header("Location: my_cards.php?success=Payment recorded successfully");

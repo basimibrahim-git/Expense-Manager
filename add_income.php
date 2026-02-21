@@ -14,9 +14,9 @@ if ($pre_month && $pre_year) {
         $default_date = date('Y-m-d');
 }
 
-// Fetch user's managed banks
-$banks_stmt = $pdo->prepare("SELECT id, bank_name FROM banks WHERE user_id = ? ORDER BY is_default DESC, bank_name ASC");
-$banks_stmt->execute([$_SESSION['user_id']]);
+// Fetch family's managed banks
+$banks_stmt = $pdo->prepare("SELECT id, bank_name FROM banks WHERE tenant_id = ? ORDER BY is_default DESC, bank_name ASC");
+$banks_stmt->execute([$_SESSION['tenant_id']]);
 $user_banks = $banks_stmt->fetchAll();
 ?>
 

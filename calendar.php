@@ -10,22 +10,28 @@ require_once 'config.php';
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
+    // Permission Check
+    if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+        header("Location: calendar.php?error=Unauthorized: Read-only access");
+        exit();
+    }
+
     if ($_POST['action'] == 'add_reminder') {
         $title = $_POST['title'];
         $date = $_POST['alert_date'];
         $recur_type = $_POST['recurrence_type'] ?? 'none';
         $color = $_POST['color'] ?? 'primary';
 
-        $stmt = $pdo->prepare("INSERT INTO reminders (user_id, title, alert_date, recurrence_type, color) VALUES (?, ?, ?, ?, ?)");
-        $stmt->execute([$_SESSION['user_id'], $title, $date, $recur_type, $color]);
+        $stmt = $pdo->prepare("INSERT INTO reminders (user_id, tenant_id, title, alert_date, recurrence_type, color) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $title, $date, $recur_type, $color]);
 
         header("Location: calendar.php?success=Reminder Added");
         exit;
     } elseif ($_POST['action'] == 'delete_reminder') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
         if ($id) {
-            $stmt = $pdo->prepare("DELETE FROM reminders WHERE id = ? AND user_id = ?");
-            $stmt->execute([$id, $_SESSION['user_id']]);
+            $stmt = $pdo->prepare("DELETE FROM reminders WHERE id = ? AND tenant_id = ?");
+            $stmt->execute([$id, $_SESSION['tenant_id']]);
         }
         header("Location: calendar.php?deleted=1");
         exit;
@@ -61,8 +67,8 @@ $first_day_of_week = date('N', strtotime("$year-$month-01")); // 1 (Mon) - 7 (Su
 $events = [];
 
 // A. Subscriptions
-$stmt = $pdo->prepare("SELECT id, description, amount, expense_date FROM expenses WHERE user_id = ? AND is_subscription = 1");
-$stmt->execute([$_SESSION['user_id']]);
+$stmt = $pdo->prepare("SELECT id, description, amount, expense_date FROM expenses WHERE tenant_id = ? AND is_subscription = 1");
+$stmt->execute([$_SESSION['tenant_id']]);
 $subs = $stmt->fetchAll();
 
 foreach ($subs as $sub) {
@@ -79,8 +85,8 @@ foreach ($subs as $sub) {
 }
 
 // B. Card Bills
-$stmt = $pdo->prepare("SELECT id, card_name, bank_name, bill_day FROM cards WHERE user_id = ? AND bill_day IS NOT NULL");
-$stmt->execute([$_SESSION['user_id']]);
+$stmt = $pdo->prepare("SELECT id, card_name, bank_name, bill_day FROM cards WHERE tenant_id = ? AND bill_day IS NOT NULL");
+$stmt->execute([$_SESSION['tenant_id']]);
 $cards = $stmt->fetchAll();
 
 foreach ($cards as $card) {
@@ -97,8 +103,8 @@ foreach ($cards as $card) {
 }
 
 // C. Custom Reminders
-$stmt = $pdo->prepare("SELECT * FROM reminders WHERE user_id = ?");
-$stmt->execute([$_SESSION['user_id']]);
+$stmt = $pdo->prepare("SELECT * FROM reminders WHERE tenant_id = ?");
+$stmt->execute([$_SESSION['tenant_id']]);
 $reminders = $stmt->fetchAll();
 
 foreach ($reminders as $rem) {
@@ -141,9 +147,15 @@ foreach ($reminders as $rem) {
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 fw-bold mb-0">My Calendar</h1>
     <div class="d-flex gap-2">
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addReminderModal">
-            <i class="fa-solid fa-plus me-2"></i> Add Reminder
-        </button>
+        <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addReminderModal">
+                <i class="fa-solid fa-plus me-2"></i> Add Reminder
+            </button>
+        <?php else: ?>
+            <div class="bg-light text-muted px-3 py-1 rounded-pill shadow-sm d-flex align-items-center small">
+                <i class="fa-solid fa-lock me-2"></i> Read Only
+            </div>
+        <?php endif; ?>
         <div class="btn-group">
             <a href="?month=<?php echo htmlspecialchars($prev_month); ?>&year=<?php echo htmlspecialchars($prev_year); ?>"
                 class="btn btn-light"><i class="fa-solid fa-chevron-left"></i></a>
@@ -194,11 +206,15 @@ foreach ($reminders as $rem) {
                 echo "<span><i class='fa-solid {$evt['icon']} me-1'></i>" . htmlspecialchars($evt['title']) . "</span>";
 
                 if ($is_rem) {
-                    echo "<button type='button' class='btn btn-link p-0 text-danger ms-1' 
-                            style='font-size: 0.9em; line-height: 1;' 
-                            onclick=\"confirmDeleteReminder({$evt['id']}, '" . addslashes(htmlspecialchars($evt['title'])) . "')\">
-                            <i class='fa-solid fa-times'></i>
-                          </button>";
+                    if (($_SESSION['permission'] ?? 'edit') !== 'read_only') {
+                        echo "<button type='button' class='btn btn-link p-0 text-danger ms-1' 
+                                style='font-size: 0.9em; line-height: 1;' 
+                                onclick=\"confirmDeleteReminder({$evt['id']}, '" . addslashes(htmlspecialchars($evt['title'])) . "')\">
+                                <i class='fa-solid fa-times'></i>
+                              </button>";
+                    } else {
+                        echo "<i class='fa-solid fa-lock text-muted x-small ms-1'></i>";
+                    }
                 }
                 echo "</div>";
             }
@@ -207,7 +223,7 @@ foreach ($reminders as $rem) {
             echo "</div>";
         }
         ?>
-</div>
+    </div>
 </div>
 
 <style>

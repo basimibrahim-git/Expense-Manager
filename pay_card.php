@@ -7,14 +7,14 @@ require_once 'includes/sidebar.php';
 // Get Card ID from URL if redirected from My Cards
 $card_id_pre = filter_input(INPUT_GET, 'card_id', FILTER_VALIDATE_INT);
 
-// Fetch user's cards
-$cards_stmt = $pdo->prepare("SELECT id, bank_name, card_name FROM cards WHERE user_id = ? ORDER BY card_name ASC");
-$cards_stmt->execute([$_SESSION['user_id']]);
+// Fetch family's cards
+$cards_stmt = $pdo->prepare("SELECT id, bank_name, card_name FROM cards WHERE tenant_id = ? ORDER BY card_name ASC");
+$cards_stmt->execute([$_SESSION['tenant_id']]);
 $all_cards = $cards_stmt->fetchAll();
 
 // Fetch managed banks for payment source
-$banks_stmt = $pdo->prepare("SELECT id, bank_name FROM banks WHERE user_id = ? ORDER BY is_default DESC, bank_name ASC");
-$banks_stmt->execute([$_SESSION['user_id']]);
+$banks_stmt = $pdo->prepare("SELECT id, bank_name FROM banks WHERE tenant_id = ? ORDER BY is_default DESC, bank_name ASC");
+$banks_stmt->execute([$_SESSION['tenant_id']]);
 $all_banks = $banks_stmt->fetchAll();
 
 $default_date = date('Y-m-d');

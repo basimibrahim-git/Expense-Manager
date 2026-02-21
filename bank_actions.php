@@ -11,7 +11,16 @@ $user_id = $_SESSION['user_id'];
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
+
+    // Permission Check: Read-Only users cannot perform POST actions
+    if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+        $redirect = $_SERVER['HTTP_REFERER'] ?? 'dashboard.php';
+        header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "error=Unauthorized: Read-only access");
+        exit();
+    }
 }
+
+$tenant_id = $_SESSION['tenant_id'];
 
 // ADD BANK
 if ($action == 'add_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -31,11 +40,11 @@ if ($action == 'add_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     try {
         // If setting as default, clear other banks' default status
         if ($is_default) {
-            $pdo->prepare("UPDATE banks SET is_default = 0 WHERE user_id = ?")->execute([$user_id]);
+            $pdo->prepare("UPDATE banks SET is_default = 0 WHERE tenant_id = ?")->execute([$tenant_id]);
         }
 
-        $stmt = $pdo->prepare("INSERT INTO banks (user_id, bank_name, account_type, account_number, iban, currency, notes, is_default) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$user_id, $bank_name, $account_type, $account_number, $iban, $currency, $notes, $is_default]);
+        $stmt = $pdo->prepare("INSERT INTO banks (user_id, tenant_id, bank_name, account_type, account_number, iban, currency, notes, is_default) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$user_id, $tenant_id, $bank_name, $account_type, $account_number, $iban, $currency, $notes, $is_default]);
 
         log_audit('add_bank', "Added Bank: $bank_name ($currency)");
         header("Location: my_banks.php?success=Bank added successfully");
@@ -68,11 +77,11 @@ elseif ($action == 'update_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     try {
         // If setting as default, clear other banks' default status
         if ($is_default) {
-            $pdo->prepare("UPDATE banks SET is_default = 0 WHERE user_id = ?")->execute([$user_id]);
+            $pdo->prepare("UPDATE banks SET is_default = 0 WHERE tenant_id = ?")->execute([$tenant_id]);
         }
 
-        $stmt = $pdo->prepare("UPDATE banks SET bank_name = ?, account_type = ?, account_number = ?, iban = ?, currency = ?, notes = ?, is_default = ? WHERE id = ? AND user_id = ?");
-        $stmt->execute([$bank_name, $account_type, $account_number, $iban, $currency, $notes, $is_default, $bank_id, $user_id]);
+        $stmt = $pdo->prepare("UPDATE banks SET bank_name = ?, account_type = ?, account_number = ?, iban = ?, currency = ?, notes = ?, is_default = ? WHERE id = ? AND tenant_id = ?");
+        $stmt->execute([$bank_name, $account_type, $account_number, $iban, $currency, $notes, $is_default, $bank_id, $tenant_id]);
 
         log_audit('update_bank', "Updated Bank: $bank_name (ID: $bank_id)");
         header("Location: edit_bank.php?id=$bank_id&success=Bank updated successfully");
@@ -86,16 +95,16 @@ elseif ($action == 'update_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 // DELETE BANK
-elseif ($action == 'delete' && (isset($_POST['id']) || isset($_GET['id']))) {
-    $bank_id = filter_input(isset($_POST['id']) ? INPUT_POST : INPUT_GET, 'id', FILTER_VALIDATE_INT);
+elseif ($action == 'delete' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['id'])) {
+    $bank_id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
 
     if ($bank_id) {
         // Unlink cards first
-        $pdo->prepare("UPDATE cards SET bank_id = NULL WHERE bank_id = ? AND user_id = ?")->execute([$bank_id, $user_id]);
+        $pdo->prepare("UPDATE cards SET bank_id = NULL WHERE bank_id = ? AND tenant_id = ?")->execute([$bank_id, $tenant_id]);
 
         // Delete bank
-        $stmt = $pdo->prepare("DELETE FROM banks WHERE id = ? AND user_id = ?");
-        $stmt->execute([$bank_id, $user_id]);
+        $stmt = $pdo->prepare("DELETE FROM banks WHERE id = ? AND tenant_id = ?");
+        $stmt->execute([$bank_id, $tenant_id]);
         log_audit('delete_bank', "Deleted Bank ID: $bank_id");
     }
 

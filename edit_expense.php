@@ -12,8 +12,8 @@ if (!$expense_id) {
 }
 
 // Fetch expense
-$stmt = $pdo->prepare("SELECT * FROM expenses WHERE id = ? AND user_id = ?");
-$stmt->execute([$expense_id, $_SESSION['user_id']]);
+$stmt = $pdo->prepare("SELECT * FROM expenses WHERE id = ? AND tenant_id = ?");
+$stmt->execute([$expense_id, $_SESSION['tenant_id']]);
 $expense = $stmt->fetch();
 
 if (!$expense) {
@@ -22,8 +22,8 @@ if (!$expense) {
 }
 
 // Fetch cards for dropdown
-$cStmt = $pdo->prepare("SELECT id, bank_name, card_name, card_type FROM cards WHERE user_id = ? ORDER BY card_name");
-$cStmt->execute([$_SESSION['user_id']]);
+$cStmt = $pdo->prepare("SELECT id, bank_name, card_name, card_type FROM cards WHERE tenant_id = ? ORDER BY card_name");
+$cStmt->execute([$_SESSION['tenant_id']]);
 $cards = $cStmt->fetchAll();
 
 $categories = ['Grocery', 'Food', 'Transport', 'Shopping', 'Utilities', 'Travel', 'Medical', 'Entertainment', 'Education', 'Other'];
@@ -158,20 +158,17 @@ $categories = ['Grocery', 'Food', 'Transport', 'Shopping', 'Utilities', 'Travel'
                 </div>
 
                 <!-- Submit -->
-                <div class="d-grid gap-2 border-top pt-4 mt-2">
-                    <button type="submit" class="btn btn-primary py-3 fw-bold">
-                        <i class="fa-solid fa-save me-2"></i> Update Expense
-                    </button>
-                    <form action="expense_actions.php" method="POST" class="d-grid"
-                        onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($expense['description'])); ?> - AED <?php echo number_format($expense['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($expense['expense_date'])); ?> permanently?');">
-                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                        <input type="hidden" name="action" value="delete_expense">
-                        <input type="hidden" name="id" value="<?php echo $expense['id']; ?>">
-                        <button type="submit" class="btn btn-outline-danger py-2">
-                            <i class="fa-solid fa-trash me-2"></i> Delete Expense
-                        </button>
-                    </form>
                 </div>
+            </form>
+            <form action="expense_actions.php" method="POST" class="d-grid mt-2"
+                onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($expense['description'])); ?> - AED <?php echo number_format($expense['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($expense['expense_date'])); ?> permanently?');">
+                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="action" value="delete_expense">
+                <input type="hidden" name="id" value="<?php echo $expense['id']; ?>">
+                <button type="submit" class="btn btn-outline-danger py-2">
+                    <i class="fa-solid fa-trash me-2"></i> Delete Expense
+                </button>
+            </form>
             </form>
         </div>
     </div>

@@ -5,26 +5,26 @@ if (!isset($_SESSION['user_id'])) {
     die("Unauthorized");
 }
 
-$user_id = $_SESSION['user_id'];
+$tenant_id = $_SESSION['tenant_id'];
 $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 $month_name = date("F", mktime(0, 0, 0, $month, 10));
 
 // Fetch Data
-$stmt = $pdo->prepare("SELECT SUM(amount) FROM income WHERE user_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ?");
-$stmt->execute([$user_id, $month, $year]);
+$stmt = $pdo->prepare("SELECT SUM(amount) FROM income WHERE tenant_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ?");
+$stmt->execute([$tenant_id, $month, $year]);
 $total_income = $stmt->fetchColumn() ?: 0;
 
-$stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE user_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
-$stmt->execute([$user_id, $month, $year]);
+$stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
+$stmt->execute([$tenant_id, $month, $year]);
 $total_expense = $stmt->fetchColumn() ?: 0;
 
-$stmt = $pdo->prepare("SELECT * FROM expenses WHERE user_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? ORDER BY expense_date ASC");
-$stmt->execute([$user_id, $month, $year]);
+$stmt = $pdo->prepare("SELECT * FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? ORDER BY expense_date ASC");
+$stmt->execute([$tenant_id, $month, $year]);
 $expenses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE user_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category ORDER BY total DESC");
-$stmt->execute([$user_id, $month, $year]);
+$stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category ORDER BY total DESC");
+$stmt->execute([$tenant_id, $month, $year]);
 $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>

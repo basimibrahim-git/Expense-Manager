@@ -4,10 +4,10 @@ require_once 'config.php';
 require_once 'includes/header.php';
 require_once 'includes/sidebar.php';
 
-// Fetch user's cards for dropdown
+// Fetch family's cards for dropdown
 try {
-    $stmt = $pdo->prepare("SELECT id, bank_name, card_name, card_type, tier, cashback_struct, is_default FROM cards WHERE user_id = :user_id ORDER BY is_default DESC, created_at DESC");
-    $stmt->execute(['user_id' => $_SESSION['user_id']]);
+    $stmt = $pdo->prepare("SELECT id, bank_name, card_name, card_type, tier, cashback_struct, is_default FROM cards WHERE tenant_id = :tenant_id ORDER BY is_default DESC, created_at DESC");
+    $stmt->execute(['tenant_id' => $_SESSION['tenant_id']]);
     $cards = $stmt->fetchAll();
 
     // Find default card
@@ -21,6 +21,28 @@ try {
 } catch (PDOException $e) {
     $cards = [];
     $default_card_id = null;
+}
+
+// Fetch family members for "Spent By" dropdown
+$tenant_id = $_SESSION['tenant_id'] ?? null;
+$family_members = [];
+$family_admin_id = null;
+if ($tenant_id) {
+    try {
+        $stmt = $pdo->prepare("SELECT id, name, role FROM users WHERE tenant_id = ? ORDER BY role DESC, name ASC");
+        $stmt->execute([$tenant_id]);
+        $family_members = $stmt->fetchAll();
+
+        // Identify the family admin to set as default
+        foreach ($family_members as $member) {
+            if ($member['role'] === 'family_admin') {
+                $family_admin_id = $member['id'];
+                break;
+            }
+        }
+    } catch (PDOException $e) {
+        $family_members = [];
+    }
 }
 
 // Pre-fill Date Logic
@@ -140,6 +162,19 @@ elseif ($pre_month && $pre_year) {
                         <label class="form-label">Date <span class="text-danger">*</span></label>
                         <input type="date" name="expense_date" class="form-control form-control-lg"
                             value="<?php echo htmlspecialchars($default_date); ?>" required>
+                    </div>
+
+                    <div class="col-12 mb-3">
+                        <label class="form-label">Spent By <span class="text-danger">*</span></label>
+                        <select name="spent_by_user_id" class="form-select">
+                            <?php foreach ($family_members as $member): ?>
+                                <option value="<?php echo $member['id']; ?>" <?php echo $member['id'] == $family_admin_id ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($member['name']); ?>
+                                    <?php echo $member['role'] === 'family_admin' ? '(Admin)' : ''; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text small text-muted">Who incurred this cost? Defaults to Family Head.</div>
                     </div>
 
                     <!-- Hidden Exchange Rate Input (Now in its own row/col for space) -->

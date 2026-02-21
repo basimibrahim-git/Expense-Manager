@@ -14,18 +14,20 @@ try {
         SELECT c.*, 
         (SELECT SUM(amount) FROM expenses e 
          WHERE e.card_id = c.id 
+         AND e.tenant_id = c.tenant_id
          AND MONTH(e.expense_date) = :month1 
          AND YEAR(e.expense_date) = :year1) as total_expenses,
         (SELECT SUM(amount) FROM card_payments p 
          WHERE p.card_id = c.id 
+         AND p.tenant_id = c.tenant_id
          AND MONTH(p.payment_date) = :month2 
          AND YEAR(p.payment_date) = :year2) as total_payments
         FROM cards c 
-        WHERE c.user_id = :user_id 
+        WHERE c.tenant_id = :tenant_id 
         ORDER BY c.created_at DESC
     ");
     $stmt->execute([
-        'user_id' => $_SESSION['user_id'],
+        'tenant_id' => $_SESSION['tenant_id'],
         'month1' => $curr_month,
         'year1' => $curr_year,
         'month2' => $curr_month,
@@ -45,9 +47,11 @@ try {
         <a href="my_banks.php" class="btn btn-outline-primary">
             <i class="fa-solid fa-landmark me-2"></i> Manage Banks
         </a>
-        <a href="add_card.php" class="btn btn-primary">
-            <i class="fa-solid fa-plus me-2"></i> Add New Card
-        </a>
+        <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+            <a href="add_card.php" class="btn btn-primary">
+                <i class="fa-solid fa-plus me-2"></i> Add New Card
+            </a>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -148,21 +152,25 @@ try {
                             <i class="fa-solid fa-external-link-alt"></i> Bank
                         </a>
                     <?php endif; ?>
-                    <a href="pay_card.php?card_id=<?php echo $card['id']; ?>" class="btn btn-sm btn-success text-white">
-                        <i class="fa-solid fa-receipt me-1"></i> Pay
-                    </a>
-                    <a href="edit_card.php?id=<?php echo $card['id']; ?>" class="btn btn-sm btn-light text-muted" title="Edit">
-                        <i class="fa-solid fa-pen"></i>
-                    </a>
-                    <form action="card_actions.php" method="POST" class="d-inline">
-                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                        <input type="hidden" name="action" value="delete_card">
-                        <input type="hidden" name="id" value="<?php echo $card['id']; ?>">
-                        <button type="submit" class="btn btn-sm btn-light text-danger" title="Delete"
-                            onclick="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($card['bank_name'] . ' ' . $card['card_name'])); ?>? (This will permanently remove card details)');">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
-                    </form>
+                    <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                        <a href="pay_card.php?card_id=<?php echo $card['id']; ?>" class="btn btn-sm btn-success text-white">
+                            <i class="fa-solid fa-receipt me-1"></i> Pay
+                        </a>
+                        <a href="edit_card.php?id=<?php echo $card['id']; ?>" class="btn btn-sm btn-light text-muted" title="Edit">
+                            <i class="fa-solid fa-pen"></i>
+                        </a>
+                        <form action="card_actions.php" method="POST" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                            <input type="hidden" name="action" value="delete_card">
+                            <input type="hidden" name="id" value="<?php echo $card['id']; ?>">
+                            <button type="submit" class="btn btn-sm btn-light text-danger" title="Delete"
+                                onclick="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($card['bank_name'] . ' ' . $card['card_name'])); ?>? (This will permanently remove card details)');">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </form>
+                    <?php else: ?>
+                        <span class="text-muted small align-self-center"><i class="fa-solid fa-lock me-1"></i> Read Only</span>
+                    <?php endif; ?>
                 </div>
             </div>
         <?php endforeach; ?>

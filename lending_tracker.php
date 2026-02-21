@@ -13,6 +13,12 @@ if (!isset($_SESSION['user_id'])) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
+    // Permission Check
+    if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+        header("Location: lending_tracker.php?error=Unauthorized: Read-only access");
+        exit();
+    }
+
     if (isset($_POST['action'])) {
         if ($_POST['action'] == 'add_lending') {
             $name = trim($_POST['borrower_name']);
@@ -23,8 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $notes = trim($_POST['notes']);
 
             if (!empty($name) && $amount > 0) {
-                $stmt = $pdo->prepare("INSERT INTO lending_tracker (user_id, borrower_name, amount, currency, lent_date, due_date, notes, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending')");
-                $stmt->execute([$_SESSION['user_id'], $name, $amount, $currency, $lent_date, $due_date, $notes]);
+                $stmt = $pdo->prepare("INSERT INTO lending_tracker (user_id, tenant_id, borrower_name, amount, currency, lent_date, due_date, notes, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending')");
+                $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $name, $amount, $currency, $lent_date, $due_date, $notes]);
                 header("Location: lending_tracker.php?success=Record Added");
                 exit;
             }
@@ -32,8 +38,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
             if ($id) {
                 // Update status to Paid
-                $stmt = $pdo->prepare("UPDATE lending_tracker SET status = 'Paid' WHERE id = ? AND user_id = ?");
-                $stmt->execute([$id, $_SESSION['user_id']]);
+                $stmt = $pdo->prepare("UPDATE lending_tracker SET status = 'Paid' WHERE id = ? AND tenant_id = ?");
+                $stmt->execute([$id, $_SESSION['tenant_id']]);
 
                 header("Location: lending_tracker.php?success=Marked as Paid");
                 exit;
@@ -41,8 +47,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         } elseif ($_POST['action'] == 'delete_lending') {
             $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
             if ($id) {
-                $stmt = $pdo->prepare("DELETE FROM lending_tracker WHERE id = ? AND user_id = ?");
-                $stmt->execute([$id, $_SESSION['user_id']]);
+                $stmt = $pdo->prepare("DELETE FROM lending_tracker WHERE id = ? AND tenant_id = ?");
+                $stmt->execute([$id, $_SESSION['tenant_id']]);
 
                 // Reset IDs (Optional, harmless for this app)
                 $pdo->exec("SET @count = 0");
@@ -57,8 +63,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $ids = array_map('intval', $_POST['ids']);
                 if (!empty($ids)) {
                     $placeholders = str_repeat('?,', count($ids) - 1) . '?';
-                    $stmt = $pdo->prepare("DELETE FROM lending_tracker WHERE id IN ($placeholders) AND user_id = ?");
-                    $stmt->execute(array_merge($ids, [$_SESSION['user_id']]));
+                    $stmt = $pdo->prepare("DELETE FROM lending_tracker WHERE id IN ($placeholders) AND tenant_id = ?");
+                    $stmt->execute(array_merge($ids, [$_SESSION['tenant_id']]));
                 }
             }
             header("Location: lending_tracker.php?success=Bulk Deleted");
@@ -68,8 +74,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $ids = array_map('intval', $_POST['ids']);
                 if (!empty($ids)) {
                     $placeholders = str_repeat('?,', count($ids) - 1) . '?';
-                    $stmt = $pdo->prepare("UPDATE lending_tracker SET status = 'Paid' WHERE id IN ($placeholders) AND user_id = ?");
-                    $stmt->execute(array_merge($ids, [$_SESSION['user_id']]));
+                    $stmt = $pdo->prepare("UPDATE lending_tracker SET status = 'Paid' WHERE id IN ($placeholders) AND tenant_id = ?");
+                    $stmt->execute(array_merge($ids, [$_SESSION['tenant_id']]));
                 }
             }
             header("Location: lending_tracker.php?success=Records Marked as Paid");
@@ -83,8 +89,8 @@ require_once 'includes/sidebar.php';
 
 // Fetch Logic
 $filter_status = $_GET['status'] ?? 'Pending';
-$query = "SELECT * FROM lending_tracker WHERE user_id = ?";
-$params = [$_SESSION['user_id']];
+$query = "SELECT * FROM lending_tracker WHERE tenant_id = ?";
+$params = [$_SESSION['tenant_id']];
 
 if ($filter_status != 'All') {
     $query .= " AND status = ?";
@@ -108,8 +114,8 @@ $stmt = $pdo->prepare("SELECT
         WHEN status = 'Paid' THEN amount 
         ELSE 0 
     END) as paid_total
-    FROM lending_tracker WHERE user_id = ?");
-$stmt->execute([$_SESSION['user_id']]);
+    FROM lending_tracker WHERE tenant_id = ?");
+$stmt->execute([$_SESSION['tenant_id']]);
 $summary = $stmt->fetch();
 ?>
 
@@ -123,9 +129,11 @@ $summary = $stmt->fetch();
             <a href="export_actions.php?action=export_lending" class="btn btn-outline-secondary">
                 <i class="fa-solid fa-file-csv me-1"></i> Export
             </a>
-            <button class="btn btn-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#addLendingModal">
-                <i class="fa-solid fa-plus me-2"></i> New Record
-            </button>
+            <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                <button class="btn btn-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#addLendingModal">
+                    <i class="fa-solid fa-plus me-2"></i> New Record
+                </button>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -191,7 +199,9 @@ $summary = $stmt->fetch();
                 <div class="col-12 col-md-6 col-xl-4">
                     <div class="glass-panel p-3 h-100 position-relative border-start border-4 <?php echo $border_class; ?>">
                         <div class="position-absolute top-0 end-0 m-2">
-                            <input type="checkbox" class="form-check-input row-checkbox" value="<?php echo $r['id']; ?>">
+                            <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                                <input type="checkbox" class="form-check-input row-checkbox" value="<?php echo $r['id']; ?>">
+                            <?php endif; ?>
                         </div>
                         <div class="d-flex justify-content-between align-items-start mb-2 pe-4">
                             <div>
@@ -233,16 +243,20 @@ $summary = $stmt->fetch();
                             </div>
 
                             <div class="btn-group">
-                                <?php if ($r['status'] == 'Pending'): ?>
-                                    <button type="button" class="btn btn-sm btn-success"
-                                        onclick="openPayModal(<?php echo $r['id']; ?>, '<?php echo htmlspecialchars($r['borrower_name']); ?>')">
-                                        <i class="fa-solid fa-check"></i> Paid
+                                <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                                    <?php if ($r['status'] == 'Pending'): ?>
+                                        <button type="button" class="btn btn-sm btn-success"
+                                            onclick="openPayModal(<?php echo $r['id']; ?>, '<?php echo htmlspecialchars($r['borrower_name']); ?>')">
+                                            <i class="fa-solid fa-check"></i> Paid
+                                        </button>
+                                    <?php endif; ?>
+                                    <button type="button" class="btn btn-sm btn-outline-danger border-0"
+                                        onclick="openDeleteModal(<?php echo $r['id']; ?>, '<?php echo addslashes(htmlspecialchars($r['borrower_name'])); ?>', '<?php echo number_format($r['amount'], 2); ?>', '<?php echo $curr; ?>')">
+                                        <i class="fa-solid fa-trash"></i>
                                     </button>
+                                <?php else: ?>
+                                    <i class="fa-solid fa-lock text-muted small" title="Read Only"></i>
                                 <?php endif; ?>
-                                <button type="button" class="btn btn-sm btn-outline-danger border-0"
-                                    onclick="openDeleteModal(<?php echo $r['id']; ?>, '<?php echo addslashes(htmlspecialchars($r['borrower_name'])); ?>', '<?php echo number_format($r['amount'], 2); ?>', '<?php echo $curr; ?>')">
-                                    <i class="fa-solid fa-trash"></i>
-                                </button>
                             </div>
                         </div>
                     </div>

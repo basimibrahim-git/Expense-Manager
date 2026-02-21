@@ -87,16 +87,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // DATA TABLES
                 $queries = [
+                    "CREATE TABLE IF NOT EXISTS tenants (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        family_name VARCHAR(100) NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )",
                     "CREATE TABLE IF NOT EXISTS users (
                         id INT AUTO_INCREMENT PRIMARY KEY,
+                        tenant_id INT,
                         name VARCHAR(100) NOT NULL,
                         email VARCHAR(150) NOT NULL UNIQUE,
                         password VARCHAR(255) NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        role ENUM('root_admin', 'family_admin', 'user') DEFAULT 'user',
+                        permission ENUM('edit', 'read_only') DEFAULT 'edit',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE SET NULL
                     )",
                     "CREATE TABLE IF NOT EXISTS banks (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
+                        tenant_id INT,
                         bank_name VARCHAR(100) NOT NULL,
                         account_type VARCHAR(50) DEFAULT 'Current',
                         account_number VARCHAR(100),
@@ -105,11 +115,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         notes TEXT,
                         is_default TINYINT(1) DEFAULT 0,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
                     )",
                     "CREATE TABLE IF NOT EXISTS cards (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
+                        tenant_id INT,
                         bank_name VARCHAR(100) NOT NULL,
                         card_name VARCHAR(100),
                         card_type VARCHAR(50) DEFAULT 'Credit',
@@ -128,11 +140,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         card_image TEXT,
                         is_default TINYINT(1) DEFAULT 0,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
                     )",
                     "CREATE TABLE IF NOT EXISTS expenses (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
+                        tenant_id INT,
+                        spent_by_user_id INT,
                         amount DECIMAL(15,2) NOT NULL,
                         description VARCHAR(255) NOT NULL,
                         category VARCHAR(100) NOT NULL,
@@ -146,11 +161,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         cashback_earned DECIMAL(10,2) DEFAULT 0,
                         is_fixed TINYINT(1) DEFAULT 0,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+                        FOREIGN KEY (spent_by_user_id) REFERENCES users(id) ON DELETE SET NULL
                     )",
                     "CREATE TABLE IF NOT EXISTS income (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
+                        tenant_id INT,
                         amount DECIMAL(15,2) NOT NULL,
                         description VARCHAR(255) NOT NULL,
                         category VARCHAR(100),
@@ -159,42 +177,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         recurrence_day INT,
                         currency VARCHAR(3) DEFAULT 'AED',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
                     )",
                     "CREATE TABLE IF NOT EXISTS bank_balances (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
+                        tenant_id INT,
                         bank_name VARCHAR(100) NOT NULL,
                         amount DECIMAL(15,2) NOT NULL,
                         balance_date DATE NOT NULL,
                         bank_id INT NULL,
                         currency VARCHAR(3) DEFAULT 'AED',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
                     )",
                     "CREATE TABLE IF NOT EXISTS card_payments (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
+                        tenant_id INT,
                         card_id INT NOT NULL,
                         bank_id INT,
                         amount DECIMAL(15,2) NOT NULL,
                         payment_date DATE NOT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
                     )",
                     "CREATE TABLE IF NOT EXISTS reminders (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
+                        tenant_id INT,
                         title VARCHAR(255) NOT NULL,
                         alert_date DATE NOT NULL,
                         recurrence_type VARCHAR(20) DEFAULT 'none',
                         color VARCHAR(20) DEFAULT 'primary',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
                     )",
                     "CREATE TABLE IF NOT EXISTS sinking_funds (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
+                        tenant_id INT,
                         name VARCHAR(100) NOT NULL,
                         category VARCHAR(50) DEFAULT 'General',
                         target_amount DECIMAL(15,2) NOT NULL,
@@ -202,11 +228,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         target_date DATE NOT NULL,
                         icon VARCHAR(50) DEFAULT 'fa-bullseye',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
                     )",
                     "CREATE TABLE IF NOT EXISTS zakath_calculations (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
+                        tenant_id INT,
                         cycle_name VARCHAR(100) NOT NULL,
                         cash_balance DECIMAL(15,2) DEFAULT 0,
                         gold_silver DECIMAL(15,2) DEFAULT 0,
@@ -216,29 +244,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         status ENUM('Pending', 'Paid') DEFAULT 'Pending',
                         due_date DATE DEFAULT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
                     )",
                     "CREATE TABLE IF NOT EXISTS sadaqa_tracker (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
+                        tenant_id INT,
                         title VARCHAR(255) NOT NULL,
                         amount DECIMAL(10,2) NOT NULL,
                         sadaqa_date DATE NOT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
                     )",
                     "CREATE TABLE IF NOT EXISTS company_incentives (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
+                        tenant_id INT,
                         title VARCHAR(255) DEFAULT 'Monthly Incentive',
                         amount DECIMAL(10,2) NOT NULL,
                         incentive_date DATE NOT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
                     )",
                     "CREATE TABLE IF NOT EXISTS lending_tracker (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
+                        tenant_id INT,
                         borrower_name VARCHAR(100) NOT NULL,
                         amount DECIMAL(10,2) NOT NULL,
                         currency VARCHAR(10) DEFAULT 'AED',
@@ -247,16 +281,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         status ENUM('Pending', 'Paid', 'Partially Paid') DEFAULT 'Pending',
                         notes TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
                     )",
                     "CREATE TABLE IF NOT EXISTS interest_tracker (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
+                        tenant_id INT,
                         title VARCHAR(255) NOT NULL,
                         amount DECIMAL(10,2) NOT NULL,
                         interest_date DATE NOT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
                     )",
                     "CREATE TABLE IF NOT EXISTS url_cache (
                         url_hash VARCHAR(64) PRIMARY KEY,
@@ -266,27 +303,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     "CREATE TABLE IF NOT EXISTS audit_logs (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
+                        tenant_id INT,
                         action VARCHAR(100) NOT NULL,
                         context TEXT,
                         ip_address VARCHAR(45),
                         user_agent TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         INDEX (user_id),
+                        INDEX (tenant_id),
                         INDEX (action),
                         INDEX (created_at),
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
                     )",
                     "CREATE TABLE IF NOT EXISTS budgets (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
+                        tenant_id INT,
                         category VARCHAR(100) NOT NULL,
                         amount DECIMAL(15,2) NOT NULL,
                         currency VARCHAR(3) DEFAULT 'AED',
                         month INT NOT NULL,
                         year INT NOT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        UNIQUE KEY user_cat_period (user_id, category, month, year),
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        UNIQUE KEY user_cat_period (tenant_id, category, month, year),
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
                     )",
                     "CREATE TABLE IF NOT EXISTS user_preferences (
                         user_id INT PRIMARY KEY,
@@ -295,7 +337,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         notifications_enabled TINYINT(1) DEFAULT 1,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                    )"
+                    )",
+                    "CREATE TABLE IF NOT EXISTS expenses_archive LIKE expenses",
+                    "CREATE TABLE IF NOT EXISTS income_archive LIKE income"
                 ];
 
                 foreach ($queries as $sql) {
@@ -327,9 +371,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = "User already exists. Please login or use a different email.";
                 $step = 4;
             } else {
+                // 1. Create Default Tenant
+                $stmt = $pdo->prepare("INSERT INTO tenants (family_name) VALUES (?)");
+                $stmt->execute([$name . "'s Family"]);
+                $tenantId = $pdo->lastInsertId();
+
+                // 2. Create Admin User linked to Tenant
                 $hashed = password_hash($pass, PASSWORD_DEFAULT);
-                $stmt = $pdo->prepare("INSERT INTO users (name, email, password) VALUES (?, ?, ?)");
-                $stmt->execute([$name, $email, $hashed]);
+                $stmt = $pdo->prepare("INSERT INTO users (tenant_id, name, email, password, role, permission) VALUES (?, ?, ?, ?, 'family_admin', 'edit')");
+                $stmt->execute([$tenantId, $name, $email, $hashed]);
 
                 $success = "Installation Complete!";
                 $step = 5;

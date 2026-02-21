@@ -12,8 +12,8 @@ if (!$bank_id) {
 }
 
 // Fetch bank
-$stmt = $pdo->prepare("SELECT * FROM banks WHERE id = ? AND user_id = ?");
-$stmt->execute([$bank_id, $_SESSION['user_id']]);
+$stmt = $pdo->prepare("SELECT * FROM banks WHERE id = ? AND tenant_id = ?");
+$stmt->execute([$bank_id, $_SESSION['tenant_id']]);
 $bank = $stmt->fetch();
 
 if (!$bank) {
@@ -108,20 +108,17 @@ if (!$bank) {
                     </div>
                 </div>
 
-                <div class="d-grid gap-2 border-top pt-4 mt-2">
-                    <button type="submit" class="btn btn-primary py-3 fw-bold">
-                        <i class="fa-solid fa-save me-2"></i> Update Bank Account
-                    </button>
-                    <form action="bank_actions.php" method="POST" class="d-grid">
-                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                        <input type="hidden" name="action" value="delete">
-                        <input type="hidden" name="id" value="<?php echo $bank['id']; ?>">
-                        <button type="submit" class="btn btn-outline-danger py-2"
-                                onclick="return confirmSubmit(this, 'Are you sure you want to delete the <?php echo addslashes(htmlspecialchars($bank['bank_name'])); ?> account?');">
-                            <i class="fa-solid fa-trash me-2"></i> Delete Bank Account
-                        </button>
-                    </form>
                 </div>
+            </form>
+            <form action="bank_actions.php" method="POST" class="d-grid mt-2">
+                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="id" value="<?php echo $bank['id']; ?>">
+                <button type="submit" class="btn btn-outline-danger py-2"
+                        onclick="return confirmSubmit(this, 'Are you sure you want to delete the <?php echo addslashes(htmlspecialchars($bank['bank_name'])); ?> account?');">
+                    <i class="fa-solid fa-trash me-2"></i> Delete Bank Account
+                </button>
+            </form>
             </form>
         </div>
     </div>

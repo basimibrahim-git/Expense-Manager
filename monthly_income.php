@@ -18,8 +18,8 @@ $page_num = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT) ?: 1;
 $offset = ($page_num - 1) * $items_per_page;
 
 // Build query with filters
-$count_query = "SELECT COUNT(*) FROM income WHERE user_id = :user_id AND MONTH(income_date) = :month AND YEAR(income_date) = :year";
-$params = ['user_id' => $_SESSION['user_id'], 'month' => $month, 'year' => $year];
+$count_query = "SELECT COUNT(*) FROM income WHERE tenant_id = :tenant_id AND MONTH(income_date) = :month AND YEAR(income_date) = :year";
+$params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];
 
 if ($category_filter) {
     $count_query .= " AND category = :cat";
@@ -124,10 +124,12 @@ $total_income = $sum_stmt->fetchColumn() ?: 0;
                 class="btn btn-outline-secondary btn-sm flex-grow-1">
                 <i class="fa-solid fa-file-csv me-1"></i> Export
             </a>
-            <a href="add_income.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>"
-                class="btn btn-success btn-sm flex-grow-1">
-                <i class="fa-solid fa-plus me-1"></i> Add
-            </a>
+            <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                <a href="add_income.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>"
+                    class="btn btn-success btn-sm flex-grow-1">
+                    <i class="fa-solid fa-plus me-1"></i> Add
+                </a>
+            <?php endif; ?>
         </div>
     </form>
 
@@ -184,17 +186,21 @@ $total_income = $sum_stmt->fetchColumn() ?: 0;
                                     <?php echo number_format($inc['amount'], 2); ?></span>
                             </td>
                             <td class="text-end pe-3">
-                                <a href="edit_income.php?id=<?php echo $inc['id']; ?>" class="btn btn-sm text-muted me-1"
-                                    title="Edit"><i class="fa-solid fa-pen"></i></a>
-                                <form action="income_actions.php" method="POST" class="d-inline"
-                                    onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($inc['description'])); ?> - AED <?php echo number_format($inc['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($inc['income_date'])); ?>?');">
-                                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                                    <input type="hidden" name="action" value="delete_income">
-                                    <input type="hidden" name="id" value="<?php echo $inc['id']; ?>">
-                                    <button type="submit" class="btn btn-sm text-danger border-0 p-0" title="Delete">
-                                        <i class="fa-solid fa-trash"></i>
-                                    </button>
-                                </form>
+                                <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                                    <a href="edit_income.php?id=<?php echo $inc['id']; ?>" class="btn btn-sm text-muted me-1"
+                                        title="Edit"><i class="fa-solid fa-pen"></i></a>
+                                    <form action="income_actions.php" method="POST" class="d-inline"
+                                        onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($inc['description'])); ?> - AED <?php echo number_format($inc['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($inc['income_date'])); ?>?');">
+                                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                        <input type="hidden" name="action" value="delete_income">
+                                        <input type="hidden" name="id" value="<?php echo $inc['id']; ?>">
+                                        <button type="submit" class="btn btn-sm text-danger border-0 p-0" title="Delete">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <i class="fa-solid fa-lock text-muted small" title="Read Only"></i>
+                                <?php endif; ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -237,40 +243,42 @@ $total_income = $sum_stmt->fetchColumn() ?: 0;
 <?php require_once 'includes/footer.php'; ?>
 
 <!-- Bulk Action Floating Bar -->
-<div id="bulkActionBar"
-    class="position-fixed bottom-0 start-50 translate-middle-x mb-4 shadow-lg glass-panel p-3 d-none animate__animated animate__fadeInUp"
-    style="z-index: 1050; border-radius: 50px; min-width: 300px;">
-    <div class="d-flex align-items-center justify-content-between gap-4 px-2">
-        <div class="text-nowrap fw-bold">
-            <span id="selectedCount">0</span> Selected
-        </div>
-        <div class="d-flex gap-2">
-            <div class="dropdown">
-                <button class="btn btn-outline-success btn-sm rounded-pill dropdown-toggle" type="button"
-                    data-bs-toggle="dropdown">
-                    Change Category
-                </button>
-                <ul class="dropdown-menu border-0 shadow">
-                    <?php foreach ($income_categories as $cat): ?>
-                        <li><a class="dropdown-item" href="#"
-                                onclick="bulkAction('change_category', '<?php echo $cat; ?>')"><?php echo $cat; ?></a></li>
-                    <?php endforeach; ?>
-                </ul>
+<?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+    <div id="bulkActionBar"
+        class="position-fixed bottom-0 start-50 translate-middle-x mb-4 shadow-lg glass-panel p-3 d-none animate__animated animate__fadeInUp"
+        style="z-index: 1050; border-radius: 50px; min-width: 300px;">
+        <div class="d-flex align-items-center justify-content-between gap-4 px-2">
+            <div class="text-nowrap fw-bold">
+                <span id="selectedCount">0</span> Selected
             </div>
-            <button class="btn btn-danger btn-sm rounded-pill px-3" onclick="bulkAction('delete')">
-                <i class="fa-solid fa-trash me-1"></i> Delete
-            </button>
-            <button class="btn btn-link btn-sm text-muted" onclick="deselectAll()">Cancel</button>
+            <div class="d-flex gap-2">
+                <div class="dropdown">
+                    <button class="btn btn-outline-success btn-sm rounded-pill dropdown-toggle" type="button"
+                        data-bs-toggle="dropdown">
+                        Change Category
+                    </button>
+                    <ul class="dropdown-menu border-0 shadow">
+                        <?php foreach ($income_categories as $cat): ?>
+                            <li><a class="dropdown-item" href="#"
+                                    onclick="bulkAction('change_category', '<?php echo $cat; ?>')"><?php echo $cat; ?></a></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+                <button class="btn btn-danger btn-sm rounded-pill px-3" onclick="bulkAction('delete')">
+                    <i class="fa-solid fa-trash me-1"></i> Delete
+                </button>
+                <button class="btn btn-link btn-sm text-muted" onclick="deselectAll()">Cancel</button>
+            </div>
         </div>
     </div>
-</div>
 
-<form id="bulkActionForm" action="income_actions.php" method="POST" class="d-none">
-    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-    <input type="hidden" name="action" id="bulkActionType">
-    <input type="hidden" name="category" id="bulkActionCategory">
-    <div id="bulkActionIds"></div>
-</form>
+    <form id="bulkActionForm" action="income_actions.php" method="POST" class="d-none">
+        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+        <input type="hidden" name="action" id="bulkActionType">
+        <input type="hidden" name="category" id="bulkActionCategory">
+        <div id="bulkActionIds"></div>
+    </form>
+<?php endif; ?>
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {

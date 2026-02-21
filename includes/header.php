@@ -44,13 +44,18 @@ header('Permissions-Policy: geolocation=(), camera=(), microphone=()');
         // Dynamic Theme Logic
         function applyTheme() {
             const savedTheme = localStorage.getItem('userTheme') || 'theme-afternoon';
+            // We now strictly use theme-afternoon (Light) and theme-night (Dark)
             document.body.classList.remove('theme-morning', 'theme-afternoon', 'theme-night');
-            document.body.classList.add(savedTheme);
+
+            let activeTheme = savedTheme;
+            if (activeTheme === 'theme-morning') activeTheme = 'theme-afternoon'; // Upgrade legacy users
+
+            document.body.classList.add(activeTheme);
 
             // Update toggle button text if exists
             const themeBtn = document.getElementById('themeToggleBtn');
             if (themeBtn) {
-                if (savedTheme === 'theme-night') {
+                if (activeTheme === 'theme-night') {
                     themeBtn.innerHTML = '<i class="fa-solid fa-sun me-2"></i> Light Mode';
                 } else {
                     themeBtn.innerHTML = '<i class="fa-solid fa-moon me-2"></i> Dark Mode';

@@ -6,14 +6,20 @@ require_once 'config.php';
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
+    // Permission Check
+    if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+        header("Location: monthly_sadaqa.php?month=" . ($_POST['month'] ?? date('n')) . "&year=" . ($_POST['year'] ?? date('Y')) . "&error=Unauthorized: Read-only access");
+        exit();
+    }
+
     if ($_POST['action'] == 'add_sadaqa') {
         $title = $_POST['title'];
         $amount = floatval($_POST['amount']);
         $date = $_POST['sadaqa_date'];
 
         if ($amount > 0 && !empty($title) && !empty($date)) {
-            $stmt = $pdo->prepare("INSERT INTO sadaqa_tracker (user_id, title, amount, sadaqa_date) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$_SESSION['user_id'], $title, $amount, $date]);
+            $stmt = $pdo->prepare("INSERT INTO sadaqa_tracker (user_id, tenant_id, title, amount, sadaqa_date) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $title, $amount, $date]);
 
             $month = date('n', strtotime($date));
             $year = date('Y', strtotime($date));
@@ -23,8 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     } elseif ($_POST['action'] == 'delete_sadaqa') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
         if ($id) {
-            $stmt = $pdo->prepare("DELETE FROM sadaqa_tracker WHERE id = ? AND user_id = ?");
-            $stmt->execute([$id, $_SESSION['user_id']]);
+            $stmt = $pdo->prepare("DELETE FROM sadaqa_tracker WHERE id = ? AND tenant_id = ?");
+            $stmt->execute([$id, $_SESSION['tenant_id']]);
         }
 
         // Fixed Open Redirect: Redirect to known parent page
@@ -35,8 +41,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $ids = array_map('intval', $_POST['ids']);
             if (!empty($ids)) {
                 $placeholders = str_repeat('?,', count($ids) - 1) . '?';
-                $stmt = $pdo->prepare("DELETE FROM sadaqa_tracker WHERE id IN ($placeholders) AND user_id = ?");
-                $stmt->execute(array_merge($ids, [$_SESSION['user_id']]));
+                $stmt = $pdo->prepare("DELETE FROM sadaqa_tracker WHERE id IN ($placeholders) AND tenant_id = ?");
+                $stmt->execute(array_merge($ids, [$_SESSION['tenant_id']]));
             }
         }
         header("Location: monthly_sadaqa.php?month=$month&year=$year&success=Bulk Deleted");
@@ -68,8 +74,8 @@ if ($next_month > 12) {
 }
 
 // Fetch Records
-$stmt = $pdo->prepare("SELECT * FROM sadaqa_tracker WHERE user_id = ? AND MONTH(sadaqa_date) = ? AND YEAR(sadaqa_date) = ? ORDER BY sadaqa_date DESC");
-$stmt->execute([$_SESSION['user_id'], $month, $year]);
+$stmt = $pdo->prepare("SELECT * FROM sadaqa_tracker WHERE tenant_id = ? AND MONTH(sadaqa_date) = ? AND YEAR(sadaqa_date) = ? ORDER BY sadaqa_date DESC");
+$stmt->execute([$_SESSION['tenant_id'], $month, $year]);
 $records = $stmt->fetchAll();
 
 // Calculate Total
@@ -113,9 +119,11 @@ foreach ($records as $r) {
             class="btn btn-outline-secondary">
             <i class="fa-solid fa-file-csv me-1"></i> Export
         </a>
-        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addSadaqaModal">
-            <i class="fa-solid fa-plus me-2"></i> Add Sadaqa
-        </button>
+        <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addSadaqaModal">
+                <i class="fa-solid fa-plus me-2"></i> Add Sadaqa
+            </button>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -135,7 +143,9 @@ foreach ($records as $r) {
                 <thead class="bg-light">
                     <tr>
                         <th class="ps-4 py-3" style="width: 40px;">
-                            <input type="checkbox" class="form-check-input" id="selectAll">
+                            <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                                <input type="checkbox" class="form-check-input" id="selectAll">
+                            <?php endif; ?>
                         </th>
                         <th class="py-3">Date</th>
                         <th>Description</th>
@@ -147,7 +157,9 @@ foreach ($records as $r) {
                     <?php foreach ($records as $r): ?>
                         <tr>
                             <td class="ps-4">
-                                <input type="checkbox" class="form-check-input row-checkbox" value="<?php echo $r['id']; ?>">
+                                <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                                    <input type="checkbox" class="form-check-input row-checkbox" value="<?php echo $r['id']; ?>">
+                                <?php endif; ?>
                             </td>
                             <td class="fw-bold">
                                 <?php echo htmlspecialchars(date('d', strtotime($r['sadaqa_date']))); ?>
@@ -162,11 +174,15 @@ foreach ($records as $r) {
                                 AED <span class="blur-sensitive"><?php echo number_format($r['amount'], 2); ?></span>
                             </td>
                             <td class="text-end pe-3">
-                                <button type="button" class="btn btn-sm text-danger"
-                                    onclick="confirmDeleteSadaqa(<?php echo $r['id']; ?>, '<?php echo addslashes(htmlspecialchars($r['title'])); ?>', '<?php echo number_format($r['amount'], 2); ?>')"
-                                    title="Delete">
-                                    <i class="fa-solid fa-trash"></i>
-                                </button>
+                                <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                                    <button type="button" class="btn btn-sm text-danger"
+                                        onclick="confirmDeleteSadaqa(<?php echo $r['id']; ?>, '<?php echo addslashes(htmlspecialchars($r['title'])); ?>', '<?php echo number_format($r['amount'], 2); ?>')"
+                                        title="Delete">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                <?php else: ?>
+                                    <i class="fa-solid fa-lock text-muted small" title="Read Only"></i>
+                                <?php endif; ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>

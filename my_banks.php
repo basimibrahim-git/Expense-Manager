@@ -6,8 +6,8 @@ require_once 'includes/sidebar.php';
 
 // Fetch banks
 try {
-    $stmt = $pdo->prepare("SELECT * FROM banks WHERE user_id = :user_id ORDER BY is_default DESC, bank_name ASC");
-    $stmt->execute(['user_id' => $_SESSION['user_id']]);
+    $stmt = $pdo->prepare("SELECT * FROM banks WHERE tenant_id = :tenant_id ORDER BY is_default DESC, bank_name ASC");
+    $stmt->execute(['tenant_id' => $_SESSION['tenant_id']]);
     $banks = $stmt->fetchAll();
 } catch (PDOException $e) {
     $banks = [];
@@ -17,8 +17,8 @@ try {
 // Count cards per bank
 $card_counts = [];
 try {
-    $cstmt = $pdo->prepare("SELECT bank_id, COUNT(*) as cnt FROM cards WHERE user_id = ? AND bank_id IS NOT NULL GROUP BY bank_id");
-    $cstmt->execute([$_SESSION['user_id']]);
+    $cstmt = $pdo->prepare("SELECT bank_id, COUNT(*) as cnt FROM cards WHERE tenant_id = ? AND bank_id IS NOT NULL GROUP BY bank_id");
+    $cstmt->execute([$_SESSION['tenant_id']]);
     foreach ($cstmt->fetchAll() as $row) {
         $card_counts[$row['bank_id']] = $row['cnt'];
     }
@@ -28,9 +28,11 @@ try {
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 fw-bold mb-0">My Bank Accounts</h1>
-    <a href="add_bank.php" class="btn btn-primary">
-        <i class="fa-solid fa-plus me-2"></i> Add Bank
-    </a>
+    <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+        <a href="add_bank.php" class="btn btn-primary">
+            <i class="fa-solid fa-plus me-2"></i> Add Bank
+        </a>
+    <?php endif; ?>
 </div>
 
 <?php if (isset($_GET['success'])): ?>
@@ -100,19 +102,23 @@ try {
                             <?php echo $card_counts[$bank['id']] ?? 0; ?> linked card(s)
                         </p>
                     </div>
-                    <div class="card-footer bg-light border-0 d-flex justify-content-between">
-                        <a href="edit_bank.php?id=<?php echo $bank['id']; ?>" class="btn btn-sm btn-outline-primary">
-                            <i class="fa-solid fa-pen me-1"></i> Edit
-                        </a>
-                        <form action="bank_actions.php" method="POST" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                            <input type="hidden" name="action" value="delete">
-                            <input type="hidden" name="id" value="<?php echo $bank['id']; ?>">
-                            <button type="submit" class="btn btn-sm btn-outline-danger"
-                                onclick="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($bank['bank_name'])); ?> account? (This permenently unlinks all associated cards)');">
-                                <i class="fa-solid fa-trash"></i>
-                            </button>
-                        </form>
+                    <div class="card-footer bg-light border-0 d-flex justify-content-between align-items-center">
+                        <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                            <a href="edit_bank.php?id=<?php echo $bank['id']; ?>" class="btn btn-sm btn-outline-primary">
+                                <i class="fa-solid fa-pen me-1"></i> Edit
+                            </a>
+                            <form action="bank_actions.php" method="POST" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="id" value="<?php echo $bank['id']; ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-danger"
+                                    onclick="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($bank['bank_name'])); ?> account? (This permenently unlinks all associated cards)');">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </form>
+                        <?php else: ?>
+                            <span class="text-muted small"><i class="fa-solid fa-lock me-1"></i> Read Only</span>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>

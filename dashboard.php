@@ -15,13 +15,13 @@ $currency_label = $base_currency;
 
 // 1. Fetch Summary Stats (Current Month)
 // Total Income
-$stmt = $pdo->prepare("SELECT SUM(amount) FROM income WHERE user_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ?");
-$stmt->execute([$user_id, $curr_month, $curr_year]);
+$stmt = $pdo->prepare("SELECT SUM(amount) FROM income WHERE tenant_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ?");
+$stmt->execute([$_SESSION['tenant_id'], $curr_month, $curr_year]);
 $income_now = $stmt->fetchColumn() ?: 0;
 
 // Total Expenses
-$stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE user_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
-$stmt->execute([$user_id, $curr_month, $curr_year]);
+$stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
+$stmt->execute([$_SESSION['tenant_id'], $curr_month, $curr_year]);
 $expense_now = $stmt->fetchColumn() ?: 0;
 
 // Total Net Worth (Latest Balances)
@@ -35,21 +35,21 @@ $stmt = $pdo->prepare("
         END
     )
     FROM bank_balances b1
-    WHERE user_id = ? 
+    WHERE tenant_id = ? 
     AND bank_name != 'Opening Balance Adjustment'
-    AND id = (SELECT MAX(id) FROM bank_balances b2 WHERE b2.bank_name = b1.bank_name AND b2.user_id = b1.user_id)
+    AND id = (SELECT MAX(id) FROM bank_balances b2 WHERE b2.bank_name = b1.bank_name AND b2.tenant_id = b1.tenant_id)
 ");
-$stmt->execute([$user_id]);
+$stmt->execute([$_SESSION['tenant_id']]);
 $net_worth = $stmt->fetchColumn() ?: 0;
 
 // Total Credit Limit
-$stmt = $pdo->prepare("SELECT SUM(limit_amount) FROM cards WHERE user_id = ?");
-$stmt->execute([$user_id]);
+$stmt = $pdo->prepare("SELECT SUM(limit_amount) FROM cards WHERE tenant_id = ?");
+$stmt->execute([$_SESSION['tenant_id']]);
 $total_limit = $stmt->fetchColumn() ?: 0;
 
 // Credit Utilization Logic
-$stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE user_id = ? AND payment_method = 'Card' AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
-$stmt->execute([$user_id, $curr_month, $curr_year]);
+$stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND payment_method = 'Card' AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
+$stmt->execute([$_SESSION['tenant_id'], $curr_month, $curr_year]);
 $total_card_spend = $stmt->fetchColumn() ?: 0;
 
 $utilization = ($total_limit > 0) ? ($total_card_spend / $total_limit) * 100 : 0;
@@ -63,15 +63,15 @@ $last_year_net_worth = 0;
 $stmt = $pdo->prepare("
     SELECT SUM(CASE WHEN currency='INR' THEN amount / 24 ELSE amount END)
     FROM bank_balances b1
-    WHERE user_id = ?
+    WHERE tenant_id = ?
     AND id = (
         SELECT MAX(id) FROM bank_balances b2 
         WHERE b2.bank_name = b1.bank_name 
-        AND b2.user_id = b1.user_id
+        AND b2.tenant_id = b1.tenant_id
         AND b2.balance_date <= LAST_DAY(DATE_SUB(NOW(), INTERVAL 1 YEAR))
     )
 ");
-$stmt->execute([$user_id]);
+$stmt->execute([$_SESSION['tenant_id']]);
 $last_year_net_worth = $stmt->fetchColumn() ?: 0;
 
 $wealth_growth_abs = $net_worth - $last_year_net_worth;
@@ -88,15 +88,15 @@ for ($i = 11; $i >= 0; $i--) {
     $stmt = $pdo->prepare("
         SELECT SUM(CASE WHEN currency='INR' THEN amount / 24 ELSE amount END)
         FROM bank_balances b1
-        WHERE user_id = ?
+        WHERE tenant_id = ?
         AND id = (
             SELECT MAX(id) FROM bank_balances b2 
             WHERE b2.bank_name = b1.bank_name 
-            AND b2.user_id = b1.user_id
+            AND b2.tenant_id = b1.tenant_id
             AND b2.balance_date <= ?
         )
     ");
-    $stmt->execute([$user_id, $month_end_date]);
+    $stmt->execute([$_SESSION['tenant_id'], $month_end_date]);
     $wealth_data[] = $stmt->fetchColumn() ?: 0;
 }
 
@@ -112,30 +112,30 @@ for ($i = 5; $i >= 0; $i--) {
     $months[] = date('M', strtotime("-$i months"));
 
     // Income
-    $stmt = $pdo->prepare("SELECT SUM(amount) FROM income WHERE user_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ?");
-    $stmt->execute([$user_id, $m, $y]);
+    $stmt = $pdo->prepare("SELECT SUM(amount) FROM income WHERE tenant_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ?");
+    $stmt->execute([$_SESSION['tenant_id'], $m, $y]);
     $income_data[] = $stmt->fetchColumn() ?: 0;
 
     // Expense
-    $stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE user_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
-    $stmt->execute([$user_id, $m, $y]);
+    $stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
+    $stmt->execute([$_SESSION['tenant_id'], $m, $y]);
     $expense_data[] = $stmt->fetchColumn() ?: 0;
 }
 
 // 3. Category Data (Current Month)
-$stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE user_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category");
-$stmt->execute([$user_id, $curr_month, $curr_year]);
+$stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category");
+$stmt->execute([$_SESSION['tenant_id'], $curr_month, $curr_year]);
 $cat_results = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 $cat_labels = array_keys($cat_results);
 $cat_values = array_values($cat_results);
 
 // 5. ROI & Anatomy Stats
-$stmt = $pdo->prepare("SELECT SUM(cashback_earned) FROM expenses WHERE user_id = ? AND YEAR(expense_date) = ?");
-$stmt->execute([$user_id, $curr_year]);
+$stmt = $pdo->prepare("SELECT SUM(cashback_earned) FROM expenses WHERE tenant_id = ? AND YEAR(expense_date) = ?");
+$stmt->execute([$_SESSION['tenant_id'], $curr_year]);
 $total_cashback = $stmt->fetchColumn() ?: 0;
 
-$stmt = $pdo->prepare("SELECT is_fixed, SUM(amount) as total FROM expenses WHERE user_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY is_fixed");
-$stmt->execute([$user_id, $curr_month, $curr_year]);
+$stmt = $pdo->prepare("SELECT is_fixed, SUM(amount) as total FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY is_fixed");
+$stmt->execute([$_SESSION['tenant_id'], $curr_month, $curr_year]);
 $anatomy = $stmt->fetchAll(PDO::FETCH_KEY_PAIR); // [0 => 'Discretionary', 1 => 'Fixed']
 
 $fixed_cost = $anatomy[1] ?? 0;
@@ -146,15 +146,15 @@ $fixed_pct = ($total_cost > 0) ? ($fixed_cost / $total_cost) * 100 : 0;
 
 // 6. Emergency Runway (Avg Expense Last 3 Months)
 // Note: We use 3 months prior to current month for stability
-$stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE user_id = ? AND expense_date BETWEEN DATE_SUB(NOW(), INTERVAL 3 MONTH) AND NOW()");
-$stmt->execute([$user_id]);
+$stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND expense_date BETWEEN DATE_SUB(NOW(), INTERVAL 3 MONTH) AND NOW()");
+$stmt->execute([$_SESSION['tenant_id']]);
 $last_3m_spend = $stmt->fetchColumn() ?: 0;
 $avg_monthly_spend = $last_3m_spend / 3;
 $runway_months = ($avg_monthly_spend > 0) ? $net_worth / $avg_monthly_spend : 0;
 
 // Fetch Monthly Budgets for Dashboard Overview
-$budget_stmt = $pdo->prepare("SELECT category, amount FROM budgets WHERE user_id = ? AND month = ? AND year = ?");
-$budget_stmt->execute([$user_id, $curr_month, $curr_year]);
+$budget_stmt = $pdo->prepare("SELECT category, amount FROM budgets WHERE tenant_id = ? AND month = ? AND year = ?");
+$budget_stmt->execute([$_SESSION['tenant_id'], $curr_month, $curr_year]);
 $dash_budgets = $budget_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 $total_budgeted = array_sum($dash_budgets);
 $budget_utilization = ($total_budgeted > 0) ? ($expense_now / $total_budgeted) * 100 : 0;
@@ -162,8 +162,8 @@ $budget_utilization = ($total_budgeted > 0) ? ($expense_now / $total_budgeted) *
 // 7. Lifestyle Creep (YoY Category Comparison)
 $last_year_month = date('n', strtotime('-1 year'));
 $last_year_year = date('Y', strtotime('-1 year'));
-$stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE user_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category");
-$stmt->execute([$user_id, $last_year_month, $last_year_year]);
+$stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category");
+$stmt->execute([$_SESSION['tenant_id'], $last_year_month, $last_year_year]);
 $last_year_cats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
 $creep_alerts = [];
@@ -184,13 +184,13 @@ foreach ($cat_results as $cat => $amount) {
 
 // 8. Cash Flow Projection (Next 30 Days)
 // Fetch Recurring Income
-$stmt = $pdo->prepare("SELECT amount, recurrence_day FROM income WHERE user_id = ? AND is_recurring = 1");
-$stmt->execute([$user_id]);
+$stmt = $pdo->prepare("SELECT amount, recurrence_day FROM income WHERE tenant_id = ? AND is_recurring = 1");
+$stmt->execute([$_SESSION['tenant_id']]);
 $recurring_incomes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch Recurring Expenses (Subscriptions)
-$stmt = $pdo->prepare("SELECT amount, DAY(expense_date) as day FROM expenses WHERE user_id = ? AND is_subscription = 1");
-$stmt->execute([$user_id]);
+$stmt = $pdo->prepare("SELECT amount, DAY(expense_date) as day FROM expenses WHERE tenant_id = ? AND is_subscription = 1");
+$stmt->execute([$_SESSION['tenant_id']]);
 $recurring_expenses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $projected_dates = [];
@@ -222,13 +222,13 @@ for ($i = 0; $i <= 30; $i++) {
 
 // 8.5 PHASE 4: ROI & Liquidity (Restored)
 // Fetch Cards for Smart Engine
-$stmt = $pdo->prepare("SELECT * FROM cards WHERE user_id = ?");
-$stmt->execute([$user_id]);
+$stmt = $pdo->prepare("SELECT * FROM cards WHERE tenant_id = ?");
+$stmt->execute([$_SESSION['tenant_id']]);
 $roi_cards = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // True Liquidity: Net Worth - Unbilled Card Spends
-$stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE user_id = ? AND payment_method = 'Card' AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
-$stmt->execute([$user_id, $curr_month, $curr_year]);
+$stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND payment_method = 'Card' AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
+$stmt->execute([$_SESSION['tenant_id'], $curr_month, $curr_year]);
 $unbilled_card_spend = $stmt->fetchColumn() ?: 0; // Approx using current month spend
 $true_liquidity = $net_worth - $unbilled_card_spend;
 
@@ -236,10 +236,10 @@ $true_liquidity = $net_worth - $unbilled_card_spend;
 // Estimate Monthly Fixed Cost (Avg of last 3 months fixed spend)
 $stmt = $pdo->prepare("
     SELECT SUM(amount) FROM expenses 
-    WHERE user_id = ? AND is_fixed = 1 
+    WHERE tenant_id = ? AND is_fixed = 1 
     AND expense_date BETWEEN DATE_SUB(NOW(), INTERVAL 3 MONTH) AND NOW()
 ");
-$stmt->execute([$user_id]);
+$stmt->execute([$_SESSION['tenant_id']]);
 $avg_fixed_cost = ($stmt->fetchColumn() ?: 0) / 3;
 $remaining_fixed = max(0, $avg_fixed_cost - $fixed_cost);
 $savings_target = $income_now * 0.20; // 20% Goal
@@ -247,8 +247,8 @@ $savings_target = $income_now * 0.20; // 20% Goal
 // 9.5 PHASE 8: Sinking Funds Deduction
 // Calculate how much we need to save THIS MONTH for all active goals
 $total_goal_contribution = 0;
-$stmt = $pdo->prepare("SELECT * FROM sinking_funds WHERE user_id = ? AND current_saved < target_amount AND target_date > NOW()");
-$stmt->execute([$user_id]);
+$stmt = $pdo->prepare("SELECT * FROM sinking_funds WHERE tenant_id = ? AND current_saved < target_amount AND target_date > NOW()");
+$stmt->execute([$_SESSION['tenant_id']]);
 $active_goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 foreach ($active_goals as $goal) {
@@ -274,10 +274,10 @@ $stmt = $pdo->prepare("
     SELECT e.amount, e.category, c.card_name, c.id as used_card_id
     FROM expenses e
     JOIN cards c ON e.card_id = c.id
-    WHERE e.user_id = ? AND e.payment_method = 'Card'
+    WHERE e.tenant_id = ? AND e.payment_method = 'Card'
     ORDER BY e.expense_date DESC LIMIT 5
 ");
-$stmt->execute([$user_id]);
+$stmt->execute([$_SESSION['tenant_id']]);
 $recent_card_txns = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 foreach ($recent_card_txns as $txn) {
@@ -339,42 +339,72 @@ for ($i = 11; $i >= 0; $i--) {
     $interest_months[] = date('M Y', strtotime("-$i months"));
 
     // Interest Accrued (Sum of positive amounts)
-    $stmt = $pdo->prepare("SELECT SUM(amount) FROM interest_tracker WHERE user_id = ? AND amount > 0 AND MONTH(interest_date) = ? AND YEAR(interest_date) = ?");
-    $stmt->execute([$user_id, $m, $y]);
+    $stmt = $pdo->prepare("SELECT SUM(amount) FROM interest_tracker WHERE tenant_id = ? AND amount > 0 AND MONTH(interest_date) = ? AND YEAR(interest_date) = ?");
+    $stmt->execute([$_SESSION['tenant_id'], $m, $y]);
     $interest_accrued_data[] = $stmt->fetchColumn() ?: 0;
 
     // Payments Made (Sum of negative amounts -> convert to positive for chart)
-    $stmt = $pdo->prepare("SELECT SUM(ABS(amount)) FROM interest_tracker WHERE user_id = ? AND amount < 0 AND MONTH(interest_date) = ? AND YEAR(interest_date) = ?");
-    $stmt->execute([$user_id, $m, $y]);
+    $stmt = $pdo->prepare("SELECT SUM(ABS(amount)) FROM interest_tracker WHERE tenant_id = ? AND amount < 0 AND MONTH(interest_date) = ? AND YEAR(interest_date) = ?");
+    $stmt->execute([$_SESSION['tenant_id'], $m, $y]);
     $interest_paid_data[] = $stmt->fetchColumn() ?: 0;
 }
 
-// 12. Upcoming Bills (Subscriptions coming soon)
+// 12. Upcoming Bills & Pending Auto-Drafts
 $upcoming_bills = [];
-$stmt = $pdo->prepare("SELECT * FROM expenses WHERE user_id = ? AND is_subscription = 1");
-$stmt->execute([$user_id]);
-$all_subs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$curr_month_logged = $pdo->prepare("SELECT description FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
+$curr_month_logged->execute([$_SESSION['tenant_id'], $curr_month, $curr_year]);
+$logged_subs = $curr_month_logged->fetchAll(PDO::FETCH_COLUMN);
 
-foreach ($all_subs as $sb) {
+// Fetch Unique Subscription Templates
+$stmt = $pdo->prepare("
+    SELECT e1.* 
+    FROM expenses e1
+    JOIN (
+        SELECT MAX(id) as max_id 
+        FROM expenses 
+        WHERE tenant_id = ? AND is_subscription = 1 
+        GROUP BY description
+    ) e2 ON e1.id = e2.max_id
+");
+$stmt->execute([$_SESSION['tenant_id']]);
+$templates = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+foreach ($templates as $sb) {
     $day = date('d', strtotime($sb['expense_date']));
+    $is_logged = in_array($sb['description'], $logged_subs);
+
+    // Calculate next renewal for "Upcoming" list
     $target_renewal = date('Y-m-') . $day;
     if (strtotime($target_renewal) < time()) {
         $target_renewal = date('Y-m-', strtotime('+1 month')) . $day;
     }
-
     $days_to_bill = ceil((strtotime($target_renewal) - time()) / 86400);
-    if ($days_to_bill >= 0 && $days_to_bill <= 7) { // Only show bills in next 7 days
-        $upcoming_bills[] = [
-            'name' => $sb['description'],
-            'amount' => $sb['amount'],
-            'due_date' => $target_renewal,
-            'days_left' => $days_to_bill
-        ];
+
+    // Alert Logic: 
+    // 1. If not logged this month AND (due in 7 days OR overdue)
+    $is_due_this_month = true; // Subscriptions are monthly
+    if (!$is_logged) {
+        $is_overdue = date('d') >= $day;
+        if ($is_overdue || ($days_to_bill >= 0 && $days_to_bill <= 7)) {
+            $upcoming_bills[] = [
+                'id' => $sb['id'],
+                'name' => $sb['description'],
+                'amount' => $sb['amount'],
+                'due_date' => $target_renewal,
+                'days_left' => $days_to_bill,
+                'is_overdue' => $is_overdue,
+                'status' => $is_overdue ? 'Overdue' : 'Due Soon'
+            ];
+        }
     }
 }
-// Sort by days left
+// Sort by urgency: Overdue first, then by days left
 usort($upcoming_bills, function ($a, $b) {
-    return $a['days_left'] <=> $b['days_left']; });
+    if ($a['is_overdue'] != $b['is_overdue']) {
+        return $b['is_overdue'] <=> $a['is_overdue'];
+    }
+    return $a['days_left'] <=> $b['days_left'];
+});
 ?>
 
 <!-- Header -->
@@ -674,15 +704,36 @@ usort($upcoming_bills, function ($a, $b) {
                 <div class="row g-3">
                     <?php foreach ($upcoming_bills as $bill): ?>
                         <div class="col-md-4 col-lg-3">
-                            <div class="p-3 rounded-4 bg-light border-0 shadow-sm">
+                            <div class="p-3 rounded-4 bg-light border-0 shadow-sm h-100 d-flex flex-column">
                                 <div class="d-flex justify-content-between mb-2">
-                                    <span class="fw-bold"><?php echo htmlspecialchars($bill['name']); ?></span>
-                                    <span class="text-danger small fw-bold">Due in <?php echo $bill['days_left']; ?>d</span>
+                                    <span class="fw-bold text-truncate me-2" title="<?php echo htmlspecialchars($bill['name']); ?>">
+                                        <?php echo htmlspecialchars($bill['name']); ?>
+                                    </span>
+                                    <span class="text-<?php echo $bill['is_overdue'] ? 'danger' : 'warning'; ?> small fw-bold text-nowrap">
+                                        <?php echo $bill['status']; ?>
+                                    </span>
                                 </div>
-                                <div class="h5 mb-0 fw-bold text-dark">AED <?php echo number_format($bill['amount'], 2); ?>
+                                <div class="h5 mb-2 fw-bold text-dark">
+                                    AED <?php echo number_format($bill['amount'], 2); ?>
                                 </div>
-                                <div class="x-small text-muted mt-1">
-                                    <?php echo date('D, j M Y', strtotime($bill['due_date'])); ?></div>
+                                <div class="x-small text-muted mb-3">
+                                    <?php echo date('D, j M Y', strtotime($bill['due_date'])); ?>
+                                </div>
+
+                                <div class="mt-auto pt-2 border-top">
+                                    <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                                        <form action="expense_actions.php" method="POST">
+                                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                            <input type="hidden" name="action" value="log_subscription">
+                                            <input type="hidden" name="template_id" value="<?php echo $bill['id']; ?>">
+                                            <button type="submit" class="btn btn-sm btn-success w-100 rounded-pill fw-bold">
+                                                Log & Pay
+                                            </button>
+                                        </form>
+                                    <?php else: ?>
+                                        <button class="btn btn-sm btn-light w-100 rounded-pill disabled small">Read Only</button>
+                                    <?php endif; ?>
+                                </div>
                             </div>
                         </div>
                     <?php endforeach; ?>
