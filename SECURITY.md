@@ -6,7 +6,11 @@ We actively monitor and provide security updates for the following versions of *
 
 | Version | Supported          |
 | ------- | ------------------ |
+<<<<<<< HEAD
 | 3.1.x   | :white_check_mark: |
+=======
+| 3.0.x   | :white_check_mark: |
+>>>>>>> 6be4e7069e3e3f9313aceb7dd9058fa47675e294
 | 2.0.x   | :x:                |
 | < 1.0   | :x:                |
 
