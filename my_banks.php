@@ -23,6 +23,7 @@ try {
         $card_counts[$row['bank_id']] = $row['cnt'];
     }
 } catch (PDOException $e) {
+    error_log($e->getMessage());
 }
 ?>
 

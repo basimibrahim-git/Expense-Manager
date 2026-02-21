@@ -1,8 +1,8 @@
 <?php
 $page_title = "Monthly Income";
-require_once 'config.php';
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+include_once 'config.php';
+include_once 'includes/header.php';
+include_once 'includes/sidebar.php';
 
 $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
@@ -240,7 +240,8 @@ $total_income = $sum_stmt->fetchColumn() ?: 0;
     </div>
 <?php endif; ?>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php include_once 'includes/footer.php'; ?>
+
 
 <!-- Bulk Action Floating Bar -->
 <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
@@ -259,8 +260,9 @@ $total_income = $sum_stmt->fetchColumn() ?: 0;
                     </button>
                     <ul class="dropdown-menu border-0 shadow">
                         <?php foreach ($income_categories as $cat): ?>
-                            <li><a class="dropdown-item" href="#"
-                                    onclick="bulkAction('change_category', '<?php echo $cat; ?>')"><?php echo $cat; ?></a></li>
+                            <li><button type="button" class="dropdown-item"
+                                    onclick="bulkAction('change_category', '<?php echo $cat; ?>')"><?php echo $cat; ?></button>
+                            </li>
                         <?php endforeach; ?>
                     </ul>
                 </div>

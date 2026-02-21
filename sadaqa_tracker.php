@@ -10,9 +10,9 @@ $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 
 // Get total sadaqa per month for the selected year
 $stmt = $pdo->prepare("
-    SELECT MONTH(sadaqa_date) as month, SUM(amount) as total 
-    FROM sadaqa_tracker 
-    WHERE tenant_id = :tenant_id AND YEAR(sadaqa_date) = :year 
+    SELECT MONTH(sadaqa_date) as month, SUM(amount) as total
+    FROM sadaqa_tracker
+    WHERE tenant_id = :tenant_id AND YEAR(sadaqa_date) = :year
     GROUP BY MONTH(sadaqa_date)
 ");
 $stmt->execute(['tenant_id' => $_SESSION['tenant_id'], 'year' => $year]);

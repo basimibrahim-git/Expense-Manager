@@ -10,11 +10,11 @@ $prev_year = $year - 1;
 
 // 1. Fetch YoY Category Data
 $stmt = $pdo->prepare("
-    SELECT category, 
+    SELECT category,
            SUM(CASE WHEN YEAR(expense_date) = ? THEN amount ELSE 0 END) as current_year,
            SUM(CASE WHEN YEAR(expense_date) = ? THEN amount ELSE 0 END) as previous_year
-    FROM expenses 
-    WHERE tenant_id = ? 
+    FROM expenses
+    WHERE tenant_id = ?
     AND YEAR(expense_date) IN (?, ?)
     GROUP BY category
     ORDER BY current_year DESC
@@ -25,10 +25,10 @@ $yoy_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 // 2. Fetch Heatmap Data (Spending by Day of Week vs Week of Month)
 // This is for the current year
 $stmt = $pdo->prepare("
-    SELECT DAYOFWEEK(expense_date) as dow, 
+    SELECT DAYOFWEEK(expense_date) as dow,
            DAY(expense_date) as dom,
            SUM(amount) as total
-    FROM expenses 
+    FROM expenses
     WHERE tenant_id = ? AND YEAR(expense_date) = ?
     GROUP BY dow, dom
 ");
@@ -43,10 +43,10 @@ foreach ($heatmap_raw as $row) {
 }
 
 $stmt = $pdo->prepare("
-    SELECT DAYOFWEEK(expense_date) as dow, 
+    SELECT DAYOFWEEK(expense_date) as dow,
            MONTH(expense_date) as month,
            SUM(amount) as total
-    FROM expenses 
+    FROM expenses
     WHERE tenant_id = ? AND YEAR(expense_date) = ?
     GROUP BY dow, month
 ");

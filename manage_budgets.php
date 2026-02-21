@@ -1,5 +1,5 @@
 // manage_budgets.php
-require_once 'config.php';
+include_once 'config.php';
 
 if (!isset($_SESSION['user_id'])) {
 header("Location: index.php");
@@ -25,8 +25,8 @@ $existing_budgets = $stmt->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
 $categories = ['Grocery', 'Food', 'Medical', 'Shopping', 'Utilities', 'Transport', 'Travel', 'Entertainment',
 'Education', 'Other'];
 
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+include_once 'includes/header.php';
+include_once 'includes/sidebar.php';
 ?>
 
 <div class="container-fluid py-4">
@@ -167,4 +167,4 @@ require_once 'includes/sidebar.php';
     }
 </script>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php include_once 'includes/footer.php'; ?>

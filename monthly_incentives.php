@@ -1,6 +1,6 @@
 <?php
 $page_title = "Monthly Incentives";
-require_once 'config.php';
+include_once 'config.php';
 
 // Handle Actions (Add/Delete)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -49,8 +49,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+include_once 'includes/header.php';
+include_once 'includes/sidebar.php';
 
 $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
@@ -195,18 +195,21 @@ foreach ($incentives as $inc) {
                     <input type="hidden" name="action" value="add_incentive">
 
                     <div class="mb-3">
-                        <label class="form-label">Title <span class="text-danger">*</span></label>
-                        <input type="text" name="title" class="form-control" placeholder="e.g. Sales Bonus" required>
+                        <label for="incentiveTitle" class="form-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" name="title" id="incentiveTitle" class="form-control"
+                            placeholder="e.g. Sales Bonus" required>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Amount <span class="text-danger">*</span></label>
-                        <input type="number" step="0.01" name="amount" class="form-control" placeholder="0.00" required>
+                        <label for="incentiveAmount" class="form-label">Amount <span
+                                class="text-danger">*</span></label>
+                        <input type="number" step="0.01" name="amount" id="incentiveAmount" class="form-control"
+                            placeholder="0.00" required>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Date <span class="text-danger">*</span></label>
-                        <input type="date" name="incentive_date" class="form-control"
+                        <label for="incentiveDate" class="form-label">Date <span class="text-danger">*</span></label>
+                        <input type="date" name="incentive_date" id="incentiveDate" class="form-control"
                             value="<?php echo htmlspecialchars(date('Y') . '-' . str_pad($month, 2, '0', STR_PAD_LEFT) . '-' . date('d')); ?>"
                             required>
 
@@ -245,7 +248,8 @@ foreach ($incentives as $inc) {
     </div>
 </div>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php include_once 'includes/footer.php'; ?>
+
 
 <!-- Bulk Action Floating Bar -->
 <div id="bulkActionBar"

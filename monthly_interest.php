@@ -1,6 +1,6 @@
 <?php
 $page_title = "Monthly Interest";
-require_once 'config.php';
+include_once 'config.php';
 
 // Handle Actions (Add/Edit/Delete)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -66,8 +66,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+include_once 'includes/header.php';
+include_once 'includes/sidebar.php';
 
 $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
@@ -115,8 +115,9 @@ foreach ($records as $r) {
         <div class="small text-muted">Net Interest</div>
         <h3 class="fw-bold <?php echo $total_interest > 0 ? 'text-danger' : 'text-success'; ?> mb-0">
             AED <span class="blur-sensitive"><?php echo number_format(abs($total_interest), 2); ?></span>
-            <?php if ($total_interest <= 0 && !empty($records))
-                echo '<i class="fa-solid fa-check ms-1"></i>'; ?>
+            <?php if ($total_interest <= 0 && !empty($records)) {
+                echo '<i class="fa-solid fa-check ms-1"></i>';
+            } ?>
         </h3>
     </div>
 </div>
@@ -226,7 +227,7 @@ foreach ($records as $r) {
                     <input type="hidden" name="id" id="recordId">
 
                     <div class="mb-3">
-                        <label class="form-label">Type</label>
+                        <label for="recordType" class="form-label">Type</label>
                         <select name="type" id="recordType" class="form-select">
                             <option value="interest">Interest Accrued (Debt)</option>
                             <option value="payment">Payment (Charity)</option>
@@ -234,19 +235,19 @@ foreach ($records as $r) {
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Title <span class="text-danger">*</span></label>
+                        <label for="recordTitle" class="form-label">Title <span class="text-danger">*</span></label>
                         <input type="text" name="title" id="recordTitle" class="form-control"
                             placeholder="e.g. Bank Savings Interest" required>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Amount <span class="text-danger">*</span></label>
+                        <label for="recordAmount" class="form-label">Amount <span class="text-danger">*</span></label>
                         <input type="number" step="0.01" name="amount" id="recordAmount" class="form-control"
                             placeholder="0.00" required>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Date <span class="text-danger">*</span></label>
+                        <label for="recordDate" class="form-label">Date <span class="text-danger">*</span></label>
                         <input type="date" name="interest_date" id="recordDate" class="form-control" required>
                     </div>
 
@@ -284,7 +285,8 @@ foreach ($records as $r) {
     </div>
 </div>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php include_once 'includes/footer.php'; ?>
+
 
 <!-- Bulk Action Floating Bar -->
 <div id="bulkActionBar"

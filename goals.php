@@ -1,8 +1,8 @@
 <?php
 $page_title = "Financial Goals";
-require_once 'config.php';
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+include_once 'config.php';
+include_once 'includes/header.php';
+include_once 'includes/sidebar.php';
 
 $user_id = $_SESSION['user_id'];
 
@@ -260,4 +260,4 @@ $total_target = array_sum(array_column($goals, 'target_amount'));
     </div>
 </div>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php include_once 'includes/footer.php'; ?>
