@@ -32,7 +32,7 @@ require_once 'includes/sidebar.php';
 <div class="container-fluid py-4">
     <div class="row mb-4 align-items-center">
         <div class="col">
-            <h2 class="fw-bold mb-0">ðŸŽ¯ Manage Budgets</h2>
+            <h2 class="fw-bold mb-0">🎯 Manage Budgets</h2>
             <p class="text-muted">Set monthly spending limits per category</p>
         </div>
         <div class="col-auto">
@@ -167,4 +167,4 @@ require_once 'includes/sidebar.php';
     }
 </script>
 
-<?php include 'includes/footer.php'; ?>
+<?php require_once 'includes/footer.php'; ?>

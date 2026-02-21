@@ -174,8 +174,8 @@ $total_target = array_sum(array_column($goals, 'target_amount'));
                                 <?php echo number_format($goal['target_amount'], 2); ?>
                             </span>
                         </div>
-                        <div class="progress" style="height: 10px;">
-                            <div class="progress-bar bg-primary" role="progressbar" style="width: <?php echo $pct; ?>%"></div>
+                        <div class="progress-wrapper">
+                            <progress class="w-100" value="<?php echo $pct; ?>" max="100"></progress>
                         </div>
                     </div>
 
@@ -220,13 +220,13 @@ $total_target = array_sum(array_column($goals, 'target_amount'));
                     <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
                     <input type="hidden" name="action" value="add_goal">
                     <div class="mb-3">
-                        <label class="form-label">Goal Name</label>
-                        <input type="text" name="name" class="form-control" placeholder="e.g. New Car, Europe Trip..."
-                            required>
+                        <label for="goalName" class="form-label">Goal Name</label>
+                        <input type="text" name="name" id="goalName" class="form-control"
+                            placeholder="e.g. New Car, Europe Trip..." required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Category</label>
-                        <select name="category" class="form-select">
+                        <label for="goalCategory" class="form-label">Category</label>
+                        <select name="category" id="goalCategory" class="form-select">
                             <option value="General">General Savings</option>
                             <option value="Travel">Travel</option>
                             <option value="Automobile">Automobile</option>
@@ -238,17 +238,18 @@ $total_target = array_sum(array_column($goals, 'target_amount'));
                     </div>
                     <div class="row g-3 mb-3">
                         <div class="col-6">
-                            <label class="form-label">Target Amount</label>
-                            <input type="number" name="target_amount" class="form-control" placeholder="10000" required>
+                            <label for="targetAmount" class="form-label">Target Amount</label>
+                            <input type="number" name="target_amount" id="targetAmount" class="form-control"
+                                placeholder="10000" required>
                         </div>
                         <div class="col-6">
-                            <label class="form-label">Already Saved</label>
-                            <input type="number" name="current_saved" class="form-control" value="0">
+                            <label for="currentSaved" class="form-label">Already Saved</label>
+                            <input type="number" name="current_saved" id="currentSaved" class="form-control" value="0">
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Target Date</label>
-                        <input type="date" name="target_date" class="form-control" required>
+                        <label for="targetDate" class="form-label">Target Date</label>
+                        <input type="date" name="target_date" id="targetDate" class="form-control" required>
                     </div>
                     <div class="d-grid">
                         <button type="submit" class="btn btn-primary fw-bold py-2">Create Goal</button>

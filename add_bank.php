@@ -22,14 +22,14 @@ require_once 'includes/sidebar.php';
                 <input type="hidden" name="action" value="add_bank">
 
                 <div class="mb-3">
-                    <label class="form-label">Bank Name <span class="text-danger">*</span></label>
-                    <input type="text" name="bank_name" class="form-control form-control-lg"
+                    <label for="bank_name" class="form-label">Bank Name <span class="text-danger">*</span></label>
+                    <input type="text" name="bank_name" id="bank_name" class="form-control form-control-lg"
                         placeholder="e.g. Emirates NBD, ADCB, FAB..." required autofocus>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Account Type</label>
-                    <select name="account_type" class="form-select">
+                    <label for="account_type" class="form-label">Account Type</label>
+                    <select name="account_type" id="account_type" class="form-select">
                         <option value="Current">Current Account</option>
                         <option value="Savings">Savings Account</option>
                         <option value="Salary">Salary Account</option>
@@ -38,18 +38,18 @@ require_once 'includes/sidebar.php';
 
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">Account Number</label>
-                        <input type="text" name="account_number" class="form-control" placeholder="Optional">
+                        <label for="account_number" class="form-label">Account Number</label>
+                        <input type="text" name="account_number" id="account_number" class="form-control" placeholder="Optional">
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">IBAN</label>
-                        <input type="text" name="iban" class="form-control" placeholder="Optional">
+                        <label for="iban" class="form-label">IBAN</label>
+                        <input type="text" name="iban" id="iban" class="form-control" placeholder="Optional">
                     </div>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Currency</label>
-                    <select name="currency" class="form-select">
+                    <label for="currency" class="form-label">Currency</label>
+                    <select name="currency" id="currency" class="form-select">
                         <option value="AED">AED - UAE Dirham</option>
                         <option value="USD">USD - US Dollar</option>
                         <option value="EUR">EUR - Euro</option>
@@ -59,8 +59,8 @@ require_once 'includes/sidebar.php';
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Notes</label>
-                    <textarea name="notes" class="form-control" rows="2" placeholder="Optional notes..."></textarea>
+                    <label for="notes" class="form-label">Notes</label>
+                    <textarea name="notes" id="notes" class="form-control" rows="2" placeholder="Optional notes..."></textarea>
                 </div>
 
                 <div class="mb-4 p-3 bg-primary bg-opacity-10 rounded border border-primary">

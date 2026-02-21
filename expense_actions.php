@@ -114,7 +114,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
 
     } catch (PDOException $e) {
-        header("Location: add_expense.php?error=Failed to add expense: " . $e->getMessage());
+        header("Location: add_expense.php?error=System error occurred during expense processing.");
         exit();
     }
 } elseif ($action == 'delete_expense' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['id'])) {
@@ -213,7 +213,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             }
         } catch (Exception $e) {
             error_log("Auto-Draft Error: " . $e->getMessage());
-            header("Location: subscriptions.php?error=Auto-draft failed");
+            header("Location: subscriptions.php?error=System error during auto-draft.");
             exit();
         }
     }
@@ -285,7 +285,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     try {
-        $stmt = $pdo->prepare("UPDATE expenses SET 
+        $stmt = $pdo->prepare("UPDATE expenses SET
             amount = ?, description = ?, category = ?, payment_method = ?,
             card_id = ?, expense_date = ?, is_subscription = ?,
             currency = ?, original_amount = ?, tags = ?,
@@ -313,7 +313,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
 
     } catch (PDOException $e) {
-        header("Location: edit_expense.php?id=$expense_id&error=Failed to update: " . urlencode($e->getMessage()));
+        header("Location: edit_expense.php?id=$expense_id&error=System error occurred during update.");
         exit();
     }
 }

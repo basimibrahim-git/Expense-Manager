@@ -80,7 +80,7 @@ try {
 
 <div class="row mb-4">
     <div class="col-12">
-        <h1 class="h3 fw-bold mb-3">ðŸ” Advanced Transaction Search</h1>
+        <h1 class="h3 fw-bold mb-3">🔍 Advanced Transaction Search</h1>
     </div>
 </div>
 
@@ -199,7 +199,9 @@ try {
                                         </td>
                                         <td class="fw-bold text-dark blur-sensitive">
                                             <?php echo number_format($ex['amount'], 2); ?>
-                                            <?php if ($ex['currency'] != 'AED') { echo ' <small class="text-muted">(' . htmlspecialchars($ex['currency']) . ')</small>'; } ?>
+                                            <?php if ($ex['currency'] != 'AED') {
+                                                echo ' <small class="text-muted">(' . htmlspecialchars($ex['currency']) . ')</small>';
+                                            } ?>
                                         </td>
                                         <td class="pe-4 text-end">
                                             <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
@@ -226,20 +228,34 @@ try {
                     <?php if ($total_pages > 1): ?>
                         <div class="card-footer bg-light d-flex justify-content-between align-items-center py-3">
                             <div class="text-muted small">
-                                Showing <?php echo $offset + 1; ?>â€“<?php echo min($offset + $items_per_page, $total_items); ?> of
+                                Showing <?php echo $offset + 1; ?>–<?php echo min($offset + $items_per_page, $total_items); ?> of
                                 <?php echo $total_items; ?> results
                             </div>
                             <nav aria-label="Page navigation">
                                 <ul class="pagination pagination-sm mb-0">
                                     <?php
                                     $base_url = "?";
-                                    if ($keyword) { $base_url .= "q=" . urlencode($keyword) . "&"; }
-                                    if ($category) { $base_url .= "category=" . urlencode($category) . "&"; }
-                                    if ($tag) { $base_url .= "tag=" . urlencode($tag) . "&"; }
-                                    if ($min_amount) { $base_url .= "min=$min_amount&"; }
-                                    if ($max_amount) { $base_url .= "max=$max_amount&"; }
-                                    if ($start_date) { $base_url .= "start=$start_date&"; }
-                                    if ($end_date) { $base_url .= "end=$end_date&"; }
+                                    if ($keyword) {
+                                        $base_url .= "q=" . urlencode($keyword) . "&";
+                                    }
+                                    if ($category) {
+                                        $base_url .= "category=" . urlencode($category) . "&";
+                                    }
+                                    if ($tag) {
+                                        $base_url .= "tag=" . urlencode($tag) . "&";
+                                    }
+                                    if ($min_amount) {
+                                        $base_url .= "min=$min_amount&";
+                                    }
+                                    if ($max_amount) {
+                                        $base_url .= "max=$max_amount&";
+                                    }
+                                    if ($start_date) {
+                                        $base_url .= "start=$start_date&";
+                                    }
+                                    if ($end_date) {
+                                        $base_url .= "end=$end_date&";
+                                    }
                                     ?>
                                     <li class="page-item <?php echo $page_num <= 1 ? 'disabled' : ''; ?>">
                                         <a class="page-link" href="<?php echo $base_url; ?>page=<?php echo $page_num - 1; ?>">

@@ -3,7 +3,7 @@
 $current_page = 'family_management.php';
 require_once 'config.php';
 
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'family_admin') {
+if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['family_admin', 'root_admin'])) {
     header("Location: dashboard.php");
     exit();
 }
@@ -52,8 +52,8 @@ $stmt = $pdo->prepare("SELECT id, name, email, role, permission, created_at FROM
 $stmt->execute([$tenant_id]);
 $members = $stmt->fetchAll();
 
-include 'includes/header.php';
-include 'includes/sidebar.php';
+require_once 'includes/header.php';
+require_once 'includes/sidebar.php';
 ?>
 
 <div class="row mb-4">
@@ -144,21 +144,23 @@ include 'includes/sidebar.php';
                     <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
 
                     <div class="mb-3">
-                        <label class="form-label">Full Name</label>
-                        <input type="text" name="name" class="form-control" required placeholder="e.g. Sara Ibrahim">
+                        <label for="memberName" class="form-label">Full Name</label>
+                        <input type="text" name="name" id="memberName" class="form-control" required
+                            placeholder="e.g. Sara Ibrahim">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Email Address</label>
-                        <input type="email" name="email" class="form-control" required placeholder="name@example.com">
+                        <label for="memberEmail" class="form-label">Email Address</label>
+                        <input type="email" name="email" id="memberEmail" class="form-control" required
+                            placeholder="name@example.com">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Password</label>
-                        <input type="password" name="password" class="form-control" required>
+                        <label for="memberPassword" class="form-label">Password</label>
+                        <input type="password" name="password" id="memberPassword" class="form-control" required>
                         <div class="form-text small">Give them a temporary password they can change later.</div>
                     </div>
                     <div class="mb-0">
-                        <label class="form-label">Access Permission</label>
-                        <select name="permission" class="form-select">
+                        <label for="memberPermission" class="form-label">Access Permission</label>
+                        <select name="permission" id="memberPermission" class="form-select">
                             <option value="read_only" selected>Read-Only (View charts and logs)</option>
                             <option value="edit">Edit Access (Add expenses/income)</option>
                         </select>
@@ -174,4 +176,4 @@ include 'includes/sidebar.php';
     </div>
 </div>
 
-<?php include 'includes/footer.php'; ?>
+<?php include_once 'includes/footer.php'; ?>

@@ -89,10 +89,8 @@ $savings_color = getStatusColor($savings_pct, 20, true);
                     <?php echo number_format($total_needs); ?>
                 </span></div>
 
-            <div class="progress" style="height: 10px;">
-                <div class="progress-bar bg-<?php echo $needs_color; ?>" role="progressbar"
-                    style="width: <?php echo min($needs_pct, 100); ?>%"></div>
-            </div>
+            <progress class="progress w-100" style="height: 10px;" value="<?php echo min($needs_pct, 100); ?>"
+                max="100"></progress>
             <div class="mt-2 small text-muted">
                 You have used <strong>
                     <?php echo number_format($needs_pct, 1); ?>%
@@ -117,10 +115,8 @@ $savings_color = getStatusColor($savings_pct, 20, true);
                     <?php echo number_format($total_wants); ?>
                 </span></div>
 
-            <div class="progress" style="height: 10px;">
-                <div class="progress-bar bg-<?php echo $wants_color; ?>" role="progressbar"
-                    style="width: <?php echo min($wants_pct, 100); ?>%"></div>
-            </div>
+            <progress class="progress w-100" style="height: 10px;" value="<?php echo min($wants_pct, 100); ?>"
+                max="100"></progress>
             <div class="mt-2 small text-muted">
                 You have used <strong>
                     <?php echo number_format($wants_pct, 1); ?>%
@@ -145,10 +141,8 @@ $savings_color = getStatusColor($savings_pct, 20, true);
                     <?php echo number_format($total_savings); ?>
                 </span></div>
 
-            <div class="progress" style="height: 10px;">
-                <div class="progress-bar bg-<?php echo $savings_color; ?>" role="progressbar"
-                    style="width: <?php echo min(max($savings_pct, 0), 100); ?>%"></div>
-            </div>
+            <progress class="progress w-100" style="height: 10px;" value="<?php echo min(max($savings_pct, 0), 100); ?>"
+                max="100"></progress>
             <div class="mt-2 small text-muted">
                 You have saved <strong>
                     <?php echo number_format($savings_pct, 1); ?>%
@@ -190,10 +184,12 @@ $savings_color = getStatusColor($savings_pct, 20, true);
                 $pct = ($spent / $limit) * 100;
                 $var = $limit - $spent;
                 $color = 'success';
-                if ($pct > 80)
+                if ($pct > 80) {
                     $color = 'warning';
-                if ($pct > 100)
+                }
+                if ($pct > 100) {
                     $color = 'danger';
+                }
                 ?>
                 <div class="col-md-6 col-lg-4">
                     <div class="p-3 border rounded-4 bg-white hover-shadow transition-all">
@@ -203,10 +199,8 @@ $savings_color = getStatusColor($savings_pct, 20, true);
                                 <?php echo number_format($pct, 0); ?>%
                             </div>
                         </div>
-                        <div class="progress mb-2" style="height: 8px;">
-                            <div class="progress-bar bg-<?php echo $color; ?>" role="progressbar"
-                                style="width: <?php echo min($pct, 100); ?>%"></div>
-                        </div>
+                        <progress class="progress w-100 mb-2" style="height: 8px;" value="<?php echo min($pct, 100); ?>"
+                            max="100"></progress>
                         <div class="d-flex justify-content-between small text-muted">
                             <span>Spent: AED <?php echo number_format($spent); ?></span>
                             <span>Goal: <?php echo number_format($limit); ?></span>
@@ -245,8 +239,9 @@ $savings_color = getStatusColor($savings_pct, 20, true);
     <?php
     $over_cats = [];
     foreach ($cat_budgets as $cat => $limit) {
-        if (($expenses[$cat] ?? 0) > $limit)
+        if (($expenses[$cat] ?? 0) > $limit) {
             $over_cats[] = $cat;
+        }
     }
     if (!empty($over_cats)):
         ?>

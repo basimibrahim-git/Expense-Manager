@@ -47,5 +47,6 @@ try {
     echo "\n✅ Archiving complete.\n";
 
 } catch (Exception $e) {
-    die("❌ Archiving failed: " . $e->getMessage());
+    error_log($e->getMessage());
+    die("❌ A system error occurred during archiving. Please check the logs.");
 }

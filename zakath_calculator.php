@@ -1,59 +1,61 @@
+<?php
 // zakath_calculator.php
 require_once 'config.php';
 
 if (!isset($_SESSION['user_id'])) {
-header("Location: index.php");
-exit();
+    header("Location: index.php");
+    exit();
 }
 
 // Permission Check
 if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-header("Location: zakath_tracker.php?error=Unauthorized: Read-only access");
-exit();
+    header("Location: zakath_tracker.php?error=Unauthorized: Read-only access");
+    exit();
 }
 
 // Fetch Current Bank Balance for Auto-Fill
 $current_bank_total = 0;
 try {
-// Sum latest balance of all banks
-$stmt = $pdo->prepare("
-SELECT SUM(
-CASE
-WHEN currency = 'INR' THEN amount / 24
-ELSE amount
-END
-)
-FROM bank_balances b1
-WHERE tenant_id = ?
-AND id = (SELECT MAX(id) FROM bank_balances b2 WHERE b2.bank_name = b1.bank_name AND b2.tenant_id = b1.tenant_id)
-");
-$stmt->execute([$_SESSION['tenant_id']]);
-$current_bank_total = $stmt->fetchColumn() ?: 0;
-} catch (Exception $e) { /* Ignore */ }
+    // Sum latest balance of all banks
+    $stmt = $pdo->prepare("
+        SELECT SUM(
+            CASE
+                WHEN currency = 'INR' THEN amount / 24
+                ELSE amount
+            END
+        )
+        FROM bank_balances b1
+        WHERE tenant_id = ?
+        AND id = (SELECT MAX(id) FROM bank_balances b2 WHERE b2.bank_name = b1.bank_name AND b2.tenant_id = b1.tenant_id)
+    ");
+    $stmt->execute([$_SESSION['tenant_id']]);
+    $current_bank_total = $stmt->fetchColumn() ?: 0;
+} catch (Exception $e) { /* Ignore */
+}
 
 // Handle Save
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-verify_csrf_token($_POST['csrf_token'] ?? '');
+    verify_csrf_token($_POST['csrf_token'] ?? '');
 
-$cycle = $_POST['cycle_name'];
-$cash = floatval($_POST['cash_balance']);
-$gold = floatval($_POST['gold_silver']);
-$invest = floatval($_POST['investments']);
-$liab = floatval($_POST['liabilities']);
+    $cycle = $_POST['cycle_name'];
+    $cash = floatval($_POST['cash_balance']);
+    $gold = floatval($_POST['gold_silver']);
+    $invest = floatval($_POST['investments']);
+    $liab = floatval($_POST['liabilities']);
 
-// Server-side Calc
-$net_assets = ($cash + $gold + $invest) - $liab;
-$net_assets = max(0, $net_assets);
-$zakath = $net_assets * 0.025;
+    // Server-side Calc
+    $net_assets = ($cash + $gold + $invest) - $liab;
+    $net_assets = max(0, $net_assets);
+    $zakath = $net_assets * 0.025;
 
-if (!empty($cycle)) {
-$stmt = $pdo->prepare("INSERT INTO zakath_calculations (user_id, tenant_id, cycle_name, cash_balance, gold_silver,
-investments, liabilities, total_zakath) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-$stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $cycle, $cash, $gold, $invest, $liab, $zakath]);
+    if (!empty($cycle)) {
+        $stmt = $pdo->prepare("INSERT INTO zakath_calculations (user_id, tenant_id, cycle_name, cash_balance, gold_silver,
+            investments, liabilities, total_zakath) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $cycle, $cash, $gold, $invest, $liab, $zakath]);
 
-header("Location: zakath_tracker.php?success=Saved Successfully");
-exit;
-}
+        header("Location: zakath_tracker.php?success=Saved Successfully");
+        exit;
+    }
 }
 
 require_once 'includes/header.php';
@@ -77,8 +79,8 @@ require_once 'includes/sidebar.php';
 
                 <h5 class="fw-bold mb-4 text-primary border-bottom pb-2">1. Cycle Information</h5>
                 <div class="mb-4">
-                    <label class="form-label fw-bold">Cycle Name</label>
-                    <input type="text" name="cycle_name" class="form-control form-control-lg"
+                    <label for="cycleName" class="form-label fw-bold">Cycle Name</label>
+                    <input type="text" name="cycle_name" id="cycleName" class="form-control form-control-lg"
                         placeholder="e.g. Ramadan <?php echo date('Y'); ?>" value="Ramadan <?php echo date('Y'); ?>"
                         required>
                     <div class="form-text">Give this calculation a name to identify it later.</div>
@@ -87,7 +89,7 @@ require_once 'includes/sidebar.php';
                 <h5 class="fw-bold mb-4 text-primary border-bottom pb-2">2. Zakatable Assets</h5>
 
                 <div class="mb-3">
-                    <label class="form-label">Cash in Hand & Bank Balances</label>
+                    <label for="cash" class="form-label">Cash in Hand & Bank Balances</label>
                     <div class="input-group">
                         <span class="input-group-text">AED</span>
                         <input type="number" step="0.01" name="cash_balance" id="cash" class="form-control calc-input"
@@ -101,7 +103,7 @@ require_once 'includes/sidebar.php';
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Gold & Silver Value</label>
+                    <label for="gold" class="form-label">Gold & Silver Value</label>
                     <div class="input-group">
                         <span class="input-group-text">AED</span>
                         <input type="number" step="0.01" name="gold_silver" id="gold" class="form-control calc-input"
@@ -110,7 +112,7 @@ require_once 'includes/sidebar.php';
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Investments & Business Assets</label>
+                    <label for="invest" class="form-label">Investments & Business Assets</label>
                     <div class="input-group">
                         <span class="input-group-text">AED</span>
                         <input type="number" step="0.01" name="investments" id="invest" class="form-control calc-input"
@@ -122,7 +124,7 @@ require_once 'includes/sidebar.php';
                 <h5 class="fw-bold mb-4 text-danger border-bottom pb-2 mt-5">3. Liabilities</h5>
 
                 <div class="mb-3">
-                    <label class="form-label">Immediate Debts / Loans</label>
+                    <label for="liab" class="form-label">Immediate Debts / Loans</label>
                     <div class="input-group">
                         <span class="input-group-text">AED</span>
                         <input type="number" step="0.01" name="liabilities" id="liab" class="form-control calc-input"

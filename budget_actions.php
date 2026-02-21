@@ -37,8 +37,8 @@ if ($action == 'save_budgets' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             // If amount is 0/empty, we can either keep it or delete it.
             // Let's use INSERT ... ON DUPLICATE KEY UPDATE
             if ($amount > 0) {
-                $stmt = $pdo->prepare("INSERT INTO budgets (user_id, tenant_id, category, amount, month, year) 
-                                     VALUES (?, ?, ?, ?, ?, ?) 
+                $stmt = $pdo->prepare("INSERT INTO budgets (user_id, tenant_id, category, amount, month, year)
+                                     VALUES (?, ?, ?, ?, ?, ?)
                                      ON DUPLICATE KEY UPDATE amount = VALUES(amount)");
                 $stmt->execute([$user_id, $tenant_id, htmlspecialchars($category), $amount, $month, $year]);
             } else {
@@ -54,7 +54,9 @@ if ($action == 'save_budgets' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
 
     } catch (Exception $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log("Save Budgets Error: " . $e->getMessage());
         header("Location: manage_budgets.php?month=$month&year=$year&error=Failed to save budgets");
         exit();
@@ -63,3 +65,4 @@ if ($action == 'save_budgets' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
 header("Location: budget.php");
 exit();
+

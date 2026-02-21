@@ -79,10 +79,10 @@ elseif ($pre_month && $pre_year) {
         <?php if (isset($_GET['added'])): ?>
             <div class="alert alert-success alert-dismissible fade show d-flex align-items-center" role="alert">
                 <i class="fa-solid fa-check-circle fa-lg me-3"></i>
-                <div>
+                <output>
                     <strong>Expense Saved!</strong>
                     <span class="badge bg-success ms-2"><?php echo intval($_GET['count'] ?? 1); ?> added this session</span>
-                </div>
+                </output>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         <?php endif; ?>
@@ -95,8 +95,8 @@ elseif ($pre_month && $pre_year) {
 
                 <!-- Payment Method Toggle (Moved to Top) -->
                 <div class="mb-3">
-                    <label class="form-label d-block">Payment Method</label>
-                    <div class="btn-group w-100" role="group" aria-label="Payment Method">
+                    <fieldset class="btn-group w-100" aria-labelledby="paymentMethodLabel">
+                        <legend id="paymentMethodLabel" class="form-label d-block">Payment Method</legend>
                         <input type="radio" class="btn-check" name="payment_method" id="methodCash" value="Cash" checked
                             onclick="toggleCardSelect(false)">
                         <label class="btn btn-outline-primary py-2" for="methodCash">
@@ -108,12 +108,13 @@ elseif ($pre_month && $pre_year) {
                         <label class="btn btn-outline-primary py-2" for="methodCard">
                             <i class="fa-solid fa-credit-card me-2"></i> Card
                         </label>
-                    </div>
+                    </fieldset>
                 </div>
 
                 <!-- Card Selection (Hidden by default unless Card selected) -->
                 <div class="mb-4" id="cardSelectionDiv" style="display: none;">
-                    <label class="form-label">Select Card Used <span class="text-danger">*</span></label>
+                    <label class="form-label" for="cardSelect">Select Card Used <span
+                            class="text-danger">*</span></label>
                     <select name="card_id" id="cardSelect" class="form-select">
                         <option value="" disabled <?php echo !$default_card_id ? 'selected' : ''; ?>>-- Choose Card --
                         </option>
@@ -121,7 +122,7 @@ elseif ($pre_month && $pre_year) {
                             <option value="<?php echo $card['id']; ?>" <?php echo $card['id'] == $default_card_id ? 'selected' : ''; ?>>
                                 <?php echo htmlspecialchars($card['bank_name'] . ' - ' . $card['card_name']); ?>
                                 (<?php echo $card['card_type']; ?>)
-                                <?php echo !empty($card['is_default']) ? 'â­' : ''; ?>
+                                <?php echo !empty($card['is_default']) ? '⭐' : ''; ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -145,28 +146,28 @@ elseif ($pre_month && $pre_year) {
                 <!-- Amount & Date -->
                 <div class="row">
                     <div class="col-md-7 mb-3">
-                        <label class="form-label">Amount <span class="text-danger">*</span></label>
+                        <label class="form-label" for="expenseAmount">Amount <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <select name="currency" id="currencySelect" class="form-select bg-light fw-bold"
-                                style="max-width: 90px;" onchange="toggleExchangeRate()">
+                                aria-label="Currency" style="max-width: 90px;" onchange="toggleExchangeRate()">
                                 <option value="AED">AED</option>
                                 <option value="INR">INR</option>
                             </select>
-                            <input type="number" name="amount" class="form-control form-control-lg" placeholder="0.00"
-                                step="0.01" value="<?php echo htmlspecialchars($_GET['amount'] ?? ''); ?>" required
-                                autofocus>
+                            <input type="number" name="amount" id="expenseAmount" class="form-control form-control-lg"
+                                placeholder="0.00" step="0.01"
+                                value="<?php echo htmlspecialchars($_GET['amount'] ?? ''); ?>" required autofocus>
                         </div>
                     </div>
 
                     <div class="col-md-5 mb-3">
-                        <label class="form-label">Date <span class="text-danger">*</span></label>
-                        <input type="date" name="expense_date" class="form-control form-control-lg"
+                        <label class="form-label" for="expenseDate">Date <span class="text-danger">*</span></label>
+                        <input type="date" name="expense_date" id="expenseDate" class="form-control form-control-lg"
                             value="<?php echo htmlspecialchars($default_date); ?>" required>
                     </div>
 
                     <div class="col-12 mb-3">
-                        <label class="form-label">Spent By <span class="text-danger">*</span></label>
-                        <select name="spent_by_user_id" class="form-select">
+                        <label class="form-label" for="spentByUser">Spent By <span class="text-danger">*</span></label>
+                        <select name="spent_by_user_id" id="spentByUser" class="form-select">
                             <?php foreach ($family_members as $member): ?>
                                 <option value="<?php echo $member['id']; ?>" <?php echo $member['id'] == $family_admin_id ? 'selected' : ''; ?>>
                                     <?php echo htmlspecialchars($member['name']); ?>
@@ -182,13 +183,14 @@ elseif ($pre_month && $pre_year) {
                         <div
                             class="alert alert-info py-2 px-3 border-0 d-flex justify-content-between align-items-center">
                             <div>
-                                <label class="form-label mb-0 small fw-bold">Exchange Rate (1 Foreign = ? AED)</label>
+                                <label class="form-label mb-0 small fw-bold" for="exchangeRateInput">Exchange Rate (1
+                                    Foreign = ? AED)</label>
                                 <input type="number" name="exchange_rate" id="exchangeRateInput"
                                     class="form-control form-control-sm mt-1" placeholder="e.g. 3.67" step="0.001"
                                     value="1.00">
                             </div>
                             <div class="text-end small">
-                                <span class="text-muted">Auto-deduction will useconverted AED.</span>
+                                <span class="text-muted">Auto-deduction will use converted AED.</span>
                             </div>
                         </div>
                     </div>
@@ -216,14 +218,15 @@ elseif ($pre_month && $pre_year) {
 
                 <!-- Description -->
                 <div class="mb-3">
-                    <label class="form-label">Description <span class="text-danger">*</span></label>
-                    <input type="text" name="description" class="form-control" placeholder="e.g. Netflix, Gym..."
+                    <label class="form-label" for="expenseDesc">Description <span class="text-danger">*</span></label>
+                    <input type="text" name="description" id="expenseDesc" class="form-control"
+                        placeholder="e.g. Netflix, Gym..."
                         value="<?php echo htmlspecialchars($_GET['description'] ?? ''); ?>" required>
 
                     <div class="form-check mt-2">
                         <input class="form-check-input" type="checkbox" name="is_subscription" id="isSub" value="1"
-                            <?php echo (isset($_GET['subscription']) ? 'checked' : ''); ?>>
-                        <label class="form-check-label text-muted small" for="isSub">
+                            <?php echo isset($_GET['subscription']) ? 'checked' : ''; ?>> <label
+                            class="form-check-label text-muted small" for="isSub">
                             This is a monthly recurring subscription
                         </label>
                     </div>
@@ -231,26 +234,25 @@ elseif ($pre_month && $pre_year) {
 
                 <!-- Category -->
                 <div class="mb-3">
-                    <label class="form-label">Category <span class="text-danger">*</span></label>
-                    <select name="category" class="form-select" required>
+                    <label class="form-label" for="expenseCategory">Category <span class="text-danger">*</span></label>
+                    <select name="category" id="expenseCategory" class="form-select" required>
                         <option value="" disabled selected>Select Category</option>
-                        <option value="Grocery"><i class="fa-solid fa-basket-shopping"></i> Grocery & Supermarkets
-                        </option>
-                        <option value="Medical">ðŸ’Š Medical & Healthcare</option>
-                        <option value="Food">ðŸ” Food & Dining</option>
-                        <option value="Utilities">ðŸ’¡ Bills & Utilities</option>
-                        <option value="Transport">ðŸš– Transport & Fuel</option>
-                        <option value="Shopping">ðŸ›ï¸ Shopping & Apparel</option>
-                        <option value="Entertainment">ðŸŽ¬ Entertainment</option>
-                        <option value="Travel">âœˆï¸ Travel</option>
-                        <option value="Education">ðŸŽ“ Education</option>
-                        <option value="Other">ðŸ”¹ Other</option>
+                        <option value="Grocery">Grocery & Supermarkets</option>
+                        <option value="Medical">Medical & Healthcare</option>
+                        <option value="Food">Food & Dining</option>
+                        <option value="Utilities">Bills & Utilities</option>
+                        <option value="Transport">Transport & Fuel</option>
+                        <option value="Shopping">Shopping & Apparel</option>
+                        <option value="Entertainment">Entertainment</option>
+                        <option value="Travel">Travel</option>
+                        <option value="Education">Education</option>
+                        <option value="Other">Other</option>
                     </select>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Tags (Optional)</label>
-                    <input type="text" name="tags" class="form-control"
+                    <label class="form-label" for="expenseTags">Tags (Optional)</label>
+                    <input type="text" name="tags" id="expenseTags" class="form-control"
                         placeholder="#Vacation2026, #Office, #Family...">
                     <div class="form-text">Use comma or hash to separate tags.</div>
                 </div>
@@ -259,13 +261,13 @@ elseif ($pre_month && $pre_year) {
 
                 <div class="row align-items-center mb-3">
                     <div class="col-md-6" id="rewardsSection" style="display: none;">
-                        <label class="form-label">Rewards Earned <span
+                        <label class="form-label" for="cashbackEarned">Rewards Earned <span
                                 class="badge bg-success-subtle text-success x-small">Auto</span></label>
                         <div class="input-group">
                             <span class="input-group-text text-success bg-success-subtle"><i
                                     class="fa-solid fa-gift"></i></span>
-                            <input type="number" name="cashback_earned" class="form-control bg-light" placeholder="0.00"
-                                step="0.01" readonly>
+                            <input type="number" name="cashback_earned" id="cashbackEarned"
+                                class="form-control bg-light" placeholder="0.00" step="0.01" readonly>
                         </div>
                     </div>
                     <div class="col-md-6">

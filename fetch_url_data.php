@@ -82,8 +82,7 @@ if (isInternalIpAddress($resolved_ip)) {
 // 1.5 Check Cache
 $url_hash = hash('sha256', $url);
 try {
-    $stmt = $pdo->prepare("SELECT url_data FROM url_cache WHERE url_hash = ? AND updated_at > DATE_SUB(NOW(), INTERVAL 30
-DAY)");
+    $stmt = $pdo->prepare("SELECT url_data FROM url_cache WHERE url_hash = ? AND updated_at > DATE_SUB(NOW(), INTERVAL 30 DAY)");
     $stmt->execute([$url_hash]);
     $cached = $stmt->fetchColumn();
 
@@ -120,7 +119,7 @@ if (isset($parsed['port']) && is_numeric($parsed['port'])) {
     }
 }
 
-// Path: Sanitize to only safe characters 
+// Path: Sanitize to only safe characters
 $url_path = '/';
 if (isset($parsed['path']) && strlen($parsed['path']) > 0) {
     // Allow only alphanumeric, dash, underscore, dot, forward slash
@@ -201,30 +200,35 @@ $xpath = new DOMXPath($doc);
 // Extract Title
 $title = '';
 $ogTitle = $xpath->query('//meta[@property="og:title"]/@content');
-if ($ogTitle->length > 0)
+if ($ogTitle->length > 0) {
     $title = $ogTitle->item(0)->nodeValue;
+}
 if (!$title) {
     $pageTitle = $xpath->query('//title');
-    if ($pageTitle->length > 0)
+    if ($pageTitle->length > 0) {
         $title = $pageTitle->item(0)->nodeValue;
+    }
 }
 
 // Extract Description (This usually has the offers!)
 $description = '';
 $ogDesc = $xpath->query('//meta[@property="og:description"]/@content');
-if ($ogDesc->length > 0)
+if ($ogDesc->length > 0) {
     $description = $ogDesc->item(0)->nodeValue;
+}
 if (!$description) {
     $metaDesc = $xpath->query('//meta[@name="description"]/@content');
-    if ($metaDesc->length > 0)
+    if ($metaDesc->length > 0) {
         $description = $metaDesc->item(0)->nodeValue;
+    }
 }
 
 // Extract Image
 $image = '';
 $ogImage = $xpath->query('//meta[@property="og:image"]/@content');
-if ($ogImage->length > 0)
+if ($ogImage->length > 0) {
     $image = $ogImage->item(0)->nodeValue;
+}
 
 // Clean up text
 $title = trim($title);
@@ -241,8 +245,7 @@ $result_data = [
 // Save to Cache
 try {
     $json_data = json_encode($result_data);
-    $stmt = $pdo->prepare("INSERT INTO url_cache (url_hash, url_data) VALUES (?, ?) ON DUPLICATE KEY UPDATE url_data = ?,
-updated_at = NOW()");
+    $stmt = $pdo->prepare("INSERT INTO url_cache (url_hash, url_data) VALUES (?, ?) ON DUPLICATE KEY UPDATE url_data = ?, updated_at = NOW()");
     $stmt->execute([$url_hash, $json_data, $json_data]);
 } catch (Exception $e) {
     // Ignore save errors
@@ -252,4 +255,3 @@ echo json_encode([
     'success' => true,
     'data' => $result_data
 ]);
-?>

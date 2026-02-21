@@ -174,12 +174,7 @@ $reminders = $stmt->fetchAll();
                             <?php endif; ?>
                         </div>
 
-                        <!-- Progress Bar for Time Elapsed (Visual Candy) -->
-                        <?php
-                        // Assume 1 year range for context or dynamic? 
-                        // Let's just show a simple static progress for "Time Left" logic? 
-                        // Maybe Recurrence info?
-                        if ($rem['recurrence_type'] != 'none'): ?>
+                        <?php if ($rem['recurrence_type'] != 'none'): ?>
                             <div class="mt-3 small opacity-75">
                                 <i class="fa-solid fa-repeat me-1"></i> Repeats:
                                 <?php echo ucfirst($rem['recurrence_type']); ?>
@@ -206,22 +201,23 @@ $reminders = $stmt->fetchAll();
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label">Title <span class="text-danger">*</span></label>
-                        <input type="text" name="title" class="form-control" placeholder="e.g. License Expiry" required>
+                        <label for="reminderTitle" class="form-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" name="title" id="reminderTitle" class="form-control"
+                            placeholder="e.g. License Expiry" required>
                     </div>
                     <div class="row">
                         <div class="col-6 mb-3">
-                            <label class="form-label">Date <span class="text-danger">*</span></label>
-                            <input type="date" name="alert_date" class="form-control" required>
+                            <label for="reminderDate" class="form-label">Date <span class="text-danger">*</span></label>
+                            <input type="date" name="alert_date" id="reminderDate" class="form-control" required>
                         </div>
                         <div class="col-6 mb-3">
-                            <label class="form-label">Time</label>
-                            <input type="time" name="alert_time" class="form-control" value="09:00">
+                            <label for="reminderTime" class="form-label">Time</label>
+                            <input type="time" name="alert_time" id="reminderTime" class="form-control" value="09:00">
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Recurrence</label>
-                        <select name="recurrence_type" class="form-select">
+                        <label for="reminderRecurrence" class="form-label">Recurrence</label>
+                        <select name="recurrence_type" id="reminderRecurrence" class="form-select">
                             <option value="none">One-time</option>
                             <option value="monthly">Monthly</option>
                             <option value="yearly">Yearly</option>

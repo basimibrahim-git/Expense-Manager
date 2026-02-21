@@ -22,7 +22,6 @@ $default_date = date('Y-m-d');
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 fw-bold mb-0">Record Card Payment</h1>
-    </a>
 </div>
 
 <?php if (isset($_GET['error'])): ?>
@@ -48,8 +47,9 @@ $default_date = date('Y-m-d');
 
                 <!-- Target Card -->
                 <div class="mb-3">
-                    <label class="form-label">Which card are you paying? <span class="text-danger">*</span></label>
-                    <select name="card_id" class="form-select form-select-lg" required>
+                    <label for="targetCard" class="form-label">Which card are you paying? <span
+                            class="text-danger">*</span></label>
+                    <select name="card_id" id="targetCard" class="form-select form-select-lg" required>
                         <option value="">-- Select Card --</option>
                         <?php foreach ($all_cards as $c): ?>
                             <option value="<?php echo $c['id']; ?>" <?php echo $card_id_pre == $c['id'] ? 'selected' : ''; ?>>
@@ -61,9 +61,9 @@ $default_date = date('Y-m-d');
 
                 <!-- Source Bank -->
                 <div class="mb-3">
-                    <label class="form-label">Paid From (Source Account) <span
+                    <label for="sourceBank" class="form-label">Paid From (Source Account) <span
                             class="text-secondary small">(Optional)</span></label>
-                    <select name="bank_id" class="form-select">
+                    <select name="bank_id" id="sourceBank" class="form-select">
                         <option value="">-- Select Source Bank --</option>
                         <?php foreach ($all_banks as $b): ?>
                             <option value="<?php echo $b['id']; ?>">
@@ -77,19 +77,20 @@ $default_date = date('Y-m-d');
 
                 <!-- Amount -->
                 <div class="mb-3">
-                    <label class="form-label">Payment Amount <span class="text-danger">*</span></label>
+                    <label for="paymentAmount" class="form-label">Payment Amount <span
+                            class="text-danger">*</span></label>
                     <div class="input-group">
                         <span class="input-group-text fw-bold text-success">AED</span>
-                        <input type="number" name="amount" class="form-control form-control-lg" step="0.01"
-                            placeholder="0.00" required>
+                        <input type="number" name="amount" id="paymentAmount" class="form-control form-control-lg"
+                            step="0.01" placeholder="0.00" required>
                     </div>
                 </div>
 
                 <!-- Date -->
                 <div class="mb-3">
-                    <label class="form-label">Payment Date <span class="text-danger">*</span></label>
-                    <input type="date" name="payment_date" class="form-control" value="<?php echo $default_date; ?>"
-                        required>
+                    <label for="paymentDate" class="form-label">Payment Date <span class="text-danger">*</span></label>
+                    <input type="date" name="payment_date" id="paymentDate" class="form-control"
+                        value="<?php echo $default_date; ?>" required>
                 </div>
 
                 <div class="d-grid mt-4">

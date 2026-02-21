@@ -8,9 +8,9 @@ $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? 2026;
 
 // Get total expenses per month for the selected year
 $stmt = $pdo->prepare("
-    SELECT MONTH(expense_date) as month, SUM(amount) as total 
-    FROM expenses 
-    WHERE tenant_id = :tenant_id AND YEAR(expense_date) = :year 
+    SELECT MONTH(expense_date) as month, SUM(amount) as total
+    FROM expenses
+    WHERE tenant_id = :tenant_id AND YEAR(expense_date) = :year
     GROUP BY MONTH(expense_date)
 ");
 $stmt->execute(['tenant_id' => $_SESSION['tenant_id'], 'year' => $year]);

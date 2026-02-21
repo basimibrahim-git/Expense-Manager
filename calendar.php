@@ -1,10 +1,6 @@
 <?php
 $page_title = "My Calendar";
 require_once 'config.php';
-$page_title = "My Calendar";
-require_once 'config.php';
-
-// 1. Auto-Healing: Create Reminders Table with Recurrence Type
 
 // 2. Handle Actions (Logic BEFORE Header)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -112,23 +108,24 @@ foreach ($reminders as $rem) {
     $rMonth = date('n', strtotime($rem['alert_date']));
     $rYear = date('Y', strtotime($rem['alert_date']));
 
-    $should_show = false;
-    // Recurrence Logic
     $recur_type = $rem['recurrence_type'] ?? ($rem['is_recurring'] ? 'monthly' : 'none'); // Fallback for old rows
 
     $should_show = false;
     if ($recur_type == 'monthly') {
         // Show every month on this day
-        if ($rDay <= $days_in_month)
+        if ($rDay <= $days_in_month) {
             $should_show = true;
+        }
     } elseif ($recur_type == 'yearly') {
         // Show every year on this month & day
-        if ($rMonth == $month && $rDay <= $days_in_month)
+        if ($rMonth == $month && $rDay <= $days_in_month) {
             $should_show = true;
+        }
     } else {
         // One-time: Specific Date
-        if ($rMonth == $month && $rYear == $year)
+        if ($rMonth == $month && $rYear == $year) {
             $should_show = true;
+        }
     }
 
     if ($should_show) {
@@ -207,11 +204,11 @@ foreach ($reminders as $rem) {
 
                 if ($is_rem) {
                     if (($_SESSION['permission'] ?? 'edit') !== 'read_only') {
-                        echo "<button type='button' class='btn btn-link p-0 text-danger ms-1' 
-                                style='font-size: 0.9em; line-height: 1;' 
-                                onclick=\"confirmDeleteReminder({$evt['id']}, '" . addslashes(htmlspecialchars($evt['title'])) . "')\">
-                                <i class='fa-solid fa-times'></i>
-                              </button>";
+                        echo "<button type='button' class='btn btn-link p-0 text-danger ms-1'" .
+                            " style='font-size: 0.9em; line-height: 1;'" .
+                            " onclick=\"confirmDeleteReminder({$evt['id']}, '" . addslashes(htmlspecialchars($evt['title'])) . "')\">" .
+                            " <i class='fa-solid fa-times'></i>" .
+                            "</button>";
                     } else {
                         echo "<i class='fa-solid fa-lock text-muted x-small ms-1'></i>";
                     }
@@ -288,19 +285,19 @@ foreach ($reminders as $rem) {
                     <input type="hidden" name="action" value="add_reminder">
 
                     <div class="mb-3">
-                        <label class="form-label">Title <span class="text-danger">*</span></label>
-                        <input type="text" name="title" class="form-control" placeholder="e.g. Passport Expiry"
-                            required>
+                        <label for="reminder_title" class="form-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" name="title" id="reminder_title" class="form-control"
+                            placeholder="e.g. Passport Expiry" required>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Date <span class="text-danger">*</span></label>
-                        <input type="date" name="alert_date" class="form-control" required>
+                        <label for="alert_date" class="form-label">Date <span class="text-danger">*</span></label>
+                        <input type="date" name="alert_date" id="alert_date" class="form-control" required>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Recurrence</label>
-                        <select name="recurrence_type" class="form-select">
+                        <label for="recurrence_type" class="form-label">Recurrence</label>
+                        <select name="recurrence_type" id="recurrence_type" class="form-select">
                             <option value="none">One-time (No Repeat)</option>
                             <option value="monthly">Monthly (Every Month on this day)</option>
                             <option value="yearly">Yearly (Every Year on this date)</option>
@@ -308,8 +305,8 @@ foreach ($reminders as $rem) {
                         <div class="form-text small">Great for subscriptions, birthdays, or annual fees.</div>
                     </div>
 
-                    <div class="mb-4">
-                        <label class="form-label">Color Tag</label>
+                    <fieldset class="mb-4">
+                        <legend class="form-label fs-6">Color Tag</legend>
                         <div class="d-flex gap-2">
                             <input type="radio" class="btn-check" name="color" id="c_primary" value="primary" checked>
                             <label class="btn btn-outline-primary btn-sm rounded-pill" for="c_primary">Blue</label>
@@ -323,7 +320,7 @@ foreach ($reminders as $rem) {
                             <input type="radio" class="btn-check" name="color" id="c_warning" value="warning">
                             <label class="btn btn-outline-warning btn-sm rounded-pill" for="c_warning">Yellow</label>
                         </div>
-                    </div>
+                    </fieldset>
 
                     <div class="d-grid">
                         <button type="submit" class="btn btn-primary fw-bold">Save Reminder</button>

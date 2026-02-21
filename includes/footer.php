@@ -84,115 +84,115 @@
     </div>
 </div>
 
-<!-- Command Bar Modal -->
-<div class="modal fade" id="commandModal" tabindex="-1" aria-hidden="true">
 
-    <script>
-        document.addEventListener('keydown', function (e) {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-                e.preventDefault();
-                const modal = new bootstrap.Modal(document.getElementById('commandModal'));
-                modal.show();
-                document.getElementById('cmdInput').focus();
-            }
-        });
 
-        document.getElementById('commandModal').addEventListener('shown.bs.modal', function () {
+
+<script>
+    document.addEventListener('keydown', function (e) {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+            e.preventDefault();
+            const modal = new bootstrap.Modal(document.getElementById('commandModal'));
+            modal.show();
             document.getElementById('cmdInput').focus();
-        });
+        }
+    });
 
-        document.getElementById('cmdInput').addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') {
-                const input = this.value.trim();
-                if (!input) return;
-                processCommand(input);
-            }
-        });
+    document.getElementById('commandModal').addEventListener('shown.bs.modal', function () {
+        document.getElementById('cmdInput').focus();
+    });
 
-        function processCommand(cmd) {
-            const parts = cmd.split(' ');
-            const action = parts[0].toLowerCase();
+    document.getElementById('cmdInput').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+            const input = this.value.trim();
+            if (!input) return;
+            processCommand(input);
+        }
+    });
 
-            if (action === 'add' && parts.length >= 4) {
-                const type = parts[1].toLowerCase(); // expense or income
-                const amount = parts[2];
-                const desc = parts.slice(3).join(' ');
+    function processCommand(cmd) {
+        const parts = cmd.split(' ');
+        const action = parts[0].toLowerCase();
 
-                if (type === 'expense') {
-                    window.location.href = `add_expense.php?amount=${amount}&description=${encodeURIComponent(desc)}`;
-                } else if (type === 'income') {
-                    window.location.href = `add_income.php?amount=${amount}&description=${encodeURIComponent(desc)}`;
-                }
-            }
-            else if (action === 'show' || action === 'goto') {
-                const page = parts[1].toLowerCase();
-                const map = {
-                    'dashboard': 'dashboard.php',
-                    'cards': 'my_cards.php',
-                    'wallet': 'my_cards.php',
-                    'users': 'my_cards.php', // alias
-                    'expenses': 'monthly_expenses.php',
-                    'income': 'monthly_income.php',
-                    'budget': 'budget.php',
-                    'subs': 'subscriptions.php',
-                    'subscriptions': 'subscriptions.php'
-                };
-                if (map[page]) window.location.href = map[page];
-            }
-            else if (action === 'refresh') {
-                location.reload();
+        if (action === 'add' && parts.length >= 4) {
+            const type = parts[1].toLowerCase(); // expense or income
+            const amount = parts[2];
+            const desc = parts.slice(3).join(' ');
+
+            if (type === 'expense') {
+                window.location.href = `add_expense.php?amount=${amount}&description=${encodeURIComponent(desc)}`;
+            } else if (type === 'income') {
+                window.location.href = `add_income.php?amount=${amount}&description=${encodeURIComponent(desc)}`;
             }
         }
-
-        // Global Modal Helper
-        function showGlobalModal(message, title = "Notification") {
-            document.getElementById('globalInfoModalBody').innerHTML = message;
-            document.getElementById('globalInfoModalTitle').innerText = title;
-            new bootstrap.Modal(document.getElementById('globalInfoModal')).show();
-        }
-
-        // Global Confirm Helper (for delete actions)
-        function confirmDelete(url, message = "Are you sure you want to delete this?", buttonText = "Delete") {
-            document.getElementById('globalConfirmModalBody').innerHTML = message;
-            document.getElementById('globalConfirmBtn').innerHTML = `<i class="fa-solid fa-trash me-1"></i> ${buttonText}`;
-            const modal = new bootstrap.Modal(document.getElementById('globalConfirmModal'));
-
-            // Set up the confirm button action
-            document.getElementById('globalConfirmBtn').onclick = function () {
-                modal.hide();
-                window.location.href = url;
+        else if (action === 'show' || action === 'goto') {
+            const page = parts[1].toLowerCase();
+            const map = {
+                'dashboard': 'dashboard.php',
+                'cards': 'my_cards.php',
+                'wallet': 'my_cards.php',
+                'users': 'my_cards.php', // alias
+                'expenses': 'monthly_expenses.php',
+                'income': 'monthly_income.php',
+                'budget': 'budget.php',
+                'subs': 'subscriptions.php',
+                'subscriptions': 'subscriptions.php'
             };
-
-            modal.show();
-            return false; // Prevent default link action
+            if (map[page]) window.location.href = map[page];
         }
-
-        // For forms - submit after confirmation
-        function confirmSubmit(formElement, message = "Are you sure?") {
-            document.getElementById('globalConfirmModalBody').innerHTML = message;
-            const modal = new bootstrap.Modal(document.getElementById('globalConfirmModal'));
-
-            document.getElementById('globalConfirmBtn').onclick = function () {
-                modal.hide();
-                formElement.submit();
-            };
-
-            modal.show();
-            return false;
+        else if (action === 'refresh') {
+            location.reload();
         }
-    </script>
+    }
 
-    <!-- Service Worker Registration -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js');
-            });
-        }
-    </script>
+    // Global Modal Helper
+    function showGlobalModal(message, title = "Notification") {
+        document.getElementById('globalInfoModalBody').innerHTML = message;
+        document.getElementById('globalInfoModalTitle').innerText = title;
+        new bootstrap.Modal(document.getElementById('globalInfoModal')).show();
+    }
 
-    <!-- Bootstrap JS Bundle -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    </body>
+    // Global Confirm Helper (for delete actions)
+    function confirmDelete(url, message = "Are you sure you want to delete this?", buttonText = "Delete") {
+        document.getElementById('globalConfirmModalBody').innerHTML = message;
+        document.getElementById('globalConfirmBtn').innerHTML = `<i class="fa-solid fa-trash me-1"></i> ${buttonText}`;
+        const modal = new bootstrap.Modal(document.getElementById('globalConfirmModal'));
 
-    </html>
+        // Set up the confirm button action
+        document.getElementById('globalConfirmBtn').onclick = function () {
+            modal.hide();
+            window.location.href = url;
+        };
+
+        modal.show();
+        return false; // Prevent default link action
+    }
+
+    // For forms - submit after confirmation
+    function confirmSubmit(formElement, message = "Are you sure?") {
+        document.getElementById('globalConfirmModalBody').innerHTML = message;
+        const modal = new bootstrap.Modal(document.getElementById('globalConfirmModal'));
+
+        document.getElementById('globalConfirmBtn').onclick = function () {
+            modal.hide();
+            formElement.submit();
+        };
+
+        modal.show();
+        return false;
+    }
+</script>
+
+<!-- Service Worker Registration -->
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js');
+        });
+    }
+</script>
+
+<!-- Bootstrap JS Bundle -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

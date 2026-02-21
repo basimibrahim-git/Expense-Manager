@@ -5,6 +5,7 @@ require_once 'includes/header.php'; // NOSONAR
 require_once 'includes/sidebar.php'; // NOSONAR
 
 $user_id = $_SESSION['user_id'];
+$tenant_id = $_SESSION['tenant_id'];
 $curr_month = date('n');
 $curr_year = date('Y');
 
@@ -16,12 +17,12 @@ $currency_label = $base_currency;
 // 1. Fetch Summary Stats (Current Month)
 // Total Income
 $stmt = $pdo->prepare("SELECT SUM(amount) FROM income WHERE tenant_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ?");
-$stmt->execute([$_SESSION['tenant_id'], $curr_month, $curr_year]);
+$stmt->execute([$tenant_id, $curr_month, $curr_year]);
 $income_now = $stmt->fetchColumn() ?: 0;
 
 // Total Expenses
 $stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
-$stmt->execute([$_SESSION['tenant_id'], $curr_month, $curr_year]);
+$stmt->execute([$tenant_id, $curr_month, $curr_year]);
 $expense_now = $stmt->fetchColumn() ?: 0;
 
 // Total Net Worth (Latest Balances)
@@ -39,17 +40,17 @@ $stmt = $pdo->prepare("
     AND bank_name != 'Opening Balance Adjustment'
     AND id = (SELECT MAX(id) FROM bank_balances b2 WHERE b2.bank_name = b1.bank_name AND b2.tenant_id = b1.tenant_id)
 ");
-$stmt->execute([$_SESSION['tenant_id']]);
+$stmt->execute([$tenant_id]);
 $net_worth = $stmt->fetchColumn() ?: 0;
 
 // Total Credit Limit
 $stmt = $pdo->prepare("SELECT SUM(limit_amount) FROM cards WHERE tenant_id = ?");
-$stmt->execute([$_SESSION['tenant_id']]);
+$stmt->execute([$tenant_id]);
 $total_limit = $stmt->fetchColumn() ?: 0;
 
 // Credit Utilization Logic
 $stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND payment_method = 'Card' AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
-$stmt->execute([$_SESSION['tenant_id'], $curr_month, $curr_year]);
+$stmt->execute([$tenant_id, $curr_month, $curr_year]);
 $total_card_spend = $stmt->fetchColumn() ?: 0;
 
 $utilization = ($total_limit > 0) ? ($total_card_spend / $total_limit) * 100 : 0;
@@ -71,7 +72,7 @@ $stmt = $pdo->prepare("
         AND b2.balance_date <= LAST_DAY(DATE_SUB(NOW(), INTERVAL 1 YEAR))
     )
 ");
-$stmt->execute([$_SESSION['tenant_id']]);
+$stmt->execute([$tenant_id]);
 $last_year_net_worth = $stmt->fetchColumn() ?: 0;
 
 $wealth_growth_abs = $net_worth - $last_year_net_worth;
@@ -96,7 +97,7 @@ for ($i = 11; $i >= 0; $i--) {
             AND b2.balance_date <= ?
         )
     ");
-    $stmt->execute([$_SESSION['tenant_id'], $month_end_date]);
+    $stmt->execute([$tenant_id, $month_end_date]);
     $wealth_data[] = $stmt->fetchColumn() ?: 0;
 }
 
@@ -113,48 +114,47 @@ for ($i = 5; $i >= 0; $i--) {
 
     // Income
     $stmt = $pdo->prepare("SELECT SUM(amount) FROM income WHERE tenant_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ?");
-    $stmt->execute([$_SESSION['tenant_id'], $m, $y]);
+    $stmt->execute([$tenant_id, $m, $y]);
     $income_data[] = $stmt->fetchColumn() ?: 0;
 
     // Expense
     $stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
-    $stmt->execute([$_SESSION['tenant_id'], $m, $y]);
+    $stmt->execute([$tenant_id, $m, $y]);
     $expense_data[] = $stmt->fetchColumn() ?: 0;
 }
 
 // 3. Category Data (Current Month)
 $stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category");
-$stmt->execute([$_SESSION['tenant_id'], $curr_month, $curr_year]);
+$stmt->execute([$tenant_id, $curr_month, $curr_year]);
 $cat_results = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 $cat_labels = array_keys($cat_results);
 $cat_values = array_values($cat_results);
 
 // 5. ROI & Anatomy Stats
 $stmt = $pdo->prepare("SELECT SUM(cashback_earned) FROM expenses WHERE tenant_id = ? AND YEAR(expense_date) = ?");
-$stmt->execute([$_SESSION['tenant_id'], $curr_year]);
+$stmt->execute([$tenant_id, $curr_year]);
 $total_cashback = $stmt->fetchColumn() ?: 0;
 
 $stmt = $pdo->prepare("SELECT is_fixed, SUM(amount) as total FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY is_fixed");
-$stmt->execute([$_SESSION['tenant_id'], $curr_month, $curr_year]);
+$stmt->execute([$tenant_id, $curr_month, $curr_year]);
 $anatomy = $stmt->fetchAll(PDO::FETCH_KEY_PAIR); // [0 => 'Discretionary', 1 => 'Fixed']
 
 $fixed_cost = $anatomy[1] ?? 0;
 $var_cost = $anatomy[0] ?? 0;
 $total_cost = $fixed_cost + $var_cost;
 $fixed_pct = ($total_cost > 0) ? ($fixed_cost / $total_cost) * 100 : 0;
-$fixed_pct = ($total_cost > 0) ? ($fixed_cost / $total_cost) * 100 : 0;
 
 // 6. Emergency Runway (Avg Expense Last 3 Months)
 // Note: We use 3 months prior to current month for stability
 $stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND expense_date BETWEEN DATE_SUB(NOW(), INTERVAL 3 MONTH) AND NOW()");
-$stmt->execute([$_SESSION['tenant_id']]);
+$stmt->execute([$tenant_id]);
 $last_3m_spend = $stmt->fetchColumn() ?: 0;
 $avg_monthly_spend = $last_3m_spend / 3;
 $runway_months = ($avg_monthly_spend > 0) ? $net_worth / $avg_monthly_spend : 0;
 
 // Fetch Monthly Budgets for Dashboard Overview
 $budget_stmt = $pdo->prepare("SELECT category, amount FROM budgets WHERE tenant_id = ? AND month = ? AND year = ?");
-$budget_stmt->execute([$_SESSION['tenant_id'], $curr_month, $curr_year]);
+$budget_stmt->execute([$tenant_id, $curr_month, $curr_year]);
 $dash_budgets = $budget_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 $total_budgeted = array_sum($dash_budgets);
 $budget_utilization = ($total_budgeted > 0) ? ($expense_now / $total_budgeted) * 100 : 0;
@@ -163,7 +163,7 @@ $budget_utilization = ($total_budgeted > 0) ? ($expense_now / $total_budgeted) *
 $last_year_month = date('n', strtotime('-1 year'));
 $last_year_year = date('Y', strtotime('-1 year'));
 $stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category");
-$stmt->execute([$_SESSION['tenant_id'], $last_year_month, $last_year_year]);
+$stmt->execute([$tenant_id, $last_year_month, $last_year_year]);
 $last_year_cats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
 $creep_alerts = [];
@@ -185,12 +185,12 @@ foreach ($cat_results as $cat => $amount) {
 // 8. Cash Flow Projection (Next 30 Days)
 // Fetch Recurring Income
 $stmt = $pdo->prepare("SELECT amount, recurrence_day FROM income WHERE tenant_id = ? AND is_recurring = 1");
-$stmt->execute([$_SESSION['tenant_id']]);
+$stmt->execute([$tenant_id]);
 $recurring_incomes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch Recurring Expenses (Subscriptions)
 $stmt = $pdo->prepare("SELECT amount, DAY(expense_date) as day FROM expenses WHERE tenant_id = ? AND is_subscription = 1");
-$stmt->execute([$_SESSION['tenant_id']]);
+$stmt->execute([$tenant_id]);
 $recurring_expenses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $projected_dates = [];
@@ -218,19 +218,17 @@ for ($i = 0; $i <= 30; $i++) {
 
     $projected_dates[] = $formatted_date;
     $projected_balance[] = $running_bal;
-    $projected_dates[] = $formatted_date;
-    $projected_balance[] = $running_bal;
 }
 
 // 8.5 PHASE 4: ROI & Liquidity (Restored)
 // Fetch Cards for Smart Engine
 $stmt = $pdo->prepare("SELECT * FROM cards WHERE tenant_id = ?");
-$stmt->execute([$_SESSION['tenant_id']]);
+$stmt->execute([$tenant_id]);
 $roi_cards = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // True Liquidity: Net Worth - Unbilled Card Spends
 $stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND payment_method = 'Card' AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
-$stmt->execute([$_SESSION['tenant_id'], $curr_month, $curr_year]);
+$stmt->execute([$tenant_id, $curr_month, $curr_year]);
 $unbilled_card_spend = $stmt->fetchColumn() ?: 0; // Approx using current month spend
 $true_liquidity = $net_worth - $unbilled_card_spend;
 
@@ -241,7 +239,7 @@ $stmt = $pdo->prepare("
     WHERE tenant_id = ? AND is_fixed = 1
     AND expense_date BETWEEN DATE_SUB(NOW(), INTERVAL 3 MONTH) AND NOW()
 ");
-$stmt->execute([$_SESSION['tenant_id']]);
+$stmt->execute([$tenant_id]);
 $avg_fixed_cost = ($stmt->fetchColumn() ?: 0) / 3;
 $remaining_fixed = max(0, $avg_fixed_cost - $fixed_cost);
 $savings_target = $income_now * 0.20; // 20% Goal
@@ -250,7 +248,7 @@ $savings_target = $income_now * 0.20; // 20% Goal
 // Calculate how much we need to save THIS MONTH for all active goals
 $total_goal_contribution = 0;
 $stmt = $pdo->prepare("SELECT * FROM sinking_funds WHERE tenant_id = ? AND current_saved < target_amount AND target_date > NOW()");
-$stmt->execute([$_SESSION['tenant_id']]);
+$stmt->execute([$tenant_id]);
 $active_goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 foreach ($active_goals as $goal) {
@@ -280,7 +278,7 @@ $stmt = $pdo->prepare("
     WHERE e.tenant_id = ? AND e.payment_method = 'Card'
     ORDER BY e.expense_date DESC LIMIT 5
 ");
-$stmt->execute([$_SESSION['tenant_id']]);
+$stmt->execute([$tenant_id]);
 $recent_card_txns = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 foreach ($recent_card_txns as $txn) {
@@ -343,19 +341,19 @@ for ($i = 11; $i >= 0; $i--) {
 
     // Interest Accrued (Sum of positive amounts)
     $stmt = $pdo->prepare("SELECT SUM(amount) FROM interest_tracker WHERE tenant_id = ? AND amount > 0 AND MONTH(interest_date) = ? AND YEAR(interest_date) = ?");
-    $stmt->execute([$_SESSION['tenant_id'], $m, $y]);
+    $stmt->execute([$tenant_id, $m, $y]);
     $interest_accrued_data[] = $stmt->fetchColumn() ?: 0;
 
     // Payments Made (Sum of negative amounts -> convert to positive for chart)
     $stmt = $pdo->prepare("SELECT SUM(ABS(amount)) FROM interest_tracker WHERE tenant_id = ? AND amount < 0 AND MONTH(interest_date) = ? AND YEAR(interest_date) = ?");
-    $stmt->execute([$_SESSION['tenant_id'], $m, $y]);
+    $stmt->execute([$tenant_id, $m, $y]);
     $interest_paid_data[] = $stmt->fetchColumn() ?: 0;
 }
 
 // 12. Upcoming Bills & Pending Auto-Drafts
 $upcoming_bills = [];
 $curr_month_logged = $pdo->prepare("SELECT description FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
-$curr_month_logged->execute([$_SESSION['tenant_id'], $curr_month, $curr_year]);
+$curr_month_logged->execute([$tenant_id, $curr_month, $curr_year]);
 $logged_subs = $curr_month_logged->fetchAll(PDO::FETCH_COLUMN);
 
 // Fetch Unique Subscription Templates
@@ -369,7 +367,7 @@ $stmt = $pdo->prepare("
         GROUP BY description
     ) e2 ON e1.id = e2.max_id
 ");
-$stmt->execute([$_SESSION['tenant_id']]);
+$stmt->execute([$tenant_id]);
 $templates = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 foreach ($templates as $sb) {
@@ -538,7 +536,7 @@ usort($upcoming_bills, function ($a, $b) {
     <div class="col-lg-4">
         <div class="glass-panel p-4 h-100 text-center position-relative overflow-hidden">
             <div class="position-absolute top-0 start-0 w-100 h-100 bg-success bg-opacity-10" style="z-index: 0;"></div>
-            <h5 class="fw-bold mb-3 position-relative">ðŸŸ¢ Safe to Spend</h5>
+            <h5 class="fw-bold mb-3 position-relative">🟢 Safe to Spend</h5>
             <h2 class="display-4 fw-bold text-success position-relative blur-sensitive">
                 <?php echo number_format(max(0, $safe_to_spend), 2); ?>
             </h2>
@@ -549,7 +547,7 @@ usort($upcoming_bills, function ($a, $b) {
     <div class="col-lg-4">
         <div class="glass-panel p-4 h-100">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="fw-bold mb-0">â¤ï¸ Financial Health</h5>
+                <h5 class="fw-bold mb-0">❤️ Financial Health</h5>
                 <span class="badge bg-success-subtle text-success">Target: >20% Savings</span>
             </div>
 
@@ -571,7 +569,7 @@ usort($upcoming_bills, function ($a, $b) {
     <div class="col-lg-4">
         <div class="glass-panel p-4 h-100">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="fw-bold mb-0">ðŸ’³ Credit Utilization</h5>
+                <h5 class="fw-bold mb-0">💳 Credit Utilization</h5>
                 <span class="badge bg-primary-subtle text-primary">Target: <30%< /span>
             </div>
 
@@ -672,7 +670,7 @@ usort($upcoming_bills, function ($a, $b) {
     <!-- Cash Flow Projection -->
     <div class="col-lg-8">
         <div class="glass-panel p-4 h-100">
-            <h5 class="fw-bold mb-4">ðŸ”® 30-Day Cash Flow Projection</h5>
+            <h5 class="fw-bold mb-4">🔮 30-Day Cash Flow Projection</h5>
             <canvas id="projectionChart" style="max-height: 250px;"></canvas>
         </div>
     </div>
@@ -680,7 +678,7 @@ usort($upcoming_bills, function ($a, $b) {
     <!-- Lifestyle Creep -->
     <div class="col-lg-4">
         <div class="glass-panel p-4 h-100">
-            <h5 class="fw-bold mb-4">ðŸ“‰ Lifestyle Creep <span class="badge bg-warning text-dark ms-2">YoY
+            <h5 class="fw-bold mb-4">📉 Lifestyle Creep <span class="badge bg-warning text-dark ms-2">YoY
                     Alerts</span>
             </h5>
             <?php if (empty($creep_alerts)): ?>
@@ -766,7 +764,7 @@ usort($upcoming_bills, function ($a, $b) {
 <div class="row mb-5">
     <div class="col-12">
         <div class="glass-panel p-4">
-            <h5 class="fw-bold mb-3">ðŸ§© Spend Anatomy <span class="text-muted small fw-normal">(Fixed vs.
+            <h5 class="fw-bold mb-3">🧩 Spend Anatomy <span class="text-muted small fw-normal">(Fixed vs.
                     Lifestyle)</span></h5>
             <div class="progress" style="height: 25px;">
                 <div class="progress-bar bg-secondary" style="width: <?php echo $fixed_pct; ?>%"
@@ -858,7 +856,7 @@ usort($upcoming_bills, function ($a, $b) {
         <div class="glass-panel p-4">
             <div class="d-flex justify-content-between align-items-end mb-4">
                 <div>
-                    <h5 class="fw-bold mb-1">ðŸš€ Wealth Journey</h5>
+                    <h5 class="fw-bold mb-1">🚀 Wealth Journey</h5>
                     <p class="text-muted small mb-0">Net Worth Growth over last 12 months</p>
                 </div>
                 <div class="text-end">
@@ -889,11 +887,11 @@ usort($upcoming_bills, function ($a, $b) {
     new Chart(interestCtx, {
         type: 'bar',
         data: {
-            labels: <?php echo json_encode($interest_months); ?>,
+            labels: <?php echo json_encode($interest_months) ?>,
             datasets: [
                 {
                     label: 'Interest Accrued (Debt)',
-                    data: <?php echo json_encode($interest_accrued_data); ?>,
+                    data: <?php echo json_encode($interest_accrued_data) ?>,
                     backgroundColor: 'rgba(220, 53, 69, 0.7)', // Danger Red
                     borderColor: '#dc3545',
                     borderWidth: 1,
@@ -901,7 +899,7 @@ usort($upcoming_bills, function ($a, $b) {
                 },
                 {
                     label: 'Payments Made (Charity)',
-                    data: <?php echo json_encode($interest_paid_data); ?>,
+                    data: <?php echo json_encode($interest_paid_data) ?>,
                     backgroundColor: 'rgba(25, 135, 84, 0.7)', // Success Green
                     borderColor: '#198754',
                     borderWidth: 1,
@@ -947,10 +945,10 @@ usort($upcoming_bills, function ($a, $b) {
     new Chart(ctxWealth, {
         type: 'line',
         data: {
-            labels: <?php echo json_encode($wealth_months); ?>,
+            labels: <?php echo json_encode($wealth_months) ?>,
             datasets: [{
                 label: 'Net Worth',
-                data: <?php echo json_encode($wealth_data); ?>,
+                data: <?php echo json_encode($wealth_data) ?>,
                 borderColor: '#1e3a8a', // Deep Blue
                 backgroundColor: 'rgba(30, 58, 138, 0.1)',
                 borderWidth: 3,
@@ -1011,10 +1009,10 @@ usort($upcoming_bills, function ($a, $b) {
     new Chart(ctx, {
         type: 'line',
         data: {
-            labels: <?php echo json_encode($months); ?>,
+            labels: <?php echo json_encode($months) ?>,
             datasets: [{
                 label: 'Income',
-                data: <?php echo json_encode($income_data); ?>,
+                data: <?php echo json_encode($income_data) ?>,
                 borderColor: '#198754',
                 backgroundColor: 'rgba(25, 135, 84, 0.1)',
                 tension: 0.4,
@@ -1022,7 +1020,7 @@ usort($upcoming_bills, function ($a, $b) {
             },
             {
                 label: 'Expense',
-                data: <?php echo json_encode($expense_data); ?>,
+                data: <?php echo json_encode($expense_data) ?>,
                 borderColor: '#dc3545',
                 backgroundColor: 'rgba(220, 53, 69, 0.1)',
                 tension: 0.4,
@@ -1046,9 +1044,9 @@ usort($upcoming_bills, function ($a, $b) {
         new Chart(ctx2, {
             type: 'doughnut',
             data: {
-                labels: <?php echo json_encode($cat_labels); ?>,
+                labels: <?php echo json_encode($cat_labels) ?>,
                 datasets: [{
-                    data: <?php echo json_encode($cat_values); ?>,
+                    data: <?php echo json_encode($cat_values) ?>,
                     backgroundColor: [
                         '#0d6efd', '#6610f2', '#6f42c1', '#d63384',
                         '#dc3545', '#fd7e14', '#ffc107', '#198754',
@@ -1072,10 +1070,10 @@ usort($upcoming_bills, function ($a, $b) {
     new Chart(ctx3, {
         type: 'line',
         data: {
-            labels: <?php echo json_encode($projected_dates); ?>,
+            labels: <?php echo json_encode($projected_dates) ?>,
             datasets: [{
                 label: 'Projected Balance',
-                data: <?php echo json_encode($projected_balance); ?>,
+                data: <?php echo json_encode($projected_balance) ?>,
                 borderColor: '#6610f2',
                 backgroundColor: 'rgba(102, 16, 242, 0.1)',
                 borderDash: [5, 5],

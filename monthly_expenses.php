@@ -102,16 +102,21 @@ try {
                     AND YEAR(e.expense_date) = :year";
 
     // Append the same filters as count/list
-    if ($category_filter)
+    if ($category_filter) {
         $total_query .= " AND e.category = :cat";
-    if ($payment_filter)
+    }
+    if ($payment_filter) {
         $total_query .= " AND e.payment_method = :pm";
-    if ($card_filter)
+    }
+    if ($card_filter) {
         $total_query .= " AND e.card_id = :card_id";
-    if ($start_date)
+    }
+    if ($start_date) {
         $total_query .= " AND e.expense_date >= :start";
-    if ($end_date)
+    }
+    if ($end_date) {
         $total_query .= " AND e.expense_date <= :end";
+    }
 
     $total_stmt = $pdo->prepare($total_query);
     $total_stmt->execute($count_params); // Reuse same params as count
@@ -123,6 +128,7 @@ try {
     $cat_budgets = $budget_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
     $actual_stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category");
+    $actual_stmt->execute([$_SESSION['tenant_id'], $month, $year]);
     $actual_stmt->execute([$_SESSION['tenant_id'], $month, $year]);
     $cat_actuals = $actual_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
@@ -159,8 +165,9 @@ try {
         <input type="hidden" name="year" value="<?php echo $year; ?>">
 
         <div class="col-6 col-md-2">
-            <label class="small text-muted mb-1">Category</label>
-            <select name="category" class="form-select form-select-sm" onchange="this.form.submit()">
+            <label for="filterCategory" class="small text-muted mb-1">Category</label>
+            <select name="category" id="filterCategory" class="form-select form-select-sm"
+                onchange="this.form.submit()">
                 <option value="">All Categories</option>
                 <?php
                 $categories = ['Grocery', 'Medical', 'Food', 'Utilities', 'Transport', 'Shopping', 'Entertainment', 'Travel', 'Education', 'Other'];
@@ -173,8 +180,9 @@ try {
         </div>
 
         <div class="col-6 col-md-2">
-            <label class="small text-muted mb-1">Payment</label>
-            <select name="payment_method" class="form-select form-select-sm" onchange="this.form.submit()">
+            <label for="filterPayment" class="small text-muted mb-1">Payment</label>
+            <select name="payment_method" id="filterPayment" class="form-select form-select-sm"
+                onchange="this.form.submit()">
                 <option value="">All Methods</option>
                 <option value="Cash" <?php echo $payment_filter == 'Cash' ? 'selected' : ''; ?>>Cash</option>
                 <option value="Card" <?php echo $payment_filter == 'Card' ? 'selected' : ''; ?>>Card</option>
@@ -182,8 +190,8 @@ try {
         </div>
 
         <div class="col-6 col-md-2">
-            <label class="small text-muted mb-1">Card</label>
-            <select name="card_id" class="form-select form-select-sm" onchange="this.form.submit()">
+            <label for="filterCard" class="small text-muted mb-1">Card</label>
+            <select name="card_id" id="filterCard" class="form-select form-select-sm" onchange="this.form.submit()">
                 <option value="">All Cards</option>
                 <?php foreach ($user_cards as $uc): ?>
                     <option value="<?php echo $uc['id']; ?>" <?php echo $card_filter == $uc['id'] ? 'selected' : ''; ?>>
@@ -194,14 +202,14 @@ try {
         </div>
 
         <div class="col-6 col-md-2">
-            <label class="small text-muted mb-1">From</label>
-            <input type="date" name="start" class="form-control form-control-sm"
+            <label for="filterStart" class="small text-muted mb-1">From</label>
+            <input type="date" name="start" id="filterStart" class="form-control form-control-sm"
                 value="<?php echo htmlspecialchars($start_date ?? ''); ?>" onchange="this.form.submit()">
         </div>
 
         <div class="col-6 col-md-2">
-            <label class="small text-muted mb-1">To</label>
-            <input type="date" name="end" class="form-control form-control-sm"
+            <label for="filterEnd" class="small text-muted mb-1">To</label>
+            <input type="date" name="end" id="filterEnd" class="form-control form-control-sm"
                 value="<?php echo htmlspecialchars($end_date ?? ''); ?>" onchange="this.form.submit()">
         </div>
 
@@ -245,10 +253,12 @@ try {
                 $spent = $cat_actuals[$cat] ?? 0;
                 $pct = ($spent / $limit) * 100;
                 $color = 'success';
-                if ($pct > 80)
+                if ($pct > 80) {
                     $color = 'warning';
-                if ($pct > 100)
+                }
+                if ($pct > 100) {
                     $color = 'danger';
+                }
                 ?>
                 <div class="col-md-3">
                     <div class="small d-flex justify-content-between mb-1">
@@ -375,17 +385,19 @@ try {
         <?php if ($total_pages > 1): ?>
             <div class="card-footer bg-light d-flex justify-content-between align-items-center py-3">
                 <div class="text-muted small">
-                    Showing <?php echo ($offset + 1); ?>â€“<?php echo min($offset + $items_per_page, $total_items); ?> of
+                    Showing <?php echo $offset + 1; ?>–<?php echo min($offset + $items_per_page, $total_items); ?> of
                     <?php echo $total_items; ?> expenses
                 </div>
                 <nav aria-label="Page navigation">
                     <ul class="pagination pagination-sm mb-0">
                         <?php
                         $base_url = "?month=$month&year=$year";
-                        if ($category_filter)
+                        if ($category_filter) {
                             $base_url .= "&category=" . urlencode($category_filter);
-                        if ($payment_filter)
+                        }
+                        if ($payment_filter) {
                             $base_url .= "&payment_method=" . urlencode($payment_filter);
+                        }
                         ?>
                         <li class="page-item <?php echo $page_num <= 1 ? 'disabled' : ''; ?>">
                             <a class="page-link" href="<?php echo $base_url; ?>&page=<?php echo $page_num - 1; ?>">

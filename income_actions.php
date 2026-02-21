@@ -76,7 +76,7 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         header("Location: monthly_income.php?month=$month&year=$year&success=Income recorded and balance updated");
         exit();
     } catch (PDOException $e) {
-        header("Location: add_income.php?error=Failed to add income: " . urlencode($e->getMessage()));
+        header("Location: add_income.php?error=System error occurred during income processing.");
         exit();
     }
 
@@ -148,7 +148,7 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
 
     } catch (PDOException $e) {
-        header("Location: edit_income.php?id=$income_id&error=Failed to update: " . urlencode($e->getMessage()));
+        header("Location: edit_income.php?id=$income_id&error=System error occurred during update.");
         exit();
     }
 }

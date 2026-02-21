@@ -10,12 +10,12 @@ $user_id = $_SESSION['user_id'];
 // We group by description to treat each unique recurring bill as a "Template"
 // We take the MAX(id) to get the most recent metadata (amount, category, etc.)
 $query = "
-    SELECT e1.* 
+    SELECT e1.*
     FROM expenses e1
     JOIN (
-        SELECT MAX(id) as max_id 
-        FROM expenses 
-        WHERE tenant_id = :tenant_id AND is_subscription = 1 
+        SELECT MAX(id) as max_id
+        FROM expenses
+        WHERE tenant_id = :tenant_id AND is_subscription = 1
         GROUP BY description
     ) e2 ON e1.id = e2.max_id
     ORDER BY e1.amount DESC";

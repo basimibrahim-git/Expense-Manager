@@ -10,8 +10,9 @@ $default_date = date('Y-m-d');
 
 if ($pre_month && $pre_year) {
     $default_date = sprintf('%04d-%02d-01', $pre_year, $pre_month);
-    if ($pre_month == date('n') && $pre_year == date('Y'))
+    if ($pre_month == date('n') && $pre_year == date('Y')) {
         $default_date = date('Y-m-d');
+    }
 }
 
 // Fetch managed banks
@@ -36,8 +37,8 @@ $all_banks = $banks_stmt->fetchAll();
                 <input type="hidden" name="action" value="add_balance">
 
                 <div class="mb-3">
-                    <label class="form-label">Bank Name <span class="text-danger">*</span></label>
-                    <select name="bank_id" class="form-select form-select-lg" required>
+                    <label for="bank_id" class="form-label">Bank Name <span class="text-danger">*</span></label>
+                    <select name="bank_id" id="bank_id" class="form-select form-select-lg" required>
                         <option value="">-- Select Bank --</option>
                         <?php foreach ($all_banks as $b): ?>
                             <option value="<?php echo $b['id']; ?>">
@@ -50,20 +51,21 @@ $all_banks = $banks_stmt->fetchAll();
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Balance Amount <span class="text-danger">*</span></label>
+                    <label for="amount" class="form-label">Balance Amount <span class="text-danger">*</span></label>
                     <div class="input-group">
                         <select name="currency" class="form-select fw-bold text-info" style="max-width: 100px;">
                             <option value="AED">AED</option>
                             <option value="INR">INR</option>
                         </select>
-                        <input type="number" name="amount" class="form-control form-control-lg" step="0.01"
+                        <input type="number" name="amount" id="amount" class="form-control form-control-lg" step="0.01"
                             placeholder="0.00" required>
                     </div>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Snapshot Date <span class="text-danger">*</span></label>
-                    <input type="date" name="balance_date" class="form-control form-control-lg"
+                    <label for="balance_date" class="form-label">Snapshot Date <span
+                            class="text-danger">*</span></label>
+                    <input type="date" name="balance_date" id="balance_date" class="form-control form-control-lg"
                         value="<?php echo $default_date; ?>" required>
                     <div class="form-text">The date this balance was recorded.</div>
                 </div>

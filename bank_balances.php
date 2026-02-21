@@ -7,19 +7,18 @@ require_once 'includes/sidebar.php';
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 
 // Get Total Balance Snapshot per month
-// Get Total Balance Snapshot per month
 // Note: This logic sums the *latest* entry for each bank within that month to get "Total Net Worth"
 $stmt = $pdo->prepare("
-    SELECT MONTH(balance_date) as month, 
-    SUM(CASE WHEN currency='INR' THEN amount / 24 ELSE amount END) as total 
+    SELECT MONTH(balance_date) as month,
+    SUM(CASE WHEN currency='INR' THEN amount / 24 ELSE amount END) as total
     FROM bank_balances b1
-    WHERE tenant_id = :tenant_id 
+    WHERE tenant_id = :tenant_id
     AND YEAR(balance_date) = :year
     AND id = (
-        SELECT MAX(id) 
-        FROM bank_balances b2 
-        WHERE b2.bank_name = b1.bank_name 
-        AND MONTH(b2.balance_date) = MONTH(b1.balance_date) 
+        SELECT MAX(id)
+        FROM bank_balances b2
+        WHERE b2.bank_name = b1.bank_name
+        AND MONTH(b2.balance_date) = MONTH(b1.balance_date)
         AND YEAR(b2.balance_date) = YEAR(b1.balance_date)
         AND b2.tenant_id = b1.tenant_id
     )

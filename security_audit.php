@@ -34,11 +34,11 @@ try {
 
     // Get logs with User Names
     $stmt = $pdo->prepare("
-        SELECT a.*, u.name as user_name 
+        SELECT a.*, u.name as user_name
         FROM audit_logs a
         LEFT JOIN users u ON a.user_id = u.id
-        $where 
-        ORDER BY a.created_at DESC 
+        $where
+        ORDER BY a.created_at DESC
         LIMIT $limit OFFSET $offset
     ");
     $stmt->execute($params);
@@ -56,7 +56,8 @@ try {
     $action_types = $typeStmt->fetchAll(PDO::FETCH_COLUMN);
 
 } catch (PDOException $e) {
-    $error = "Failed to fetch logs: " . $e->getMessage();
+    error_log("Failed to fetch logs: " . $e->getMessage());
+    $error = "A system error occurred while fetching logs. Please try again later.";
 }
 
 require_once 'includes/header.php';
@@ -137,7 +138,15 @@ require_once 'includes/sidebar.php';
                                 <td>
                                     <?php
                                     $badgeClass = 'bg-secondary';
-                                    if (strpos($log['action'], 'delete') !== false) { $badgeClass = 'bg-danger'; } elseif (strpos($log['action'], 'login') !== false) { $badgeClass = 'bg-success'; } elseif (strpos($log['action'], 'update') !== false) { $badgeClass = 'bg-warning text-dark'; } elseif (strpos($log['action'], 'add') !== false) { $badgeClass = 'bg-primary'; }
+                                    if (strpos($log['action'], 'delete') !== false) {
+                                        $badgeClass = 'bg-danger';
+                                    } elseif (strpos($log['action'], 'login') !== false) {
+                                        $badgeClass = 'bg-success';
+                                    } elseif (strpos($log['action'], 'update') !== false) {
+                                        $badgeClass = 'bg-warning text-dark';
+                                    } elseif (strpos($log['action'], 'add') !== false) {
+                                        $badgeClass = 'bg-primary';
+                                    }
                                     ?>
                                     <span class="badge <?php echo $badgeClass; ?> rounded-pill px-3">
                                         <?php echo ucwords(str_replace('_', ' ', $log['action'])); ?>
@@ -204,10 +213,11 @@ require_once 'includes/sidebar.php';
                         <div id="modalTime" class="h5"></div>
                     </div>
                     <div class="col-12">
-                        <label class="text-muted small fw-bold text-uppercase d-block mb-1">Context /
+                        <label class="text-muted small fw-bold text-uppercase d-block mb-1" id="modalContextLabel"
+                            for="modalContextText">Context /
                             Description</label>
-                        <div id="modalContext" class="p-3 bg-light rounded-3 font-monospace"
-                            style="word-break: break-all;"></div>
+                        <div id="modalContextText" class="p-3 bg-light rounded-3 font-monospace"
+                            aria-labelledby="modalContextLabel" style="word-break: break-all;"></div>
                     </div>
                     <div class="col-md-6">
                         <div class="text-muted small fw-bold text-uppercase d-block mb-1">IP Address</div>
@@ -234,7 +244,7 @@ require_once 'includes/sidebar.php';
         document.getElementById('modalUserName').textContent = log.user_name || 'System / Unknown';
         document.getElementById('modalAction').textContent = log.action.replace(/_/g, ' ').toUpperCase();
         document.getElementById('modalTime').textContent = log.display_time;
-        document.getElementById('modalContext').textContent = log.context;
+        document.getElementById('modalContextText').textContent = log.context;
         document.getElementById('modalIP').textContent = log.ip_address;
         document.getElementById('modalUA').textContent = log.user_agent;
 
@@ -242,4 +252,4 @@ require_once 'includes/sidebar.php';
     }
 </script>
 
-<?php include 'includes/footer.php'; ?>
+<?php require_once 'includes/footer.php'; ?>

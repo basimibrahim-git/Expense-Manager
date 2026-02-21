@@ -4,7 +4,6 @@ require_once 'config.php';
 require_once 'includes/header.php';
 require_once 'includes/sidebar.php';
 
-// Fetch cards with auto-healing for missing table
 // Fetch cards with current month usage
 try {
     $curr_month = date('n');
@@ -35,7 +34,6 @@ try {
     ]);
     $cards = $stmt->fetchAll();
 } catch (\PDOException $e) {
-    // Auto-healing logic removed for security.
     error_log("Database Error in my_cards.php: " . $e->getMessage());
     die("A system error occurred. Please contact support.");
 }
@@ -82,7 +80,8 @@ try {
                     style="background: <?php echo !empty($card['card_image']) ? "linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('" . htmlspecialchars($card['card_image']) . "')" : "linear-gradient(45deg, #1e1e1e, #3a3a3a)"; ?>; background-size: cover; background-position: center; border-radius: 16px; min-height: 220px; transition: transform 0.2s;">
 
                     <!-- Make card clickable -->
-                    <a href="view_card.php?id=<?php echo $card['id']; ?>" class="text-decoration-none text-white h-100 d-block">
+                    <a href="view_card.php?id=<?php echo $card['id']; ?>" class="text-decoration-none text-white h-100 d-block"
+                        aria-label="View details for <?php echo htmlspecialchars($card['bank_name'] . ' ' . $card['card_name']); ?>">
                         <div
                             style="position: absolute; top: -20px; right: -20px; width: 100px; height: 100px; background: rgba(255,255,255,0.1); border-radius: 50%;">
                         </div>
@@ -119,9 +118,9 @@ try {
                                         <?php echo number_format($usage_pct, 1); ?>%
                                     </span>
                                 </div>
-                                <div class="progress bg-white bg-opacity-10" style="height: 6px;">
-                                    <div class="progress-bar bg-<?php echo $usage_color; ?>" role="progressbar"
-                                        style="width: <?php echo $usage_pct; ?>%"></div>
+                                <div class="progress-wrapper mb-2">
+                                    <progress class="w-100" value="<?php echo min($usage_pct, 100); ?>" max="100"
+                                        title="<?php echo number_format($usage_pct, 1); ?>% usage"></progress>
                                 </div>
                                 <div class="d-flex justify-content-between mt-2 align-items-end">
                                     <div class="lh-1">

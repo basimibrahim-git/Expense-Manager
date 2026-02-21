@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ];
 
             if (writeEnvFile($envFile, $envData)) {
-                // Determine base URL for next step redirect if needed, 
+                // Determine base URL for next step redirect if needed,
                 // but we carry state via session or hidden inputs.
                 // For simplicity, we just move to next step in UI.
                 $step = 3;
@@ -68,10 +68,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         } catch (PDOException $e) {
             $error = "Connection Failed. Please check your credentials.";
-            if ($e->getCode() == 1045)
+            if ($e->getCode() == 1045) {
                 $error = "Access Denied: Invalid Username or Password.";
-            if ($e->getCode() == 2002)
+            }
+            if ($e->getCode() == 2002) {
                 $error = "Connection Failed: Could not find Database Host.";
+            }
             $step = 1;
         }
     } elseif ($step === 3) {
@@ -396,7 +398,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 
@@ -507,7 +508,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <!-- Error Messages -->
                     <?php if ($error): ?>
                         <div class="alert alert-danger shadow-sm border-0 shake-animation">
-                            <i class="fa-solid fa-triangle-exclamation me-2"></i> <?php echo htmlspecialchars($error); ?>
+                            <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                            <?php echo htmlspecialchars($error); ?>
                         </div>
                     <?php endif; ?>
 
@@ -518,29 +520,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <input type="hidden" name="step" value="2">
                             <h4 class="fw-bold mb-3">Database Connection</h4>
                             <div class="mb-3">
-                                <label class="form-label">Database Host</label>
-                                <input type="text" name="db_host" class="form-control form-control-lg"
+                                <label class="form-label" for="db_host">Database Host</label>
+                                <input type="text" name="db_host" id="db_host" class="form-control form-control-lg"
                                     placeholder="localhost" value="localhost" required>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Database Name</label>
-                                <input type="text" name="db_name" class="form-control form-control-lg"
+                                <label class="form-label" for="db_name">Database Name</label>
+                                <input type="text" name="db_name" id="db_name" class="form-control form-control-lg"
                                     placeholder="expense_manager" required>
                             </div>
                             <div class="row g-2 mb-3">
                                 <div class="col-6">
-                                    <label class="form-label">Username</label>
-                                    <input type="text" name="db_user" class="form-control" placeholder="root" required>
+                                    <label class="form-label" for="db_user">Username</label>
+                                    <input type="text" name="db_user" id="db_user" class="form-control" placeholder="root"
+                                        required>
                                 </div>
                                 <div class="col-6">
-                                    <label class="form-label">Password</label>
-                                    <input type="password" name="db_pass" class="form-control" placeholder="******">
+                                    <label class="form-label" for="db_pass">Password</label>
+                                    <input type="password" name="db_pass" id="db_pass" class="form-control"
+                                        placeholder="******">
                                 </div>
                             </div>
 
                             <div class="mb-4">
-                                <label class="form-label">Application Timezone</label>
-                                <select name="app_timezone" class="form-select form-control-lg">
+                                <label class="form-label" for="app_timezone">Application Timezone</label>
+                                <select name="app_timezone" id="app_timezone" class="form-select form-control-lg">
                                     <option value="Asia/Dubai" selected>Asia/Dubai (GST)</option>
                                     <option value="UTC">UTC</option>
                                     <option value="America/New_York">New York (EST)</option>
@@ -562,8 +566,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <?php if ($step === 3): ?>
                             <input type="hidden" name="step" value="3"> <!-- Submits to itself for processing -->
                             <div class="text-center py-4">
-                                <div class="spinner-border text-primary mb-3" role="status" style="display:none;"
-                                    id="installSpinner"></div>
+                                <output class="spinner-border text-primary mb-3" style="display:none;"
+                                    id="installSpinner"></output>
                                 <i class="fa-solid fa-database fa-4x text-info mb-3" id="dbIcon"></i>
                                 <h4 class="fw-bold">Database Connected!</h4>
                                 <p class="text-muted">We are ready to install the database schema.</p>
@@ -594,18 +598,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <input type="hidden" name="step" value="4">
                             <h4 class="fw-bold mb-3">Create Admin Account</h4>
                             <div class="mb-3">
-                                <label class="form-label">Full Name</label>
-                                <input type="text" name="name" class="form-control form-control-lg" placeholder="John Doe"
-                                    required>
+                                <label class="form-label" for="admin_name">Full Name</label>
+                                <input type="text" name="name" id="admin_name" class="form-control form-control-lg"
+                                    placeholder="John Doe" required>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Email Address</label>
-                                <input type="email" name="email" class="form-control form-control-lg"
+                                <label class="form-label" for="admin_email">Email Address</label>
+                                <input type="email" name="email" id="admin_email" class="form-control form-control-lg"
                                     placeholder="john@example.com" required>
                             </div>
                             <div class="mb-4">
-                                <label class="form-label">Password</label>
-                                <input type="password" name="password" class="form-control form-control-lg" required>
+                                <label class="form-label" for="admin_password">Password</label>
+                                <input type="password" name="password" id="admin_password"
+                                    class="form-control form-control-lg" required>
                             </div>
 
                             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -638,7 +643,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <script>
                                 function cleanup() {
                                     // Trigger cleanup via beacon or simple timeout fetch
-                                    // Since we are redirecting, we can attempt a sync fetch or 
+                                    // Since we are redirecting, we can attempt a sync fetch or
                                     // more reliably, let the user click and WE perform the action via a separate tiny script?
                                     // OR: We can just use a PHP script as the target of the link that deletes files then redirects.
                                     window.location.href = "finish_install.php";

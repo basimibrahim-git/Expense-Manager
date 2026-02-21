@@ -22,13 +22,13 @@ if (!$income) {
 }
 
 $categories = [
-    'Salary' => 'ðŸ’¼ Salary',
-    'Incentives' => 'ðŸŽ¯ Incentives / Commission',
-    'Business' => 'ðŸ¢ Business Income',
-    'Bonus' => 'ðŸŽ Bonus',
-    'Investment' => 'ðŸ“ˆ Investment Return',
-    'Gift' => 'ðŸŽ€ Gift',
-    'Other' => 'ðŸ”¹ Other'
+    'Salary' => '💼 Salary',
+    'Incentives' => '🎯 Incentives / Commission',
+    'Business' => '🏢 Business Income',
+    'Bonus' => '🎁 Bonus',
+    'Investment' => '📈 Investment Return',
+    'Gift' => '🎀 Gift',
+    'Other' => '🔹 Other'
 ];
 ?>
 

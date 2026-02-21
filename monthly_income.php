@@ -69,7 +69,6 @@ $total_income = $sum_stmt->fetchColumn() ?: 0;
         </h3>
     </div>
 </div>
-</div>
 
 <?php if (isset($_GET['success'])): ?>
     <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
@@ -94,8 +93,9 @@ $total_income = $sum_stmt->fetchColumn() ?: 0;
         <input type="hidden" name="year" value="<?php echo $year; ?>">
 
         <div class="col-md-3">
-            <label class="small text-muted mb-1">Category</label>
-            <select name="category" class="form-select form-select-sm" onchange="this.form.submit()">
+            <label for="filterCategory" class="small text-muted mb-1">Category</label>
+            <select name="category" id="filterCategory" class="form-select form-select-sm"
+                onchange="this.form.submit()">
                 <option value="">All Categories</option>
                 <?php
                 $income_categories = ['Salary', 'Incentives', 'Business', 'Bonus', 'Investment', 'Gift', 'Other'];
@@ -108,14 +108,14 @@ $total_income = $sum_stmt->fetchColumn() ?: 0;
         </div>
 
         <div class="col-md-2">
-            <label class="small text-muted mb-1">From</label>
-            <input type="date" name="start" class="form-control form-control-sm"
+            <label for="filterStart" class="small text-muted mb-1">From</label>
+            <input type="date" name="start" id="filterStart" class="form-control form-control-sm"
                 value="<?php echo htmlspecialchars($start_date ?? ''); ?>" onchange="this.form.submit()">
         </div>
 
         <div class="col-md-2">
-            <label class="small text-muted mb-1">To</label>
-            <input type="date" name="end" class="form-control form-control-sm"
+            <label for="filterEnd" class="small text-muted mb-1">To</label>
+            <input type="date" name="end" id="filterEnd" class="form-control form-control-sm"
                 value="<?php echo htmlspecialchars($end_date ?? ''); ?>" onchange="this.form.submit()">
         </div>
 
@@ -212,7 +212,7 @@ $total_income = $sum_stmt->fetchColumn() ?: 0;
         <?php if ($total_pages > 1): ?>
             <div class="card-footer bg-light d-flex justify-content-between align-items-center py-3">
                 <div class="text-muted small">
-                    Showing <?php echo ($offset + 1); ?>â€“<?php echo min($offset + $items_per_page, $total_items); ?> of
+                    Showing <?php echo $offset + 1; ?>–<?php echo min($offset + $items_per_page, $total_items); ?> of
                     <?php echo $total_items; ?> entries
                 </div>
                 <nav aria-label="Page navigation">

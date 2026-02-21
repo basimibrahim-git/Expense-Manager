@@ -4,14 +4,13 @@ require_once 'config.php';
 require_once 'includes/header.php';
 require_once 'includes/sidebar.php';
 
-
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 
 // Get total interest per month for the selected year
 $stmt = $pdo->prepare("
-    SELECT MONTH(interest_date) as month, SUM(amount) as total 
-    FROM interest_tracker 
-    WHERE tenant_id = :tenant_id AND YEAR(interest_date) = :year 
+    SELECT MONTH(interest_date) as month, SUM(amount) as total
+    FROM interest_tracker
+    WHERE tenant_id = :tenant_id AND YEAR(interest_date) = :year
     GROUP BY MONTH(interest_date)
 ");
 $stmt->execute(['tenant_id' => $_SESSION['tenant_id'], 'year' => $year]);
@@ -25,9 +24,9 @@ $stmt->execute([$_SESSION['tenant_id'], $year]);
 $year_stats = $stmt->fetch();
 $total_accrued = $year_stats['total_accrued'] ?? 0;
 $total_paid = $year_stats['total_paid'] ?? 0;
-// For the dashboard, "Remaining Due" is usually Net for that year? 
+// For the dashboard, "Remaining Due" is usually Net for that year?
 // Or does user want Global Remaining Due but Year Specific Paid?
-// User said: "dashboard card shows that select years total". 
+// User said: "dashboard card shows that select years total".
 // So filtering both is correct based on instruction.
 $current_balance = $total_accrued - $total_paid;
 
@@ -178,8 +177,9 @@ $current_year = date('Y');
 
                         <div class="mt-4">
                             <?php echo $amount_html; ?>
-                            <?php if ($has_data)
-                                echo '<div class="mt-1">' . $status_html . '</div>'; ?>
+                            <?php if ($has_data) {
+                                echo '<div class="mt-1">' . $status_html . '</div>';
+                            } ?>
                         </div>
                     </div>
                 </div>
@@ -202,29 +202,29 @@ $current_year = date('Y');
                     <input type="hidden" name="action" value="add_payment">
 
                     <div class="mb-3">
-                        <label class="form-label">Payment Date</label>
-                        <input type="date" name="payment_date" class="form-control" value="<?php echo date('Y-m-d'); ?>"
-                            required>
+                        <label for="paymentDate" class="form-label">Payment Date</label>
+                        <input type="date" name="payment_date" id="paymentDate" class="form-control"
+                            value="<?php echo date('Y-m-d'); ?>" required>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Paying For (Month/Year)</label>
-                        <input type="month" name="target_month_year" class="form-control" required>
+                        <label for="targetMonthYear" class="form-label">Paying For (Month/Year)</label>
+                        <input type="month" name="target_month_year" id="targetMonthYear" class="form-control" required>
                         <div class="form-text">Select which month/year this payment is for.</div>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Amount Paid</label>
+                        <label for="amountPaid" class="form-label">Amount Paid</label>
                         <div class="input-group">
                             <span class="input-group-text">AED</span>
-                            <input type="number" step="0.01" name="amount" class="form-control" placeholder="0.00"
-                                required>
+                            <input type="number" step="0.01" name="amount" id="amountPaid" class="form-control"
+                                placeholder="0.00" required>
                         </div>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Description / Charity</label>
-                        <input type="text" name="title" class="form-control"
+                        <label for="paymentTitle" class="form-label">Description / Charity</label>
+                        <input type="text" name="title" id="paymentTitle" class="form-control"
                             placeholder="e.g. Charity via Emirates Red Crescent" required>
                     </div>
 

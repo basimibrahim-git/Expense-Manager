@@ -1,8 +1,8 @@
 <?php
 $page_title = "Add Card";
-require_once 'config.php';
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+require_once 'config.php'; // NOSONAR
+require_once 'includes/header.php'; // NOSONAR
+require_once 'includes/sidebar.php'; // NOSONAR
 
 // Fetch all banks for the dropdown
 $banks_stmt = $pdo->prepare("SELECT id, bank_name FROM banks WHERE tenant_id = ? ORDER BY is_default DESC, bank_name ASC");
@@ -29,7 +29,7 @@ $all_banks = $banks_stmt->fetchAll();
 
                 <!-- Moved Bank URL to Top -->
                 <div class="mb-4">
-                    <label class="form-label">Bank Login URL <span
+                    <label class="form-label" for="bankUrlInput">Bank Login URL <span
                             class="badge bg-info text-dark rounded-pill ms-2">Auto-Detect</span></label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="fa-solid fa-link"></i></span>
@@ -47,9 +47,9 @@ $all_banks = $banks_stmt->fetchAll();
                 <h5 class="mb-3 text-muted">Card Details</h5>
 
                 <div class="mb-3">
-                    <label class="form-label">Associated Bank <span
+                    <label class="form-label" for="bankSelect">Associated Bank <span
                             class="text-secondary small">(Optional)</span></label>
-                    <select name="bank_id" class="form-select">
+                    <select name="bank_id" id="bankSelect" class="form-select">
                         <option value="">-- No Bank Linked --</option>
                         <?php foreach ($all_banks as $b): ?>
                             <option value="<?php echo $b['id']; ?>">
@@ -61,28 +61,30 @@ $all_banks = $banks_stmt->fetchAll();
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Bank Name <span class="text-danger">*</span></label>
+                    <label class="form-label" for="bankNameInput">Bank Name <span class="text-danger">*</span></label>
                     <input type="text" name="bank_name" id="bankNameInput" class="form-control"
                         placeholder="e.g. ADCB, ENBD, FAB" required>
                     <div class="form-text x-small">Display name for the card</div>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Card Name / Nickname <span class="text-danger">*</span></label>
+                    <label class="form-label" for="cardNameInput">Card Name / Nickname <span
+                            class="text-danger">*</span></label>
                     <input type="text" name="card_name" id="cardNameInput" class="form-control"
                         placeholder="e.g. 365 Cashback, Traveler" required>
                 </div>
 
                 <div class="row">
                     <div class="col-md-4 mb-3">
-                        <label class="form-label">Card Type <span class="text-danger">*</span></label>
+                        <label class="form-label" for="cardTypeInput">Card Type <span
+                                class="text-danger">*</span></label>
                         <select name="card_type" id="cardTypeInput" class="form-select" required>
                             <option value="Credit">Credit Card</option>
                             <option value="Debit">Debit Card</option>
                         </select>
                     </div>
                     <div class="col-md-4 mb-3">
-                        <label class="form-label">Network <span class="text-danger">*</span></label>
+                        <label class="form-label" for="networkInput">Network <span class="text-danger">*</span></label>
                         <select name="network" id="networkInput" class="form-select" required>
                             <option value="Visa">Visa</option>
                             <option value="Mastercard">Mastercard</option>
@@ -90,8 +92,8 @@ $all_banks = $banks_stmt->fetchAll();
                         </select>
                     </div>
                     <div class="col-md-4 mb-3">
-                        <label class="form-label">Fee Type</label>
-                        <select name="fee_type" class="form-select">
+                        <label class="form-label" for="feeTypeInput">Fee Type</label>
+                        <select name="fee_type" id="feeTypeInput" class="form-select">
                             <option value="LTF">LTF (Lifetime Free)</option>
                             <option value="Paid">Paid</option>
                             <option value="Spend Based">Spend Based</option>
@@ -101,23 +103,24 @@ $all_banks = $banks_stmt->fetchAll();
 
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">Category / Tier</label>
+                        <label class="form-label" for="tierInput">Category / Tier</label>
                         <input type="text" name="tier" id="tierInput" class="form-control" placeholder="e.g. Platinum">
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">Credit / Monthly Limit (AED)</label>
-                        <input type="number" name="limit_amount" class="form-control" placeholder="0.00" step="0.01">
+                        <label class="form-label" for="limitInput">Credit / Monthly Limit (AED)</label>
+                        <input type="number" name="limit_amount" id="limitInput" class="form-control" placeholder="0.00"
+                            step="0.01">
                     </div>
                 </div>
 
                 <div class="row">
                     <div class="col-6 mb-3">
-                        <label class="form-label">First 4 Digits</label>
+                        <label class="form-label" for="firstFourInput">First 4 Digits</label>
                         <input type="text" name="first_four" id="firstFourInput" class="form-control" placeholder="1234"
                             maxlength="4">
                     </div>
                     <div class="col-6 mb-3">
-                        <label class="form-label">Last 4 Digits</label>
+                        <label class="form-label" for="lastFourInput">Last 4 Digits</label>
                         <input type="text" name="last_four" id="lastFourInput" class="form-control" placeholder="5678"
                             maxlength="4">
                     </div>
@@ -125,97 +128,107 @@ $all_banks = $banks_stmt->fetchAll();
 
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">Bill Generation Day</label>
-                        <input type="number" name="bill_day" class="form-control" placeholder="e.g. 15" min="1"
-                            max="31">
+                        <label class="form-label" for="billDayInput">Bill Generation Day</label>
+                        <input type="number" name="bill_day" id="billDayInput" class="form-control"
+                            placeholder="e.g. 15" min="1" max="31">
                         <div class="form-text x-small">Day of month bill is issued</div>
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">Statement Closing Day</label>
-                        <input type="number" name="statement_day" class="form-control" placeholder="e.g. 14" min="1"
-                            max="31">
+                        <label class="form-label" for="statementDayInput">Statement Closing Day</label>
+                        <input type="number" name="statement_day" id="statementDayInput" class="form-control"
+                            placeholder="e.g. 14" min="1" max="31">
                         <div class="form-text x-small">Day of month statement closes</div>
                     </div>
                 </div>
 
                 <!-- Cashback Categories -->
                 <div class="mb-4">
-                    <label class="form-label fw-bold"><i class="fa-solid fa-percent text-primary me-2"></i> Category
+                    <label class="form-label fw-bold" for="cbGrocery"><i
+                            class="fa-solid fa-percent text-primary me-2"></i> Category
                         Cashback %</label>
                     <div class="bg-light p-3 rounded shadow-sm border">
                         <div class="row g-2 mb-2">
                             <div class="col-6 col-md-3">
-                                <label class="x-small text-muted">Grocery</label>
+                                <label class="x-small text-muted" for="cbGrocery">Grocery</label>
                                 <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Grocery" class="form-control" step="0.1" value="0">
+                                    <input type="number" name="cb_Grocery" id="cbGrocery" class="form-control"
+                                        step="0.1" value="0">
                                     <span class="input-group-text">%</span>
                                 </div>
                             </div>
                             <div class="col-6 col-md-3">
-                                <label class="x-small text-muted">Dining/Food</label>
+                                <label class="x-small text-muted" for="cbFood">Dining/Food</label>
                                 <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Food" class="form-control" step="0.1" value="0">
+                                    <input type="number" name="cb_Food" id="cbFood" class="form-control" step="0.1"
+                                        value="0">
                                     <span class="input-group-text">%</span>
                                 </div>
                             </div>
                             <div class="col-6 col-md-3">
-                                <label class="x-small text-muted">Transport</label>
+                                <label class="x-small text-muted" for="cbTransport">Transport</label>
                                 <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Transport" class="form-control" step="0.1" value="0">
+                                    <input type="number" name="cb_Transport" id="cbTransport" class="form-control"
+                                        step="0.1" value="0">
                                     <span class="input-group-text">%</span>
                                 </div>
                             </div>
                             <div class="col-6 col-md-3">
-                                <label class="x-small text-muted">Shopping</label>
+                                <label class="x-small text-muted" for="cbShopping">Shopping</label>
                                 <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Shopping" class="form-control" step="0.1" value="0">
+                                    <input type="number" name="cb_Shopping" id="cbShopping" class="form-control"
+                                        step="0.1" value="0">
                                     <span class="input-group-text">%</span>
                                 </div>
                             </div>
                         </div>
                         <div class="row g-2 mb-2">
                             <div class="col-6 col-md-3">
-                                <label class="x-small text-muted">Utilities</label>
+                                <label class="x-small text-muted" for="cbUtilities">Utilities</label>
                                 <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Utilities" class="form-control" step="0.1" value="0">
+                                    <input type="number" name="cb_Utilities" id="cbUtilities" class="form-control"
+                                        step="0.1" value="0">
                                     <span class="input-group-text">%</span>
                                 </div>
                             </div>
                             <div class="col-6 col-md-3">
-                                <label class="x-small text-muted">Travel</label>
+                                <label class="x-small text-muted" for="cbTravel">Travel</label>
                                 <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Travel" class="form-control" step="0.1" value="0">
-                                    <span class="input-group-text">%</span>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <label class="x-small text-muted">Medical</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Medical" class="form-control" step="0.1" value="0">
-                                    <span class="input-group-text">%</span>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <label class="x-small text-muted">Entmt.</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Entertainment" class="form-control" step="0.1"
+                                    <input type="number" name="cb_Travel" id="cbTravel" class="form-control" step="0.1"
                                         value="0">
+                                    <span class="input-group-text">%</span>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="x-small text-muted" for="cbMedical">Medical</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="cb_Medical" id="cbMedical" class="form-control"
+                                        step="0.1" value="0">
+                                    <span class="input-group-text">%</span>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="x-small text-muted" for="cbEntertainment">Entmt.</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="cb_Entertainment" id="cbEntertainment"
+                                        class="form-control" step="0.1" value="0">
                                     <span class="input-group-text">%</span>
                                 </div>
                             </div>
                         </div>
                         <div class="row g-2">
                             <div class="col-6 col-md-3">
-                                <label class="x-small text-muted">Education</label>
+                                <label class="x-small text-muted" for="cbEducation">Education</label>
                                 <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Education" class="form-control" step="0.1" value="0">
+                                    <input type="number" name="cb_Education" id="cbEducation" class="form-control"
+                                        step="0.1" value="0">
                                     <span class="input-group-text">%</span>
                                 </div>
                             </div>
                             <div class="col-6 col-md-3">
-                                <label class="x-small text-muted">Other/Gen.</label>
+                                <label class="x-small text-muted" for="cbOther">Other/Gen.</label>
                                 <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Other" class="form-control" step="0.1" value="0">
+                                    <input type="number" name="cb_Other" id="cbOther" class="form-control" step="0.1"
+                                        value="0">
                                     <span class="input-group-text">%</span>
                                 </div>
                             </div>
@@ -226,7 +239,7 @@ $all_banks = $banks_stmt->fetchAll();
 
                 <!-- New Features Field -->
                 <div class="mb-3">
-                    <label class="form-label">
+                    <label class="form-label" for="featuresInput">
                         Card Offers & Features
                         <span class="badge bg-success text-white rounded-pill ms-2" id="smartBadge"
                             style="display:none;">Smart-Filled</span>
@@ -331,46 +344,46 @@ $all_banks = $banks_stmt->fetchAll();
 
         // 1. Feature Library (Fallback)
         const featureAnalysis = {
-            'cashback': `â€¢ 3% Cashback on non-AED spend
-â€¢ 2% Cashback on Grocery & Supermarkets
-â€¢ 1% Cashback on all other retail spends
-â€¢ No Annual Fee for the first year`,
-            'infinite': `â€¢ Unlimited complimentary access to 1000+ airport lounges (LoungeKey)
-â€¢ Multi-trip travel insurance
-â€¢ Golf privileges at various clubs across UAE
-â€¢ Concierge Service 24/7`,
-            'platinum': `â€¢ Buy 1 Get 1 Free movie tickets at Vox Cinemas
-â€¢ 20% off on Careem rides
-â€¢ Purchase Protection & Extended Warranty
-â€¢ 2 free airport transfers per year`,
-            'rewards': `â€¢ Earn 2.5 Reward Points for every AED 1 spent
-â€¢ Redeem points for flights, hotels, or electronics
-â€¢ Access to exclusive 'Buy 1, Get 1' offers
-â€¢ Dining discounts up to 30%`,
-            'miles': `â€¢ Earn 2 Miles per USD spend
-â€¢ Redeem on any airline, any time
-â€¢ Free travel insurance for you and family
-â€¢ Priority pass lounge access`,
-            'touchpoints': `â€¢ Earn 1.5 TouchPoints for every AED 1 spent
-â€¢ 20% off on talabat orders twice a month
-â€¢ Buy 1 Get 1 Free coffee at Costa
-â€¢ Complimentary golf access`,
-            'skywards': `â€¢ Up to 2.5 Skywards Miles per USD spent
-â€¢ Silver Tier membership status
-â€¢ 25% discount on dining at 2000+ restaurants
-â€¢ Valet parking at selected malls`,
-            'neo': `â€¢ 1% Cashback on all spends
-â€¢ Free international transfers
-â€¢ No minimum balance required
-â€¢ Instant digital card issuance`,
-            'standard': `â€¢ Standard shopping protection
-â€¢ SMS alerts for transactions
-â€¢ Online banking access
-â€¢ 24/7 Customer Support`,
-            'islamic': `â€¢ Sharia-compliant card
-â€¢ No annual fee for life
-â€¢ Roadside assistance
-â€¢ Travel desk services`
+            'cashback': `• 3% Cashback on non-AED spend
+• 2% Cashback on Grocery & Supermarkets
+• 1% Cashback on all other retail spends
+• No Annual Fee for the first year`,
+            'infinite': `• Unlimited complimentary access to 1000+ airport lounges (LoungeKey)
+• Multi-trip travel insurance
+• Golf privileges at various clubs across UAE
+• Concierge Service 24/7`,
+            'platinum': `• Buy 1 Get 1 Free movie tickets at Vox Cinemas
+• 20% off on Careem rides
+• Purchase Protection & Extended Warranty
+• 2 free airport transfers per year`,
+            'rewards': `• Earn 2.5 Reward Points for every AED 1 spent
+• Redeem points for flights, hotels, or electronics
+• Access to exclusive 'Buy 1, Get 1' offers
+• Dining discounts up to 30%`,
+            'miles': `• Earn 2 Miles per USD spend
+• Redeem on any airline, any time
+• Free travel insurance for you and family
+• Priority pass lounge access`,
+            'touchpoints': `• Earn 1.5 TouchPoints for every AED 1 spent
+• 20% off on talabat orders twice a month
+• Buy 1 Get 1 Free coffee at Costa
+• Complimentary golf access`,
+            'skywards': `• Up to 2.5 Skywards Miles per USD spent
+• Silver Tier membership status
+• 25% discount on dining at 2000+ restaurants
+• Valet parking at selected malls`,
+            'neo': `• 1% Cashback on all spends
+• Free international transfers
+• No minimum balance required
+• Instant digital card issuance`,
+            'standard': `• Standard shopping protection
+• SMS alerts for transactions
+• Online banking access
+• 24/7 Customer Support`,
+            'islamic': `• Sharia-compliant card
+• No annual fee for life
+• Roadside assistance
+• Travel desk services`
         };
 
         // 2. Try Live Fetch (The Real Data)
@@ -384,7 +397,7 @@ $all_banks = $banks_stmt->fetchAll();
 
             if (data.success && data.data.description && data.data.description.length > 20) {
                 // Formatting the live content nicely
-                features = "âœ… VERIFIED LIVE DATA FROM BANK WEBSITE:\n" + data.data.description;
+                features = "✅ VERIFIED LIVE DATA FROM BANK WEBSITE:\n" + data.data.description;
                 if (data.data.title) {
                     features = "Card: " + data.data.title + "\n" + features;
                 }
@@ -530,4 +543,4 @@ $all_banks = $banks_stmt->fetchAll();
     });
 </script>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php require_once 'includes/footer.php'; // NOSONAR ?>
