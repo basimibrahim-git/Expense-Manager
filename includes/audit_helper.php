@@ -1,0 +1,37 @@
+<?php
+// includes/audit_helper.php
+// Centralized logic for recording system actions and security events.
+
+/**
+ * Records an action or event into the audit_logs table.
+ * 
+ * @param string $action The type of action (e.g., 'bulk_delete', 'login_success')
+ * @param mixed $context Additional data, description, or IDs (will be JSON encoded)
+ * @return bool
+ */
+function log_audit($action, $context = null)
+{
+    global $pdo;
+
+    // Ensure session is active and user is logged in
+    if (!isset($_SESSION['user_id'])) {
+        return false;
+    }
+
+    try {
+        $userId = $_SESSION['user_id'];
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+        $ua = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
+
+        // Convert context to string if array/object
+        $contextStr = is_string($context) ? $context : json_encode($context);
+
+        $stmt = $pdo->prepare("INSERT INTO audit_logs (user_id, action, context, ip_address, user_agent) VALUES (?, ?, ?, ?, ?)");
+        return $stmt->execute([$userId, $action, $contextStr, $ip, $ua]);
+    } catch (Exception $e) {
+        // Fail silently in production to avoid breaking the main user flow, 
+        // but log to error_log if configured.
+        error_log("Audit Logging Failed: " . $e->getMessage());
+        return false;
+    }
+}

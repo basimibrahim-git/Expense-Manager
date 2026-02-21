@@ -19,7 +19,8 @@ $rootDir = dirname(__DIR__);
 $envFile = $rootDir . '/.env';
 
 // Functions
-function writeEnvFile($path, $data) {
+function writeEnvFile($path, $data)
+{
     $content = "";
     foreach ($data as $key => $value) {
         $content .= "{$key}={$value}\n";
@@ -53,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'DB_PASS' => '"' . str_replace('"', '\"', $pass) . '"', // Escape quotes
                 'APP_TIMEZONE' => $_POST['app_timezone'] ?? 'Asia/Dubai'
             ];
-            
+
             if (writeEnvFile($envFile, $envData)) {
                 // Determine base URL for next step redirect if needed, 
                 // but we carry state via session or hidden inputs.
@@ -67,8 +68,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         } catch (PDOException $e) {
             $error = "Connection Failed. Please check your credentials.";
-            if ($e->getCode() == 1045) $error = "Access Denied: Invalid Username or Password.";
-            if ($e->getCode() == 2002) $error = "Connection Failed: Could not find Database Host.";
+            if ($e->getCode() == 1045)
+                $error = "Access Denied: Invalid Username or Password.";
+            if ($e->getCode() == 2002)
+                $error = "Connection Failed: Could not find Database Host.";
             $step = 1;
         }
     } elseif ($step === 3) {
@@ -78,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $step = 1;
             $error = "Session expired. Please start again.";
         } else {
-             try {
+            try {
                 $dsn = "mysql:host={$envData['DB_HOST']};dbname={$envData['DB_NAME']};charset=utf8mb4";
                 $pdo = new PDO($dsn, $envData['DB_USER'], trim($envData['DB_PASS'], '"'), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
@@ -158,7 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                     )",
-                     "CREATE TABLE IF NOT EXISTS bank_balances (
+                    "CREATE TABLE IF NOT EXISTS bank_balances (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
                         bank_name VARCHAR(100) NOT NULL,
@@ -179,7 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                     )",
-                     "CREATE TABLE IF NOT EXISTS reminders (
+                    "CREATE TABLE IF NOT EXISTS reminders (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
                         title VARCHAR(255) NOT NULL,
@@ -193,6 +196,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
                         name VARCHAR(100) NOT NULL,
+                        category VARCHAR(50) DEFAULT 'General',
                         target_amount DECIMAL(15,2) NOT NULL,
                         current_saved DECIMAL(15,2) DEFAULT 0,
                         target_date DATE NOT NULL,
@@ -232,7 +236,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                     )",
-                     "CREATE TABLE IF NOT EXISTS lending_tracker (
+                    "CREATE TABLE IF NOT EXISTS lending_tracker (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
                         borrower_name VARCHAR(100) NOT NULL,
@@ -245,7 +249,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                     )",
-                     "CREATE TABLE IF NOT EXISTS interest_tracker (
+                    "CREATE TABLE IF NOT EXISTS interest_tracker (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         user_id INT NOT NULL,
                         title VARCHAR(255) NOT NULL,
@@ -254,10 +258,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                     )",
-                     "CREATE TABLE IF NOT EXISTS url_cache (
+                    "CREATE TABLE IF NOT EXISTS url_cache (
                         url_hash VARCHAR(64) PRIMARY KEY,
                         url_data TEXT,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    )",
+                    "CREATE TABLE IF NOT EXISTS audit_logs (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT NOT NULL,
+                        action VARCHAR(100) NOT NULL,
+                        context TEXT,
+                        ip_address VARCHAR(45),
+                        user_agent TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        INDEX (user_id),
+                        INDEX (action),
+                        INDEX (created_at),
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                    )",
+                    "CREATE TABLE IF NOT EXISTS budgets (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT NOT NULL,
+                        category VARCHAR(100) NOT NULL,
+                        amount DECIMAL(15,2) NOT NULL,
+                        currency VARCHAR(3) DEFAULT 'AED',
+                        month INT NOT NULL,
+                        year INT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE KEY user_cat_period (user_id, category, month, year),
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                    )",
+                    "CREATE TABLE IF NOT EXISTS user_preferences (
+                        user_id INT PRIMARY KEY,
+                        base_currency VARCHAR(3) DEFAULT 'AED',
+                        theme_preference VARCHAR(20) DEFAULT 'dark',
+                        notifications_enabled TINYINT(1) DEFAULT 1,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                     )"
                 ];
 
@@ -267,10 +304,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $step = 4; // Move to Account Creation
 
-             } catch (Exception $e) {
-                 $error = "Schema Creation Failed. Please check database permissions.";
-                 $step = 3; // Retry
-             }
+            } catch (Exception $e) {
+                $error = "Schema Creation Failed. Please check database permissions.";
+                $step = 3; // Retry
+            }
         }
     } elseif ($step === 4) {
         // Admin Account Creation
@@ -287,8 +324,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE email = ?");
             $stmt->execute([$email]);
             if ($stmt->fetchColumn() > 0) {
-                 $error = "User already exists. Please login or use a different email.";
-                 $step = 4; 
+                $error = "User already exists. Please login or use a different email.";
+                $step = 4;
             } else {
                 $hashed = password_hash($pass, PASSWORD_DEFAULT);
                 $stmt = $pdo->prepare("INSERT INTO users (name, email, password) VALUES (?, ?, ?)");
@@ -312,6 +349,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -319,174 +357,252 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        :root { --primary-color: #6c5ce7; --bg-gradient: linear-gradient(135deg, #a8c0ff 0%, #3f2b96 100%); }
-        body { background: var(--bg-gradient); min-height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'Inter', sans-serif; }
-        .glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border-radius: 20px; box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37); border: 1px solid rgba(255, 255, 255, 0.18); overflow: hidden; }
-        .step-indicator { display: flex; justify-content: space-between; margin-bottom: 2rem; position: relative; }
-        .step-indicator::before { content: ''; position: absolute; top: 15px; left: 0; right: 0; height: 3px; background: #e9ecef; z-index: 0; }
-        .step { width: 35px; height: 35px; background: #e9ecef; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; position: relative; z-index: 1; color: #6c757d; transition: all 0.3s; }
-        .step.active { background: var(--primary-color); color: white; box-shadow: 0 0 0 5px rgba(108, 92, 231, 0.2); }
-        .step.completed { background: #2ecc71; color: white; }
+        :root {
+            --primary-color: #6c5ce7;
+            --bg-gradient: linear-gradient(135deg, #a8c0ff 0%, #3f2b96 100%);
+        }
+
+        body {
+            background: var(--bg-gradient);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            overflow: hidden;
+        }
+
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+
+        .step-indicator::before {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #e9ecef;
+            z-index: 0;
+        }
+
+        .step {
+            width: 35px;
+            height: 35px;
+            background: #e9ecef;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            position: relative;
+            z-index: 1;
+            color: #6c757d;
+            transition: all 0.3s;
+        }
+
+        .step.active {
+            background: var(--primary-color);
+            color: white;
+            box-shadow: 0 0 0 5px rgba(108, 92, 231, 0.2);
+        }
+
+        .step.completed {
+            background: #2ecc71;
+            color: white;
+        }
     </style>
 </head>
+
 <body>
 
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="glass-panel p-5">
-                <div class="text-center mb-4">
-                    <i class="fa-solid fa-wallet fa-3x text-primary mb-3"></i>
-                    <h2 class="fw-bold">Expense Manager Setup</h2>
-                    <p class="text-muted">Follow the steps to configure your application</p>
-                </div>
-
-                <!-- Progress Steps -->
-                <div class="step-indicator px-4">
-                    <div class="step <?php echo $step >= 1 ? 'active' : ''; ?> <?php echo $step > 1 ? 'completed' : ''; ?>">1</div>
-                    <div class="step <?php echo $step >= 2 ? 'active' : ''; ?> <?php echo $step > 2 ? 'completed' : ''; ?>">2</div>
-                    <div class="step <?php echo $step >= 3 ? 'active' : ''; ?> <?php echo $step > 3 ? 'completed' : ''; ?>">3</div>
-                    <div class="step <?php echo $step >= 4 ? 'active' : ''; ?> <?php echo $step > 4 ? 'completed' : ''; ?>">4</div>
-                </div>
-
-                <!-- Error Messages -->
-                <?php if ($error): ?>
-                    <div class="alert alert-danger shadow-sm border-0 shake-animation">
-                        <i class="fa-solid fa-triangle-exclamation me-2"></i> <?php echo htmlspecialchars($error); ?>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="glass-panel p-5">
+                    <div class="text-center mb-4">
+                        <i class="fa-solid fa-wallet fa-3x text-primary mb-3"></i>
+                        <h2 class="fw-bold">Expense Manager Setup</h2>
+                        <p class="text-muted">Follow the steps to configure your application</p>
                     </div>
-                <?php endif; ?>
 
-                <form method="POST">
-                    
-                    <!-- STEP 1: WELCOME & CONNECT -->
-                    <?php if ($step === 1): ?>
-                        <input type="hidden" name="step" value="2">
-                        <h4 class="fw-bold mb-3">Database Connection</h4>
-                        <div class="mb-3">
-                            <label class="form-label">Database Host</label>
-                            <input type="text" name="db_host" class="form-control form-control-lg" placeholder="localhost" value="localhost" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Database Name</label>
-                            <input type="text" name="db_name" class="form-control form-control-lg" placeholder="expense_manager" required>
-                        </div>
-                        <div class="row g-2 mb-3">
-                            <div class="col-6">
-                                <label class="form-label">Username</label>
-                                <input type="text" name="db_user" class="form-control" placeholder="root" required>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label">Password</label>
-                                <input type="password" name="db_pass" class="form-control" placeholder="******">
-                            </div>
-                        </div>
-                        
-                        <div class="mb-4">
-                            <label class="form-label">Application Timezone</label>
-                            <select name="app_timezone" class="form-select form-control-lg">
-                                <option value="Asia/Dubai" selected>Asia/Dubai (GST)</option>
-                                <option value="UTC">UTC</option>
-                                <option value="America/New_York">New York (EST)</option>
-                                <option value="Europe/London">London (GMT)</option>
-                                <option value="Asia/Kolkata">Kolkata (IST)</option>
-                                <option value="Asia/Riyadh">Riyadh (AST)</option>
-                                <option value="Australia/Sydney">Sydney (AEDT)</option>
-                                <!-- Add more as needed -->
-                            </select>
-                            <div class="form-text">This will be saved to your .env file.</div>
-                        </div>
+                    <!-- Progress Steps -->
+                    <div class="step-indicator px-4">
+                        <div
+                            class="step <?php echo $step >= 1 ? 'active' : ''; ?> <?php echo $step > 1 ? 'completed' : ''; ?>">
+                            1</div>
+                        <div
+                            class="step <?php echo $step >= 2 ? 'active' : ''; ?> <?php echo $step > 2 ? 'completed' : ''; ?>">
+                            2</div>
+                        <div
+                            class="step <?php echo $step >= 3 ? 'active' : ''; ?> <?php echo $step > 3 ? 'completed' : ''; ?>">
+                            3</div>
+                        <div
+                            class="step <?php echo $step >= 4 ? 'active' : ''; ?> <?php echo $step > 4 ? 'completed' : ''; ?>">
+                            4</div>
+                    </div>
 
-                        <button type="submit" class="btn btn-primary w-100 py-3 fw-bold shadow">
-                            Check Connection <i class="fa-solid fa-arrow-right ms-2"></i>
-                        </button>
+                    <!-- Error Messages -->
+                    <?php if ($error): ?>
+                        <div class="alert alert-danger shadow-sm border-0 shake-animation">
+                            <i class="fa-solid fa-triangle-exclamation me-2"></i> <?php echo htmlspecialchars($error); ?>
+                        </div>
                     <?php endif; ?>
 
-                    <!-- STEP 3 (Skipped 2 logic implicit): CREATE TABLES -->
-                    <?php if ($step === 3): ?>
-                        <input type="hidden" name="step" value="3"> <!-- Submits to itself for processing -->
-                        <div class="text-center py-4">
-                            <div class="spinner-border text-primary mb-3" role="status" style="display:none;" id="installSpinner"></div>
-                            <i class="fa-solid fa-database fa-4x text-info mb-3" id="dbIcon"></i>
-                            <h4 class="fw-bold">Database Connected!</h4>
-                            <p class="text-muted">We are ready to install the database schema.</p>
-                            
-                            <div class="alert alert-info border-0 bg-info-subtle text-info-emphasis text-start">
-                                <small>
-                                <i class="fa-solid fa-list-check me-2"></i> <strong>Will Create:</strong><br>
-                                Users, Banks, Cards, Expenses, Income, Reminders, Goals, Zakath, Sadaqa, Company, Lending...
-                                </small>
+                    <form method="POST">
+
+                        <!-- STEP 1: WELCOME & CONNECT -->
+                        <?php if ($step === 1): ?>
+                            <input type="hidden" name="step" value="2">
+                            <h4 class="fw-bold mb-3">Database Connection</h4>
+                            <div class="mb-3">
+                                <label class="form-label">Database Host</label>
+                                <input type="text" name="db_host" class="form-control form-control-lg"
+                                    placeholder="localhost" value="localhost" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Database Name</label>
+                                <input type="text" name="db_name" class="form-control form-control-lg"
+                                    placeholder="expense_manager" required>
+                            </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label">Username</label>
+                                    <input type="text" name="db_user" class="form-control" placeholder="root" required>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">Password</label>
+                                    <input type="password" name="db_pass" class="form-control" placeholder="******">
+                                </div>
                             </div>
 
-                            <button type="submit" class="btn btn-success w-100 py-3 fw-bold shadow" onclick="showLoader()">
-                                Install Database Tables <i class="fa-solid fa-hammer ms-2"></i>
+                            <div class="mb-4">
+                                <label class="form-label">Application Timezone</label>
+                                <select name="app_timezone" class="form-select form-control-lg">
+                                    <option value="Asia/Dubai" selected>Asia/Dubai (GST)</option>
+                                    <option value="UTC">UTC</option>
+                                    <option value="America/New_York">New York (EST)</option>
+                                    <option value="Europe/London">London (GMT)</option>
+                                    <option value="Asia/Kolkata">Kolkata (IST)</option>
+                                    <option value="Asia/Riyadh">Riyadh (AST)</option>
+                                    <option value="Australia/Sydney">Sydney (AEDT)</option>
+                                    <!-- Add more as needed -->
+                                </select>
+                                <div class="form-text">This will be saved to your .env file.</div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100 py-3 fw-bold shadow">
+                                Check Connection <i class="fa-solid fa-arrow-right ms-2"></i>
                             </button>
-                        </div>
-                        <script>
-                            function showLoader() {
-                                document.getElementById('installSpinner').style.display = 'inline-block';
-                                document.getElementById('dbIcon').style.display = 'none';
-                            }
-                        </script>
-                    <?php endif; ?>
+                        <?php endif; ?>
 
-                    <!-- STEP 4: CREATE ADMIN -->
-                    <?php if ($step === 4): ?>
-                        <input type="hidden" name="step" value="4">
-                        <h4 class="fw-bold mb-3">Create Admin Account</h4>
-                        <div class="mb-3">
-                            <label class="form-label">Full Name</label>
-                            <input type="text" name="name" class="form-control form-control-lg" placeholder="John Doe" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Email Address</label>
-                            <input type="email" name="email" class="form-control form-control-lg" placeholder="john@example.com" required>
-                        </div>
-                        <div class="mb-4">
-                            <label class="form-label">Password</label>
-                            <input type="password" name="password" class="form-control form-control-lg" required>
-                        </div>
-                        
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                             <span class="text-muted small">Need more users? You can add them later manually directly in DB or we can build an invite system.</span>
-                        </div>
+                        <!-- STEP 3 (Skipped 2 logic implicit): CREATE TABLES -->
+                        <?php if ($step === 3): ?>
+                            <input type="hidden" name="step" value="3"> <!-- Submits to itself for processing -->
+                            <div class="text-center py-4">
+                                <div class="spinner-border text-primary mb-3" role="status" style="display:none;"
+                                    id="installSpinner"></div>
+                                <i class="fa-solid fa-database fa-4x text-info mb-3" id="dbIcon"></i>
+                                <h4 class="fw-bold">Database Connected!</h4>
+                                <p class="text-muted">We are ready to install the database schema.</p>
 
-                        <button type="submit" class="btn btn-primary w-100 py-3 fw-bold shadow">
-                            Create Account <i class="fa-solid fa-check ms-2"></i>
-                        </button>
-                    <?php endif; ?>
+                                <div class="alert alert-info border-0 bg-info-subtle text-info-emphasis text-start">
+                                    <small>
+                                        <i class="fa-solid fa-list-check me-2"></i> <strong>Will Create:</strong><br>
+                                        Users, Banks, Cards, Expenses, Income, Reminders, Goals, Zakath, Sadaqa, Company,
+                                        Lending, Budgets, Audit Logs, Sinking Funds...
+                                    </small>
+                                </div>
 
-                    <!-- STEP 5: SUCCESS & CLEANUP -->
-                    <?php if ($step === 5): ?>
-                        <div class="text-center py-5">
-                            <div class="mb-4 text-success">
-                                <i class="fa-solid fa-circle-check fa-5x "></i>
+                                <button type="submit" class="btn btn-success w-100 py-3 fw-bold shadow"
+                                    onclick="showLoader()">
+                                    Install Database Tables <i class="fa-solid fa-hammer ms-2"></i>
+                                </button>
                             </div>
-                            <h3 class="fw-bold text-success">Installation Complete!</h3>
-                            <p class="text-muted mb-4">Your Expense Manager is ready to use.</p>
-                            
-                            <a href="../dashboard.php" class="btn btn-dark btn-lg w-100 py-3 fw-bold shadow mb-3" onclick="cleanup()">
-                                Go to Dashboard <i class="fa-solid fa-rocket ms-2"></i>
-                            </a>
-                            <p class="text-danger small"><i class="fa-solid fa-shield-halved me-1"></i> Installer will self-destruct after you leave.</p>
-                        </div>
+                            <script>
+                                function showLoader() {
+                                    document.getElementById('installSpinner').style.display = 'inline-block';
+                                    document.getElementById('dbIcon').style.display = 'none';
+                                }
+                            </script>
+                        <?php endif; ?>
 
-                        <script>
-                            function cleanup() {
-                                // Trigger cleanup via beacon or simple timeout fetch
-                                // Since we are redirecting, we can attempt a sync fetch or 
-                                // more reliably, let the user click and WE perform the action via a separate tiny script?
-                                // OR: We can just use a PHP script as the target of the link that deletes files then redirects.
-                                window.location.href = "finish_install.php";
-                            }
-                        </script>
-                    <?php endif; ?>
+                        <!-- STEP 4: CREATE ADMIN -->
+                        <?php if ($step === 4): ?>
+                            <input type="hidden" name="step" value="4">
+                            <h4 class="fw-bold mb-3">Create Admin Account</h4>
+                            <div class="mb-3">
+                                <label class="form-label">Full Name</label>
+                                <input type="text" name="name" class="form-control form-control-lg" placeholder="John Doe"
+                                    required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Email Address</label>
+                                <input type="email" name="email" class="form-control form-control-lg"
+                                    placeholder="john@example.com" required>
+                            </div>
+                            <div class="mb-4">
+                                <label class="form-label">Password</label>
+                                <input type="password" name="password" class="form-control form-control-lg" required>
+                            </div>
 
-                </form>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="text-muted small">Need more users? You can add them later manually directly in
+                                    DB or we can build an invite system.</span>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100 py-3 fw-bold shadow">
+                                Create Account <i class="fa-solid fa-check ms-2"></i>
+                            </button>
+                        <?php endif; ?>
+
+                        <!-- STEP 5: SUCCESS & CLEANUP -->
+                        <?php if ($step === 5): ?>
+                            <div class="text-center py-5">
+                                <div class="mb-4 text-success">
+                                    <i class="fa-solid fa-circle-check fa-5x "></i>
+                                </div>
+                                <h3 class="fw-bold text-success">Installation Complete!</h3>
+                                <p class="text-muted mb-4">Your Expense Manager is ready to use.</p>
+
+                                <a href="../dashboard.php" class="btn btn-dark btn-lg w-100 py-3 fw-bold shadow mb-3"
+                                    onclick="cleanup()">
+                                    Go to Dashboard <i class="fa-solid fa-rocket ms-2"></i>
+                                </a>
+                                <p class="text-danger small"><i class="fa-solid fa-shield-halved me-1"></i> Installer will
+                                    self-destruct after you leave.</p>
+                            </div>
+
+                            <script>
+                                function cleanup() {
+                                    // Trigger cleanup via beacon or simple timeout fetch
+                                    // Since we are redirecting, we can attempt a sync fetch or 
+                                    // more reliably, let the user click and WE perform the action via a separate tiny script?
+                                    // OR: We can just use a PHP script as the target of the link that deletes files then redirects.
+                                    window.location.href = "finish_install.php";
+                                }
+                            </script>
+                        <?php endif; ?>
+
+                    </form>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
+
 </html>

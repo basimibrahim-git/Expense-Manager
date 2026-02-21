@@ -93,6 +93,15 @@
     </div>
 
     <div class="mt-auto px-3 pb-3">
+        <form action="settings_actions.php" method="POST" class="mb-2">
+            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+            <input type="hidden" name="action" value="toggle_currency">
+            <button type="submit" class="btn btn-outline-secondary w-100 border-0 text-start bg-light hover-shadow">
+                <i class="fa-solid fa-coins me-2"></i> 
+                Switch to <?php echo ($_SESSION['preferences']['base_currency'] ?? 'AED') == 'AED' ? 'INR' : 'AED'; ?>
+            </button>
+        </form>
+
         <button id="themeToggleBtn" onclick="toggleTheme()"
             class="btn btn-outline-secondary w-100 border-0 text-start bg-light hover-shadow mb-2">
             <i class="fa-solid fa-moon me-2"></i> Dark Mode
@@ -101,6 +110,14 @@
             class="btn btn-outline-secondary w-100 border-0 text-start bg-light hover-shadow mb-2">
             <i class="fa-solid fa-eye me-2"></i> Visible
         </button>
+        <a href="reports_advanced.php"
+            class="btn btn-outline-secondary w-100 border-0 text-start bg-light hover-shadow mb-2 <?php echo $current_page == 'reports_advanced.php' ? 'active' : ''; ?>">
+            <i class="fa-solid fa-chart-line me-2"></i> Advanced Reports
+        </a>
+        <a href="security_audit.php"
+            class="btn btn-outline-secondary w-100 border-0 text-start bg-light hover-shadow mb-2 <?php echo $current_page == 'security_audit.php' ? 'active' : ''; ?>">
+            <i class="fa-solid fa-shield-halved me-2"></i> Security Audit
+        </a>
         <a href="logout.php" class="btn btn-outline-danger w-100 border-0 text-start bg-light hover-shadow">
             <i class="fa-solid fa-right-from-bracket me-2"></i> Logout
         </a>

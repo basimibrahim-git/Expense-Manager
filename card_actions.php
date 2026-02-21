@@ -47,6 +47,7 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("INSERT INTO cards (user_id, bank_name, card_name, card_type, network, tier, limit_amount, bill_day, statement_day, cashback_struct, bank_url, features, bank_id, first_four, last_four, fee_type, card_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([$user_id, $bank_name, $card_name, $card_type, $network, $tier, $limit_amount, $bill_day, $statement_day, $cashback_struct, $bank_url, $features, $bank_id, $first_four, $last_four, $fee_type, $card_image]);
 
+        log_audit('add_card', "Added Card: $card_name ($bank_name)");
         header("Location: my_cards.php?success=Card added successfully");
         exit();
 
@@ -102,6 +103,7 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("UPDATE cards SET bank_name=?, card_name=?, card_type=?, network=?, tier=?, limit_amount=?, bill_day=?, statement_day=?, cashback_struct=?, bank_url=?, features=?, is_default=?, bank_id=?, first_four=?, last_four=?, fee_type=?, card_image=? WHERE id=? AND user_id=?");
         $stmt->execute([$bank_name, $card_name, $card_type, $network, $tier, $limit_amount, $bill_day, $statement_day, $cashback_struct, $bank_url, $features, $is_default, $bank_id, $first_four, $last_four, $fee_type, $card_image, $card_id, $user_id]);
 
+        log_audit('update_card', "Updated Card: $card_name (ID: $card_id)");
         if ($stmt->rowCount() > 0) {
             header("Location: edit_card.php?id=$card_id&success=Card updated successfully");
         } else {
@@ -125,6 +127,7 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         try {
             $stmt = $pdo->prepare("DELETE FROM cards WHERE id = ? AND user_id = ?");
             $stmt->execute([$card_id, $user_id]);
+            log_audit('delete_card', "Deleted Card ID: $card_id");
             header("Location: my_cards.php?success=Card deleted");
             exit();
         } catch (PDOException $e) {
@@ -151,25 +154,7 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("INSERT INTO card_payments (user_id, card_id, bank_id, amount, payment_date) VALUES (?, ?, ?, ?, ?)");
         $stmt->execute([$user_id, $card_id, $bank_id, $amount, $date]);
 
-        // Deduct from bank balance if provided
-        if ($bank_id) {
-            $bstmt = $pdo->prepare("SELECT bank_name FROM banks WHERE id = ? AND user_id = ?");
-            $bstmt->execute([$bank_id, $user_id]);
-            $bank_name = $bstmt->fetchColumn();
-
-            if ($bank_name) {
-                // Get latest balance
-                $lstmt = $pdo->prepare("SELECT amount FROM bank_balances WHERE (bank_id = ? OR bank_name = ?) AND user_id = ? ORDER BY balance_date DESC, id DESC LIMIT 1");
-                $lstmt->execute([$bank_id, $bank_name, $user_id]);
-                $last_balance = $lstmt->fetchColumn() ?: 0;
-
-                // Record new balance snapshot
-                $new_balance = $last_balance - $amount;
-                $istmt = $pdo->prepare("INSERT INTO bank_balances (user_id, bank_name, amount, balance_date, bank_id) VALUES (?, ?, ?, ?, ?)");
-                $istmt->execute([$user_id, $bank_name, $new_balance, $date, $bank_id]);
-            }
-        }
-
+        log_audit('record_card_payment', "Recorded Card Payment: $amount (Card ID: $card_id)");
         header("Location: my_cards.php?success=Payment recorded successfully");
         exit();
     } catch (PDOException $e) {

@@ -14,11 +14,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $target = $_POST['target_amount'];
         $saved = $_POST['current_saved'];
         $date = $_POST['target_date'];
+        $category = $_POST['category'] ?? 'General';
 
-        $stmt = $pdo->prepare("INSERT INTO sinking_funds (user_id, name, target_amount, current_saved, target_date) VALUES (?, ?, ?, ?, ?)");
-        $stmt->execute([$user_id, $name, $target, $saved, $date]);
+        $stmt = $pdo->prepare("INSERT INTO sinking_funds (user_id, name, target_amount, current_saved, target_date, category) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$user_id, $name, $target, $saved, $date, $category]);
 
-        echo "<script>window.location.href='goals.php';</script>";
+        log_audit('add_goal', "Created Goal: $name (Target: $target AED)");
+        echo "<script>window.location.href='goals.php?success=Goal created';</script>";
         exit;
     } elseif ($_POST['action'] == 'add_funds') {
         $id = $_POST['goal_id'];
@@ -27,18 +29,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $stmt = $pdo->prepare("UPDATE sinking_funds SET current_saved = current_saved + ? WHERE id = ? AND user_id = ?");
         $stmt->execute([$amount, $id, $user_id]);
 
-        // Optional: Also log this as an expense? 
-        // For now, we act as if the money is just moved to a savings pot, so it might not be an expense per se, 
-        // but for "Net Worth" logic, if it's in a bank account, it's still an asset.
-
-        echo "<script>window.location.href='goals.php';</script>";
+        log_audit('add_goal_funds', "Added $amount AED to Goal ID: $id");
+        echo "<script>window.location.href='goals.php?success=Funds added';</script>";
         exit;
     } elseif ($_POST['action'] == 'delete_goal') {
         $id = $_POST['goal_id'];
         $stmt = $pdo->prepare("DELETE FROM sinking_funds WHERE id = ? AND user_id = ?");
         $stmt->execute([$id, $user_id]);
 
-        echo "<script>window.location.href='goals.php';</script>";
+        log_audit('delete_goal', "Deleted Goal ID: $id");
+        echo "<script>window.location.href='goals.php?success=Goal deleted';</script>";
         exit;
     }
 }
@@ -126,7 +126,9 @@ $total_target = array_sum(array_column($goals, 'target_amount'));
                                 <h5 class="fw-bold mb-0">
                                     <?php echo htmlspecialchars($goal['name']); ?>
                                 </h5>
-                                <div class="small <?php echo $status_color; ?>">
+                                <div class="small text-muted">
+                                    <span
+                                        class="badge bg-light text-dark border me-1"><?php echo htmlspecialchars($goal['category'] ?? 'General'); ?></span>
                                     <?php echo $days_left > 0 ? $days_left . ' days left' : 'Due Passed'; ?>
                                 </div>
                             </div>
@@ -206,6 +208,18 @@ $total_target = array_sum(array_column($goals, 'target_amount'));
                         <label class="form-label">Goal Name</label>
                         <input type="text" name="name" class="form-control" placeholder="e.g. New Car, Europe Trip..."
                             required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Category</label>
+                        <select name="category" class="form-select">
+                            <option value="General">General Savings</option>
+                            <option value="Travel">Travel</option>
+                            <option value="Automobile">Automobile</option>
+                            <option value="Electronics">Electronics</option>
+                            <option value="Emergency">Emergency Fund</option>
+                            <option value="Investments">Investments</option>
+                            <option value="Other">Other</option>
+                        </select>
                     </div>
                     <div class="row g-3 mb-3">
                         <div class="col-6">

@@ -8,6 +8,11 @@ $user_id = $_SESSION['user_id'];
 $curr_month = date('n');
 $curr_year = date('Y');
 
+// Base Currency Scaling Logic
+$base_currency = $_SESSION['preferences']['base_currency'] ?? 'AED';
+$currency_multiplier = ($base_currency == 'INR') ? 24 : 1;
+$currency_label = $base_currency;
+
 // 1. Fetch Summary Stats (Current Month)
 // Total Income
 $stmt = $pdo->prepare("SELECT SUM(amount) FROM income WHERE user_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ?");
@@ -146,6 +151,13 @@ $stmt->execute([$user_id]);
 $last_3m_spend = $stmt->fetchColumn() ?: 0;
 $avg_monthly_spend = $last_3m_spend / 3;
 $runway_months = ($avg_monthly_spend > 0) ? $net_worth / $avg_monthly_spend : 0;
+
+// Fetch Monthly Budgets for Dashboard Overview
+$budget_stmt = $pdo->prepare("SELECT category, amount FROM budgets WHERE user_id = ? AND month = ? AND year = ?");
+$budget_stmt->execute([$user_id, $curr_month, $curr_year]);
+$dash_budgets = $budget_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+$total_budgeted = array_sum($dash_budgets);
+$budget_utilization = ($total_budgeted > 0) ? ($expense_now / $total_budgeted) * 100 : 0;
 
 // 7. Lifestyle Creep (YoY Category Comparison)
 $last_year_month = date('n', strtotime('-1 year'));
@@ -336,6 +348,33 @@ for ($i = 11; $i >= 0; $i--) {
     $stmt->execute([$user_id, $m, $y]);
     $interest_paid_data[] = $stmt->fetchColumn() ?: 0;
 }
+
+// 12. Upcoming Bills (Subscriptions coming soon)
+$upcoming_bills = [];
+$stmt = $pdo->prepare("SELECT * FROM expenses WHERE user_id = ? AND is_subscription = 1");
+$stmt->execute([$user_id]);
+$all_subs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+foreach ($all_subs as $sb) {
+    $day = date('d', strtotime($sb['expense_date']));
+    $target_renewal = date('Y-m-') . $day;
+    if (strtotime($target_renewal) < time()) {
+        $target_renewal = date('Y-m-', strtotime('+1 month')) . $day;
+    }
+
+    $days_to_bill = ceil((strtotime($target_renewal) - time()) / 86400);
+    if ($days_to_bill >= 0 && $days_to_bill <= 7) { // Only show bills in next 7 days
+        $upcoming_bills[] = [
+            'name' => $sb['description'],
+            'amount' => $sb['amount'],
+            'due_date' => $target_renewal,
+            'days_left' => $days_to_bill
+        ];
+    }
+}
+// Sort by days left
+usort($upcoming_bills, function ($a, $b) {
+    return $a['days_left'] <=> $b['days_left']; });
 ?>
 
 <!-- Header -->
@@ -384,8 +423,8 @@ for ($i = 11; $i >= 0; $i--) {
                             class="fa-solid fa-ellipsis"></i></button>
                 </div>
             </div>
-            <h3 class="fw-bold mb-1">AED <span
-                    class="blur-sensitive"><?php echo number_format($income_now, 2); ?></span>
+            <h3 class="fw-bold mb-1"><?php echo $currency_label; ?> <span
+                    class="blur-sensitive"><?php echo number_format($income_now * $currency_multiplier, 2); ?></span>
             </h3>
             <span class="text-muted small">Income (This Month)</span>
         </div>
@@ -399,8 +438,8 @@ for ($i = 11; $i >= 0; $i--) {
                     <i class="fa-solid fa-arrow-trend-down fa-xl"></i>
                 </div>
             </div>
-            <h3 class="fw-bold mb-1">AED <span
-                    class="blur-sensitive"><?php echo number_format($expense_now, 2); ?></span>
+            <h3 class="fw-bold mb-1"><?php echo $currency_label; ?> <span
+                    class="blur-sensitive"><?php echo number_format($expense_now * $currency_multiplier, 2); ?></span>
             </h3>
             <span class="text-muted small">Expenses (This Month)</span>
         </div>
@@ -414,14 +453,16 @@ for ($i = 11; $i >= 0; $i--) {
                     <i class="fa-solid fa-building-columns fa-xl"></i>
                 </div>
             </div>
-            <h3 class="fw-bold mb-0">AED <span class="blur-sensitive"><?php echo number_format($net_worth, 2); ?></span>
+            <h3 class="fw-bold mb-0"><?php echo $currency_label; ?> <span
+                    class="blur-sensitive"><?php echo number_format($net_worth * $currency_multiplier, 2); ?></span>
             </h3>
             <div class="small text-muted mb-2">Total Bank Balance</div>
 
             <div class="border-top pt-2">
                 <div class="d-flex justify-content-between text-success fw-bold small">
                     <span>Liq. Assets:</span>
-                    <span class="blur-sensitive"><?php echo number_format($true_liquidity, 2); ?></span>
+                    <span
+                        class="blur-sensitive"><?php echo number_format($true_liquidity * $currency_multiplier, 2); ?></span>
                 </div>
             </div>
         </div>
@@ -435,8 +476,8 @@ for ($i = 11; $i >= 0; $i--) {
                     <i class="fa-solid fa-credit-card fa-xl"></i>
                 </div>
             </div>
-            <h3 class="fw-bold mb-1">AED <span
-                    class="blur-sensitive"><?php echo number_format($total_limit, 2); ?></span>
+            <h3 class="fw-bold mb-1"><?php echo $currency_label; ?> <span
+                    class="blur-sensitive"><?php echo number_format($total_limit * $currency_multiplier, 2); ?></span>
             </h3>
             <span class="text-muted small">Total Credit Limit</span>
         </div>
@@ -520,6 +561,62 @@ for ($i = 11; $i >= 0; $i--) {
             </div>
         </div>
     </div>
+
+    <!-- Budget Status (New) -->
+    <div class="col-12">
+        <div class="glass-panel p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0"><i class="fa-solid fa-bullseye text-primary me-2"></i> Monthly Budget Health
+                </h5>
+                <a href="budget.php" class="small text-primary text-decoration-none">View Details</a>
+            </div>
+
+            <?php if (empty($dash_budgets)): ?>
+                <div class="text-center py-3 text-muted">
+                    No budgets set for this month. <a href="manage_budgets.php">Setup now</a>
+                </div>
+            <?php else: ?>
+                <div class="row align-items-center g-4">
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <div
+                                    class="display-6 fw-bold <?php echo $budget_utilization > 100 ? 'text-danger' : 'text-primary'; ?>">
+                                    <?php echo number_format($budget_utilization, 1); ?>%
+                                </div>
+                                <div class="small text-muted text-uppercase fw-bold ls-1">Overall Budget Used</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="row g-3">
+                            <?php
+                            // Show top 4 spending categories vs budget
+                            $count = 0;
+                            foreach ($dash_budgets as $cat => $limit):
+                                if ($count++ >= 4)
+                                    break;
+                                $spent = $cat_results[$cat] ?? 0;
+                                $pct = ($spent / $limit) * 100;
+                                $color = $pct > 100 ? 'danger' : ($pct > 80 ? 'warning' : 'success');
+                                ?>
+                                <div class="col-6 col-md-3">
+                                    <div class="small fw-bold mb-1 d-flex justify-content-between">
+                                        <span><?php echo $cat; ?></span>
+                                        <span><?php echo number_format($pct, 0); ?>%</span>
+                                    </div>
+                                    <div class="progress" style="height: 6px;">
+                                        <div class="progress-bar bg-<?php echo $color; ?>"
+                                            style="width: <?php echo min($pct, 100); ?>%"></div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
 </div>
 
 </div>
@@ -562,6 +659,37 @@ for ($i = 11; $i >= 0; $i--) {
             <?php endif; ?>
         </div>
     </div>
+
+    <!-- Upcoming Bills (New) -->
+    <div class="col-12 mt-4">
+        <div class="glass-panel p-4 border-start border-4 border-warning">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="fw-bold mb-0 text-warning"><i class="fa-solid fa-hourglass-half me-2"></i> Upcoming Bills
+                    (Next 7 Days)</h5>
+                <a href="subscriptions.php" class="btn btn-sm btn-outline-warning rounded-pill px-3">Manage Subs</a>
+            </div>
+            <?php if (empty($upcoming_bills)): ?>
+                <p class="text-muted mb-0">No bills due in the next 7 days. You're clear!</p>
+            <?php else: ?>
+                <div class="row g-3">
+                    <?php foreach ($upcoming_bills as $bill): ?>
+                        <div class="col-md-4 col-lg-3">
+                            <div class="p-3 rounded-4 bg-light border-0 shadow-sm">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="fw-bold"><?php echo htmlspecialchars($bill['name']); ?></span>
+                                    <span class="text-danger small fw-bold">Due in <?php echo $bill['days_left']; ?>d</span>
+                                </div>
+                                <div class="h5 mb-0 fw-bold text-dark">AED <?php echo number_format($bill['amount'], 2); ?>
+                                </div>
+                                <div class="x-small text-muted mt-1">
+                                    <?php echo date('D, j M Y', strtotime($bill['due_date'])); ?></div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
 </div>
 
 <!-- Spend Anatomy (Fixed vs Discretionary) -->
@@ -596,7 +724,8 @@ for ($i = 11; $i >= 0; $i--) {
         <div class="glass-panel p-4">
             <div class="d-flex justify-content-between align-items-end mb-4">
                 <div>
-                    <h5 class="fw-bold mb-1"><i class="fa-solid fa-chart-line text-danger me-2"></i> Interest Tracker</h5>
+                    <h5 class="fw-bold mb-1"><i class="fa-solid fa-chart-line text-danger me-2"></i> Interest Tracker
+                    </h5>
                     <p class="text-muted small mb-0">Interest Accrued vs Payments (Last 12 Months)</p>
                 </div>
                 <a href="interest_tracker.php" class="btn btn-sm btn-outline-danger fw-bold rounded-pill px-3">
@@ -717,8 +846,8 @@ for ($i = 11; $i >= 0; $i--) {
                 legend: { position: 'top' },
                 tooltip: {
                     callbacks: {
-                        label: function(context) {
-                            return context.dataset.label + ': AED ' + context.parsed.y.toLocaleString(undefined, {minimumFractionDigits: 2});
+                        label: function (context) {
+                            return context.dataset.label + ': AED ' + context.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2 });
                         }
                     }
                 }
@@ -727,7 +856,7 @@ for ($i = 11; $i >= 0; $i--) {
                 y: {
                     beginAtZero: true,
                     grid: { borderDash: [5, 5] },
-                    ticks: { callback: function(value) { return 'AED ' + value.toLocaleString(); } }
+                    ticks: { callback: function (value) { return 'AED ' + value.toLocaleString(); } }
                 },
                 x: {
                     grid: { display: false }

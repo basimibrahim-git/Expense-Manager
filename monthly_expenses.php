@@ -116,10 +116,21 @@ try {
     $total_stmt->execute($count_params); // Reuse same params as count
     $view_total = $total_stmt->fetchColumn() ?: 0;
 
+    // Fetch Category Budgets and Actuals for Progress Bars
+    $budget_stmt = $pdo->prepare("SELECT category, amount FROM budgets WHERE user_id = ? AND month = ? AND year = ?");
+    $budget_stmt->execute([$_SESSION['user_id'], $month, $year]);
+    $cat_budgets = $budget_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+    $actual_stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE user_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category");
+    $actual_stmt->execute([$_SESSION['user_id'], $month, $year]);
+    $cat_actuals = $actual_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
 } catch (PDOException $e) {
     $expenses = [];
     $view_total = 0;
     $total_pages = 1;
+    $cat_budgets = [];
+    $cat_actuals = [];
 }
 ?>
 
@@ -194,6 +205,10 @@ try {
         </div>
 
         <div class="col-6 col-md-2 text-end d-flex gap-2">
+            <a href="print_report.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>" target="_blank"
+                class="btn btn-outline-primary btn-sm flex-grow-1">
+                <i class="fa-solid fa-print me-1"></i> Print
+            </a>
             <a href="export_actions.php?action=export_expenses&month=<?php echo $month; ?>&year=<?php echo $year; ?>&category=<?php echo $category_filter; ?>&payment_method=<?php echo $payment_filter; ?>&card_id=<?php echo $card_filter; ?>&start=<?php echo $start_date; ?>&end=<?php echo $end_date; ?>"
                 class="btn btn-outline-secondary btn-sm flex-grow-1">
                 <i class="fa-solid fa-file-csv me-1"></i> Export
@@ -213,6 +228,43 @@ try {
         </div>
     <?php endif; ?>
 </div>
+
+<!-- Budget Progress Bars -->
+<?php if (!empty($cat_budgets)): ?>
+    <div class="glass-panel p-3 mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="fw-bold mb-0">Budget Progress</h6>
+            <a href="manage_budgets.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>"
+                class="small text-primary text-decoration-none">Manage Budgets</a>
+        </div>
+        <div class="row g-3">
+            <?php foreach ($cat_budgets as $cat => $limit):
+                $spent = $cat_actuals[$cat] ?? 0;
+                $pct = ($spent / $limit) * 100;
+                $color = 'success';
+                if ($pct > 80)
+                    $color = 'warning';
+                if ($pct > 100)
+                    $color = 'danger';
+                ?>
+                <div class="col-md-3">
+                    <div class="small d-flex justify-content-between mb-1">
+                        <span><?php echo $cat; ?></span>
+                        <span class="fw-bold"><?php echo number_format($pct, 0); ?>%</span>
+                    </div>
+                    <div class="progress" style="height: 6px;"
+                        title="Spent AED <?php echo number_format($spent); ?> of AED <?php echo number_format($limit); ?>">
+                        <div class="progress-bar bg-<?php echo $color; ?>" role="progressbar"
+                            style="width: <?php echo min($pct, 100); ?>%"></div>
+                    </div>
+                    <div class="x-small text-muted mt-1">
+                        AED <?php echo number_format($spent); ?> / <?php echo number_format($limit); ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+<?php endif; ?>
 
 <?php if (empty($expenses)): ?>
     <div class="text-center py-5">

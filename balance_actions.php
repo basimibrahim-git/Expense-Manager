@@ -34,6 +34,7 @@ if ($action == 'add_balance' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("INSERT INTO bank_balances (user_id, bank_id, bank_name, amount, balance_date, currency) VALUES (?, ?, ?, ?, ?, ?)");
         $stmt->execute([$user_id, $bank_id, $bank_name, $amount, $date, $currency]);
 
+        log_audit('manual_balance_update', "Updated Balance for $bank_name: $amount $currency");
         $month = date('n', strtotime($date));
         $year = date('Y', strtotime($date));
         header("Location: monthly_balances.php?month=$month&year=$year&success=Balance Added");
@@ -48,6 +49,7 @@ if ($action == 'add_balance' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     if ($id) {
         $stmt = $pdo->prepare("DELETE FROM bank_balances WHERE id = ? AND user_id = ?");
         $stmt->execute([$id, $_SESSION['user_id']]);
+        log_audit('delete_balance_snapshot', "Deleted Balance Snapshot ID: $id");
     }
     header("Location: bank_balances.php?success=Deleted");
     exit();

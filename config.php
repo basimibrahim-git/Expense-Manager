@@ -11,13 +11,16 @@ if (file_exists($envFile)) {
     $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($lines as $line) {
         $line = trim($line);
-        if ($line === '' || $line[0] === '#') continue;
+        if ($line === '' || $line[0] === '#')
+            continue;
         $parts = explode('=', $line, 2);
-        if (count($parts) !== 2) continue; // skip malformed
+        if (count($parts) !== 2)
+            continue; // skip malformed
         $name = trim($parts[0]);
         $value = trim($parts[1]);
         $value = trim($value, "\"'");
-        if ($name === '') continue;
+        if ($name === '')
+            continue;
         putenv(sprintf('%s=%s', $name, $value));
         $_ENV[$name] = $value;
     }
@@ -67,7 +70,7 @@ $logFile = $logDataDir . '/expense_manager_errors.log';
 
 // If parent is not writable, fallback to project root but hidden
 if (!is_writable($logDataDir) && !is_writable($logFile)) {
-    $logFile = __DIR__ . '/.error.log'; 
+    $logFile = __DIR__ . '/.error.log';
 }
 
 ini_set('log_errors', 1);
@@ -98,11 +101,32 @@ function generate_csrf_token()
 
 function verify_csrf_token($token)
 {
-    if (!isset($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], (string)$token)) {
+    if (!isset($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], (string) $token)) {
         // Log only a non-sensitive message.
         error_log("CSRF Mismatch for session id: " . session_id() . " (token not logged)");
         header("Location: dashboard.php?error=Security session expired. Please try again.");
         exit();
     }
     return true;
+}
+
+// v3 Enhancements: Core Utilities
+require_once __DIR__ . '/includes/audit_helper.php';
+
+// Load User Preferences into Session
+if (isset($_SESSION['user_id']) && !isset($_SESSION['preferences'])) {
+    try {
+        $prefStmt = $pdo->prepare("SELECT * FROM user_preferences WHERE user_id = ?");
+        $prefStmt->execute([$_SESSION['user_id']]);
+        $prefs = $prefStmt->fetch();
+
+        if (!$prefs) {
+            // Create default
+            $pdo->prepare("INSERT INTO user_preferences (user_id) VALUES (?)")->execute([$_SESSION['user_id']]);
+            $prefs = ['base_currency' => 'AED', 'theme_preference' => 'dark', 'notifications_enabled' => 1];
+        }
+        $_SESSION['preferences'] = $prefs;
+    } catch (Exception $e) {
+        $_SESSION['preferences'] = ['base_currency' => 'AED', 'theme_preference' => 'dark'];
+    }
 }

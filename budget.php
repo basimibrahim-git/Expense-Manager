@@ -161,6 +161,68 @@ $savings_color = getStatusColor($savings_pct, 20, true);
     </div>
 </div>
 
+<div class="glass-panel p-4 mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h5 class="fw-bold mb-0">Category Budgets vs Actuals</h5>
+        <a href="manage_budgets.php" class="btn btn-outline-primary btn-sm rounded-pill px-3">Manage Targets</a>
+    </div>
+
+    <?php
+    // Fetch specifically defined budgets
+    $stmt = $pdo->prepare("SELECT category, amount FROM budgets WHERE user_id = ? AND month = ? AND year = ?");
+    $stmt->execute([$user_id, $month, $year]);
+    $cat_budgets = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+    ?>
+
+    <?php if (empty($cat_budgets)): ?>
+        <div class="text-center py-4 bg-light rounded-4">
+            <p class="text-muted mb-0">No specific category budgets defined for this month.</p>
+            <a href="manage_budgets.php" class="small text-primary">Set individual targets</a>
+        </div>
+    <?php else: ?>
+        <div class="row g-4">
+            <?php foreach ($cat_budgets as $cat => $limit):
+                $spent = $expenses[$cat] ?? 0;
+                $pct = ($spent / $limit) * 100;
+                $var = $limit - $spent;
+                $color = 'success';
+                if ($pct > 80)
+                    $color = 'warning';
+                if ($pct > 100)
+                    $color = 'danger';
+                ?>
+                <div class="col-md-6 col-lg-4">
+                    <div class="p-3 border rounded-4 bg-white hover-shadow transition-all">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div class="fw-bold"><?php echo $cat; ?></div>
+                            <div class="badge bg-<?php echo $color; ?>-subtle text-<?php echo $color; ?>">
+                                <?php echo number_format($pct, 0); ?>%
+                            </div>
+                        </div>
+                        <div class="progress mb-2" style="height: 8px;">
+                            <div class="progress-bar bg-<?php echo $color; ?>" role="progressbar"
+                                style="width: <?php echo min($pct, 100); ?>%"></div>
+                        </div>
+                        <div class="d-flex justify-content-between small text-muted">
+                            <span>Spent: AED <?php echo number_format($spent); ?></span>
+                            <span>Goal: <?php echo number_format($limit); ?></span>
+                        </div>
+                        <?php if ($var < 0): ?>
+                            <div class="mt-2 text-danger x-small fw-bold">
+                                <i class="fa-solid fa-arrow-up"></i> Over by AED <?php echo number_format(abs($var)); ?>
+                            </div>
+                        <?php else: ?>
+                            <div class="mt-2 text-success x-small fw-bold">
+                                <i class="fa-solid fa-arrow-down"></i> AED <?php echo number_format($var); ?> remaining
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</div>
+
 <div class="glass-panel p-4">
     <h5 class="fw-bold mb-3">Budget Insights</h5>
     <?php if ($savings_pct >= 20): ?>
@@ -174,6 +236,20 @@ $savings_color = getStatusColor($savings_pct, 20, true);
     <?php if ($needs_pct > 50): ?>
         <p class="text-warning mt-2 mb-0"><i class="fa-solid fa-triangle-exclamation me-2"></i> Your 'Needs' are high
             (>50%). Consider reviewing recurring bills.</p>
+    <?php endif; ?>
+
+    <?php
+    $over_cats = [];
+    foreach ($cat_budgets as $cat => $limit) {
+        if (($expenses[$cat] ?? 0) > $limit)
+            $over_cats[] = $cat;
+    }
+    if (!empty($over_cats)):
+        ?>
+        <p class="text-danger mt-2 mb-0">
+            <i class="fa-solid fa-circle-xmark me-2"></i> You have exceeded your budget in:
+            <strong><?php echo implode(', ', $over_cats); ?></strong>
+        </p>
     <?php endif; ?>
 </div>
 

@@ -5,14 +5,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
     $action = $_POST['action'] ?? '';
-    
+
     if ($action == 'add_payment') {
         // Handle Payment (Negative Interest)
         $title = trim($_POST['title']);
         $amount = floatval($_POST['amount']);
         $date = $_POST['payment_date'];
         $target_month_year = $_POST['target_month_year']; // Format YYYY-MM
-        
+
         // If user selects a target month, we might want to record the payment date 
         // OR the date of the target month. 
         // Requirement: "select im paying for which moth as well"
@@ -27,12 +27,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // IF the dashboard shows Month Cards, it sums records with date in that month.
         // So if I pay for Jan, the record must have a Jan date to reduce Jan's card amount.
         // Let's use the target month/year and set day to 28 or current day.
-        
+
         // RE-EVALUATING BASED ON USER REQUEST: "select im paying for ehich moth as well"
         // If I pay today (Feb) for Jan, I want Jan's balance to go down.
         // So the entry MUST have a Jan date in the DB.
         // We can append the real payment date in the title/description.
-        
+
         if (!empty($target_month_year)) {
             $date = $target_month_year . '-' . date('d'); // Default to current day of that month? Or 01?
             // To be safe against "Feb 30", let's just use 01 or 28.
@@ -41,15 +41,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // If I physically paid on Feb 5th for Jan, I want Jan to be clear.
             // So we insert a record with Date = Jan XX (to affect Jan total) 
             // AND maybe a note "Paid on Feb 5th".
-            
+
             // Let's just trust the "target_month_year" for the database date field 
             // to ensure the math works for that month.
             $parts = explode('-', $target_month_year);
             $year = $parts[0];
             $month = $parts[1];
-            
+
             // We'll use the 28th of the month to ensure it sits at the end or just current day if valid
-            $day = min(date('d'), 28); 
+            $day = min(date('d'), 28);
             $interest_date = "$year-$month-$day";
         } else {
             $interest_date = $date;
@@ -58,10 +58,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($amount > 0 && !empty($title) && !empty($interest_date)) {
             // Store as NEGATIVE amount for payment
             $final_amount = -1 * abs($amount);
-            
+
             $stmt = $pdo->prepare("INSERT INTO interest_tracker (user_id, title, amount, interest_date) VALUES (?, ?, ?, ?)");
             $stmt->execute([$_SESSION['user_id'], $title, $final_amount, $interest_date]);
-            
+
+            log_audit('interest_payment', "Recorded Interest Payment: " . abs($amount) . " for " . ($target_month_year ?: $interest_date));
             header("Location: interest_tracker.php?year=" . date('Y', strtotime($interest_date)) . "&success=Payment Recorded");
             exit;
         }

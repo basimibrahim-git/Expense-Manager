@@ -99,9 +99,10 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $count = intval($_POST['add_count'] ?? 0) + 1;
 
         if ($add_another) {
-            // Redirect back to add_expense with same date and count
+            log_audit('add_expense', "Added Expense: $desc ($final_amount AED)");
             header("Location: add_expense.php?added=1&count=$count&date=$date");
         } else {
+            log_audit('add_expense', "Added Expense: $desc ($final_amount AED)");
             header("Location: expenses.php?success=Expense added successfully");
         }
         exit();
@@ -115,6 +116,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     if ($id) {
         $stmt = $pdo->prepare("DELETE FROM expenses WHERE id = ? AND user_id = ?");
         $stmt->execute([$id, $_SESSION['user_id']]);
+        log_audit('delete_expense', "Deleted Expense ID: $id");
     }
     header("Location: expenses.php?success=Deleted");
     exit();
@@ -133,6 +135,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $placeholders = str_repeat('?,', count($ids) - 1) . '?';
         $stmt = $pdo->prepare("DELETE FROM expenses WHERE id IN ($placeholders) AND user_id = ?");
         $stmt->execute(array_merge($ids, [$_SESSION['user_id']]));
+        log_audit('bulk_delete_expenses', "Bulk Deleted " . count($ids) . " Expenses. IDs: " . implode(',', $ids));
     }
     $redirect = $_SERVER['HTTP_REFERER'] ?? 'expenses.php';
     header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Bulk deleted");
@@ -144,6 +147,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $placeholders = str_repeat('?,', count($ids) - 1) . '?';
         $stmt = $pdo->prepare("UPDATE expenses SET category = ? WHERE id IN ($placeholders) AND user_id = ?");
         $stmt->execute(array_merge([$category], $ids, [$_SESSION['user_id']]));
+        log_audit('bulk_change_category', "Bulk Changed Category to $category for " . count($ids) . " Expenses. IDs: " . implode(',', $ids));
     }
     $redirect = $_SERVER['HTTP_REFERER'] ?? 'expenses.php';
     header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Bulk category updated");
@@ -207,6 +211,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             $user_id
         ]);
 
+        log_audit('update_expense', "Updated Expense: $desc ($final_amount AED) - ID: $expense_id");
         header("Location: edit_expense.php?id=$expense_id&success=Expense updated successfully");
         exit();
 

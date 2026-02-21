@@ -63,6 +63,7 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $month = date('n', strtotime($date));
         $year = date('Y', strtotime($date));
+        log_audit('add_income', "Added Income: $desc ($amount $currency)");
         header("Location: monthly_income.php?month=$month&year=$year&success=Income recorded and balance updated");
         exit();
     } catch (PDOException $e) {
@@ -98,6 +99,7 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     if ($id) {
         $stmt = $pdo->prepare("DELETE FROM income WHERE id = ? AND user_id = ?");
         $stmt->execute([$id, $_SESSION['user_id']]);
+        log_audit('delete_income', "Deleted Income ID: $id");
     }
     // Try to return to where they were
     header("Location: income.php?success=Deleted");
@@ -108,6 +110,7 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $placeholders = str_repeat('?,', count($ids) - 1) . '?';
         $stmt = $pdo->prepare("DELETE FROM income WHERE id IN ($placeholders) AND user_id = ?");
         $stmt->execute(array_merge($ids, [$_SESSION['user_id']]));
+        log_audit('bulk_delete_income', "Bulk Deleted " . count($ids) . " Income records. IDs: " . implode(',', $ids));
     }
     $redirect = $_SERVER['HTTP_REFERER'] ?? 'income.php';
     header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Bulk deleted");
@@ -119,6 +122,7 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $placeholders = str_repeat('?,', count($ids) - 1) . '?';
         $stmt = $pdo->prepare("UPDATE income SET category = ? WHERE id IN ($placeholders) AND user_id = ?");
         $stmt->execute(array_merge([$category], $ids, [$_SESSION['user_id']]));
+        log_audit('bulk_change_income_category', "Bulk Changed Category to $category for " . count($ids) . " Income records. IDs: " . implode(',', $ids));
     }
     $redirect = $_SERVER['HTTP_REFERER'] ?? 'income.php';
     header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Bulk category updated");
@@ -153,6 +157,7 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("UPDATE income SET amount = ?, description = ?, category = ?, income_date = ?, is_recurring = ?, recurrence_day = ?, currency = ? WHERE id = ? AND user_id = ?");
         $stmt->execute([$amount, $desc, $category, $date, $is_recurring, $recurrence_day, $currency, $income_id, $user_id]);
 
+        log_audit('update_income', "Updated Income: $desc ($amount $currency) - ID: $income_id");
         header("Location: edit_income.php?id=$income_id&success=Income updated successfully");
         exit();
 

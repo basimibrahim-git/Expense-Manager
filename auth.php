@@ -24,6 +24,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 session_regenerate_id(true); // Prevent Session Fixation
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['user_name'] = $user['name'];
+                log_audit('login_success', "User Login: $email");
                 header("Location: dashboard.php");
                 exit();
             } else {
