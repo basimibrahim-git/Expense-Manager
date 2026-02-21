@@ -1,6 +1,6 @@
 # 💰 Expense Manager
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![PHP](https://img.shields.io/badge/PHP-8.0%2B-777BB4.svg)
 ![MySQL](https://img.shields.io/badge/MySQL-5.7%2B-4479A1.svg)
@@ -15,6 +15,13 @@
 ### 📊 Interactive Dashboard
 - **Real-Time Overview**: Instant access to Income, Expenses, Net Worth, and Credit Limits.
 - **Visual Analytics**: Interactive charts for spending breakdown (Doughnut), monthly trends (Line), and wealth journey monitoring.
+- **Dual-Currency Switcher**: Toggle your entire dashboard between **AED** and **INR** instantly based on user preferences.
+
+### 🎯 Proactive Budgeting & Planning
+- **Budgeting Engine**: Set monthly spending limits per category with visual progress bars.
+- **Variance Analysis**: Real-time tracking of actual vs. budgeted spending with "Safe to Spend" insights.
+- **Upcoming Bills**: Smart widget that scans active subscriptions and alerts you to renewals due in the next 7 days.
+- **Financial Goals**: track sinking funds and savings milestones with category-based progress tracking.
 
 ### 💳 Smart Finance Management
 - **Card Portfolio**: Visual wallet for credit/debit cards with "Best Card" recommendations for specific spend categories (e.g., Dining, Fuel).
@@ -25,6 +32,11 @@
 - **Zakath Tracker**: Smart calculator that pulls bank balances and gold/silver rates to compute and track 2.5% Zakath obligations.
 - **Sadaqa Tracker**: Log and track voluntary charity donations.
 - **Interest Purifier**: Separate tracking for interest income to ensure ethical disposal. Tracks accrued interest vs. charity payments, with a dashboard for net due calculations.
+
+### 📈 Advanced Reporting
+- **YoY Analysis**: Compare spending habits between current and previous years with granular category growth/reduction trends.
+- **Spending Intensity**: Visual heatmap tracking spending frequency by Month vs. Day of Week.
+- **Professional Statements**: Dedicated print-optimized statement engine for monthly financial summaries.
 
 ### 💼 Professional Tools
 - **Company Tracker**: Monitor annual incentives, bonuses, and sales performance grids.
@@ -56,6 +68,7 @@ This application is built with a robust, standard LAMP/LEMP stack:
   - **Chart.js**: Data visualization.
   - **Bootstrap 5**: Responsive layout framework.
 - **Security**:
+  - **Audit Logs**: Comprehensive tracking of all sensitive actions (deletions, updates, logins) with IP and User Agent logging.
   - **CSRF Protection**: Token-based security for all forms and sensitive actions.
   - **Secure Deletions**: Every deletion requires a POST request with detailed confirmation dialogs to prevent accidental loss.
   - **Input Sanitization**: Protection against XSS and SQL injection.
@@ -80,6 +93,9 @@ The application is modularized for maintainability:
   - `zakath_tracker.php`: Religious obligation calculation.
   - `company_tracker.php`: Professional income tracking.
   - `my_cards.php`: Credit card management system.
+  - `security_audit.php`: Comprehensive action log dashboard.
+  - `budget.php` / `manage_budgets.php`: Planning and variance monitoring.
+  - `reports_advanced.php`: Deep-dive YoY and intensity reports.
 
 ---
 
