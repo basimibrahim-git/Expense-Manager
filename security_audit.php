@@ -1,6 +1,10 @@
 <?php
 // security_audit.php
-require_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\Layout;
+
+Bootstrap::init();
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
@@ -60,8 +64,8 @@ try {
     $error = "A system error occurred while fetching logs. Please try again later.";
 }
 
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+Layout::header();
+Layout::sidebar();
 ?>
 
 <div class="container-fluid py-4">
@@ -252,4 +256,4 @@ require_once 'includes/sidebar.php'; // NOSONAR
     }
 </script>
 
-<?php require_once 'includes/footer.php'; ?> // NOSONAR
+<?php Layout::footer(); ?>

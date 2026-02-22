@@ -1,8 +1,14 @@
 <?php
 $page_title = "Edit Income";
-require_once 'config.php'; // NOSONAR
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
+
+Layout::header();
+Layout::sidebar();
 
 $income_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 
@@ -62,7 +68,7 @@ $categories = [
     <div class="col-md-6">
         <div class="glass-panel p-4">
             <form action="income_actions.php" method="POST">
-                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="update_income">
                 <input type="hidden" name="income_id" value="<?php echo $income['id']; ?>">
 
@@ -128,7 +134,7 @@ $categories = [
             </form>
             <form action="income_actions.php" method="POST" class="d-grid"
                 onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($income['description'])); ?> - AED <?php echo number_format($income['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($income['income_date'])); ?> permanently?');">
-                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="delete_income">
                 <input type="hidden" name="id" value="<?php echo $income['id']; ?>">
                 <button type="submit" class="btn btn-outline-danger py-2">
@@ -146,4 +152,4 @@ $categories = [
     }
 </script>
 
-<?php require_once 'includes/footer.php'; // NOSONAR ?>
+<?php Layout::footer(); ?>

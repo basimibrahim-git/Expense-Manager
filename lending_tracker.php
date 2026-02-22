@@ -1,6 +1,11 @@
 <?php
 $page_title = "Lending Tracker";
-require_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
 
 // Auth Check
 if (!isset($_SESSION['user_id'])) {
@@ -11,7 +16,7 @@ if (!isset($_SESSION['user_id'])) {
 
 // Handle Actions (Must be before outputting any HTML)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
@@ -87,8 +92,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+Layout::header();
+Layout::sidebar();
 
 // Fetch Logic
 $filter_status = $_GET['status'] ?? 'Pending';
@@ -107,7 +112,7 @@ $records = $stmt->fetchAll();
 
 // Summary (Convert INR to AED for Display Stats approx / 24)
 $stmt = $pdo->prepare("SELECT
-    SUM(CASE 
+    SUM(CASE
         WHEN status = 'Pending' AND currency = 'INR' THEN amount / 24
         WHEN status = 'Pending' THEN amount
         ELSE 0
@@ -196,7 +201,19 @@ $summary = $stmt->fetch();
             <?php
             // Color Logic
             $is_overdue = ($r['status'] == 'Pending' && !empty($r['due_date']) && strtotime($r['due_date']) < time());
-            $border_class = $r['status'] == 'Paid' ? 'border-success' : ($is_overdue ? 'border-danger' : 'border-warning');
+            $border_class = 'border-warning'; // Default for pending
+            if ($r['status'] == 'Paid') {
+                $border_class = 'border-success';
+            } elseif ($is_overdue) {
+                $border_class = 'border-danger';
+            }
+
+            $statusClass = 'bg-success';
+            if ($r['status'] === 'Pending') {
+                $statusClass = 'bg-warning text-dark';
+            } elseif ($is_overdue) { // Assuming 'Overdue' is a state derived from 'Pending'
+                $statusClass = 'bg-danger';
+            }
             $curr = $r['currency'] ?? 'AED';
             ?>
             <div class="col-12 col-md-6 col-xl-4">
@@ -278,7 +295,7 @@ $summary = $stmt->fetch();
             </div>
             <div class="modal-body">
                 <form method="POST">
-                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="add_lending">
 
                     <div class="mb-3">
@@ -342,7 +359,7 @@ $summary = $stmt->fetch();
                 <h5 class="fw-bold mb-2">Delete Record?</h5>
                 <p id="deleteLendingMsg" class="text-muted small mb-4">This action cannot be undone.</p>
                 <form method="POST">
-                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="delete_lending">
                     <input type="hidden" name="id" id="deleteModalId">
                     <div class="d-grid gap-2">
@@ -367,7 +384,7 @@ $summary = $stmt->fetch();
                 <p class="text-muted small mb-4">Confirm that <span id="payModalName" class="fw-bold"></span> has
                     returned the money.</p>
                 <form method="POST">
-                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="mark_paid">
                     <input type="hidden" name="id" id="payModalId">
                     <div class="d-grid gap-2">
@@ -380,7 +397,7 @@ $summary = $stmt->fetch();
     </div>
 </div>
 
-<?php require_once 'includes/footer.php'; ?> // NOSONAR
+<?php Layout::footer(); ?>
 
 <!-- Bulk Action Floating Bar -->
 <div id="bulkActionBar"
@@ -403,7 +420,7 @@ $summary = $stmt->fetch();
 </div>
 
 <form id="bulkActionForm" method="POST" class="d-none">
-    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
     <input type="hidden" name="action" id="bulkActionType">
     <div id="bulkActionIds"></div>
 </form>

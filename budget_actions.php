@@ -1,7 +1,11 @@
 <?php
 // budget_actions.php
-require_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
+
+Bootstrap::init();
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
@@ -12,7 +16,7 @@ $user_id = $_SESSION['user_id'];
 $action = $_POST['action'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     // Permission Check: Read-Only users cannot perform POST actions
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
@@ -66,4 +70,3 @@ if ($action == 'save_budgets' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
 header("Location: budget.php");
 exit();
-

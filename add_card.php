@@ -1,8 +1,14 @@
 <?php
 $page_title = "Add Card";
-require_once 'config.php'; // NOSONAR
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
+
+Layout::header();
+Layout::sidebar();
 
 // Fetch all banks for the dropdown
 $banks_stmt = $pdo->prepare("SELECT id, bank_name FROM banks WHERE tenant_id = ? ORDER BY is_default DESC, bank_name ASC");
@@ -21,7 +27,7 @@ $all_banks = $banks_stmt->fetchAll();
     <div class="col-md-8 col-lg-6">
         <div class="glass-panel p-4">
             <form action="card_actions.php" method="POST" id="addCardForm">
-                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="add_card">
                 <input type="hidden" name="card_image" id="cardImageInput">
 
@@ -543,4 +549,4 @@ $all_banks = $banks_stmt->fetchAll();
     });
 </script>
 
-<?php require_once 'includes/footer.php'; // NOSONAR ?>
+<?php Layout::footer(); ?>

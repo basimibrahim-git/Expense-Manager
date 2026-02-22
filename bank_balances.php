@@ -1,8 +1,13 @@
 <?php
 $page_title = "Bank Balances";
-require_once 'config.php'; // NOSONAR
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\Layout;
+
+Bootstrap::init();
+
+Layout::header();
+Layout::sidebar();
 
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 
@@ -121,4 +126,4 @@ $current_year = date('Y');
     }
 </style>
 
-<?php require_once 'includes/footer.php'; ?> // NOSONAR
+<?php Layout::footer(); ?>

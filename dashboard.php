@@ -1,8 +1,13 @@
 <?php
 $page_title = "Dashboard";
-require_once 'config.php'; // NOSONAR
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
+Layout::header();
+Layout::sidebar();
 
 $user_id = $_SESSION['user_id'];
 $tenant_id = $_SESSION['tenant_id'];
@@ -740,7 +745,8 @@ usort($upcoming_bills, function ($a, $b) {
                                 <div class="mt-auto pt-2 border-top">
                                     <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
                                         <form action="expense_actions.php" method="POST">
-                                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                            <input type="hidden" name="csrf_token"
+                                                value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                                             <input type="hidden" name="action" value="log_subscription">
                                             <input type="hidden" name="template_id" value="<?php echo $bill['id']; ?>">
                                             <button type="submit" class="btn btn-sm btn-success w-100 rounded-pill fw-bold">
@@ -1089,4 +1095,4 @@ usort($upcoming_bills, function ($a, $b) {
     });
 </script>
 
-<?php require_once 'includes/footer.php'; // NOSONAR ?>
+<?php Layout::footer(); ?>

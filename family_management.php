@@ -1,9 +1,13 @@
 <?php
 // family_management.php
 $current_page = 'family_management.php';
-require_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
 use App\Helpers\AuditHelper;
 use App\Helpers\Layout;
+use App\Helpers\SecurityHelper;
+
+Bootstrap::init();
 
 if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['family_admin', 'root_admin'])) {
     header("Location: dashboard.php");
@@ -16,7 +20,7 @@ $success = "";
 
 // Handle User Creation
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action']) && $_POST['action'] == 'add_member') {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     $name = trim($_POST['name']);
     $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
@@ -44,7 +48,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action']) && $_POST['a
                 AuditHelper::log($pdo, 'add_family_member', "Added Member: $email (Permission: $permission)");
             }
         } catch (Exception $e) {
-            $error = "Failed to add member: " . $e->getMessage();
+            error_log("Add family member failed: " . $e->getMessage());
+            $error = "Failed to add member: A system error occurred.";
         }
     }
 }
@@ -73,7 +78,7 @@ Layout::sidebar();
 
 <?php if ($error): ?>
     <div class="alert alert-danger shadow-sm border-0">
-        <?php echo $error; ?>
+        <?php echo htmlspecialchars($error); ?>
     </div>
 <?php endif; ?>
 <?php if ($success): ?>
@@ -143,7 +148,7 @@ Layout::sidebar();
             <form method="POST">
                 <div class="modal-body p-4">
                     <input type="hidden" name="action" value="add_member">
-                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
 
                     <div class="mb-3">
                         <label for="memberName" class="form-label">Full Name</label>
@@ -178,4 +183,4 @@ Layout::sidebar();
     </div>
 </div>
 
-<?php include_once 'includes/footer.php'; ?> // NOSONAR
+<?php Layout::footer(); ?>

@@ -1,8 +1,14 @@
 <?php
 $page_title = "Monthly Expenses";
-require_once 'config.php';
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\Layout;
+use App\Helpers\SecurityHelper;
+
+Bootstrap::init();
+
+Layout::header();
+Layout::sidebar();
 
 $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
@@ -25,9 +31,9 @@ $page_num = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT) ?: 1;
 $offset = ($page_num - 1) * $items_per_page;
 
 // Count total for pagination
-$count_query = "SELECT COUNT(*) FROM expenses e 
-          WHERE e.tenant_id = :tenant_id 
-          AND MONTH(e.expense_date) = :month 
+$count_query = "SELECT COUNT(*) FROM expenses e
+          WHERE e.tenant_id = :tenant_id
+          AND MONTH(e.expense_date) = :month
           AND YEAR(e.expense_date) = :year";
 $count_params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];
 
@@ -58,12 +64,12 @@ $total_items = $count_stmt->fetchColumn();
 $total_pages = max(1, ceil($total_items / $items_per_page));
 
 // Build Query with LIMIT
-$query = "SELECT e.*, c.bank_name, c.card_name, u.name as spender_name 
-          FROM expenses e 
-          LEFT JOIN cards c ON e.card_id = c.id 
+$query = "SELECT e.*, c.bank_name, c.card_name, u.name as spender_name
+          FROM expenses e
+          LEFT JOIN cards c ON e.card_id = c.id
           LEFT JOIN users u ON e.spent_by_user_id = u.id
-          WHERE e.tenant_id = :tenant_id 
-          AND MONTH(e.expense_date) = :month 
+          WHERE e.tenant_id = :tenant_id
+          AND MONTH(e.expense_date) = :month
           AND YEAR(e.expense_date) = :year";
 
 $params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];
@@ -97,8 +103,8 @@ try {
     $expenses = $stmt->fetchAll();
 
     // Calculate total for this month (BASED ON FILTERS)
-    $total_query = "SELECT SUM(amount) FROM expenses e WHERE e.tenant_id = :tenant_id 
-                    AND MONTH(e.expense_date) = :month 
+    $total_query = "SELECT SUM(amount) FROM expenses e WHERE e.tenant_id = :tenant_id
+                    AND MONTH(e.expense_date) = :month
                     AND YEAR(e.expense_date) = :year";
 
     // Append the same filters as count/list
@@ -364,7 +370,8 @@ try {
                                         title="Edit"><i class="fa-solid fa-pen"></i></a>
                                     <form action="expense_actions.php" method="POST" class="d-inline"
                                         onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($expense['description'])); ?> - AED <?php echo number_format($expense['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($expense['expense_date'])); ?>?');">
-                                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                        <input type="hidden" name="csrf_token"
+                                            value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                                         <input type="hidden" name="action" value="delete_expense">
                                         <input type="hidden" name="id" value="<?php echo $expense['id']; ?>">
                                         <button type="submit" class="btn btn-sm text-danger border-0 p-0" title="Delete">
@@ -421,7 +428,7 @@ try {
     </div>
 <?php endif; ?>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php Layout::footer(); ?>
 
 <!-- Bulk Action Floating Bar -->
 <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
@@ -454,7 +461,7 @@ try {
     </div>
 
     <form id="bulkActionForm" action="expense_actions.php" method="POST" class="d-none">
-        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+        <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
         <input type="hidden" name="action" id="bulkActionType">
         <input type="hidden" name="category" id="bulkActionCategory">
         <div id="bulkActionIds"></div>

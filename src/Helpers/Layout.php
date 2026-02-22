@@ -12,7 +12,7 @@ class Layout
      */
     public static function header()
     {
-        require_once __DIR__ . '/../../includes/header.php'; // NOSONAR
+        require_once __DIR__ . '/../../includes/header.php';
     }
 
     /**
@@ -20,7 +20,7 @@ class Layout
      */
     public static function sidebar()
     {
-        require_once __DIR__ . '/../../includes/sidebar.php'; // NOSONAR
+        require_once __DIR__ . '/../../includes/sidebar.php';
     }
 
     /**
@@ -28,6 +28,6 @@ class Layout
      */
     public static function footer()
     {
-        require_once __DIR__ . '/../../includes/footer.php'; // NOSONAR
+        require_once __DIR__ . '/../../includes/footer.php';
     }
 }

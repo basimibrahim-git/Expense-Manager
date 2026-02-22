@@ -1,5 +1,9 @@
 <?php
-require_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+
+Bootstrap::init();
+use App\Helpers\SecurityHelper;
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
     exit();
@@ -7,7 +11,7 @@ if (!isset($_SESSION['user_id'])) {
 
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
     $action = $_POST['action'] ?? 'auto_fix';
     $diff = floatval($_POST['difference']);
     $desc = $_POST['desc'];

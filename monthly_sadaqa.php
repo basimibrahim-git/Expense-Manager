@@ -1,10 +1,16 @@
 <?php
 $page_title = "Monthly Sadaqa";
-include_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\AuditHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
 
 // Handle Actions (Add/Delete)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
@@ -24,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt = $pdo->prepare("INSERT INTO monthly_sadaqa (tenant_id, month, year, title, amount, category, record_date) VALUES (?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([$_SESSION['tenant_id'], $month, $year, $title, $amount, $category, $date]);
 
-            log_audit('add_sadaqa', "Added sadaqa: $title (AED $amount)");
+            AuditHelper::log($pdo, 'add_sadaqa', "Added sadaqa: $title (AED $amount)");
             header("Location: monthly_sadaqa.php?month=$month&year=$year&success=Sadaqa added");
             exit();
         } elseif ($_POST['action'] == 'delete_sadaqa') {
@@ -35,15 +41,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt = $pdo->prepare("DELETE FROM monthly_sadaqa WHERE id = ? AND tenant_id = ?");
             $stmt->execute([$id, $_SESSION['tenant_id']]);
 
-            log_audit('delete_sadaqa', "Deleted sadaqa ID: $id");
+            AuditHelper::log($pdo, 'delete_sadaqa', "Deleted sadaqa ID: $id");
             header("Location: monthly_sadaqa.php?month=$month&year=$year&success=Sadaqa deleted");
             exit();
         }
     }
 }
 
-include_once 'includes/header.php'; // NOSONAR
-include_once 'includes/sidebar.php'; // NOSONAR
+Layout::header();
+Layout::sidebar();
 
 $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
@@ -164,7 +170,7 @@ $total_sadaqa = array_sum(array_column($records, 'amount'));
             </div>
             <div class="modal-body">
                 <form method="POST">
-                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="add_sadaqa">
                     <input type="hidden" name="month" value="<?php echo $month; ?>">
                     <input type="hidden" name="year" value="<?php echo $year; ?>">
@@ -242,7 +248,7 @@ $total_sadaqa = array_sum(array_column($records, 'amount'));
                 <h5 class="fw-bold mb-2">Delete Entry?</h5>
                 <p class="text-muted small" id="deleteSadaqaMsg"></p>
                 <form method="POST">
-                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="delete_sadaqa">
                     <input type="hidden" name="month" value="<?php echo $month; ?>">
                     <input type="hidden" name="year" value="<?php echo $year; ?>">
@@ -265,4 +271,4 @@ $total_sadaqa = array_sum(array_column($records, 'amount'));
     }
 </script>
 
-<?php include_once 'includes/footer.php'; // NOSONAR ?>
+<?php Layout::footer(); ?>

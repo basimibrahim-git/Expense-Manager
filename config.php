@@ -64,7 +64,7 @@ try {
     $hrs = floor($mins / 60);
     $mins -= $hrs * 60;
     $offset = sprintf('%+d:%02d', $hrs * $sgn, $mins);
-    $pdo->exec("SET time_zone='$offset'"); // NOSONAR
+    $pdo->exec("SET time_zone='$offset'");
 } catch (\PDOException $e) {
     // Production Error Handling
     error_log("Database Connection Error: " . $e->getMessage()); // Log to server error log
@@ -103,26 +103,11 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-function generate_csrf_token() // NOSONAR
-{
-    return \App\Helpers\SecurityHelper::generateCsrfToken();
-}
-
-function verify_csrf_token($token) // NOSONAR
-{
-    if (!\App\Helpers\SecurityHelper::verifyCsrfToken($token)) {
-        header("Location: dashboard.php?error=Security session expired. Please try again.");
-        exit();
-    }
-    return true;
-}
 
 // Load Composer Autoloader
 require_once __DIR__ . '/vendor/autoload.php';
 
-// v3 Enhancements: Core Utilities
 // procedural version removed in favor of App\Helpers\AuditHelper
-// require_once __DIR__ . '/includes/audit_helper.php'; // NOSONAR
 
 // Load User Preferences into Session
 if (isset($_SESSION['user_id']) && !isset($_SESSION['preferences'])) {

@@ -1,6 +1,10 @@
 <?php
 // v3_archive_engine.php - Maintenance script for cleaning up old data.
-require_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\AuditHelper;
+
+Bootstrap::init();
 
 if (php_sapi_name() !== 'cli' && !isset($_SESSION['user_id'])) {
     die("Unauthorized. Run via CLI or log in.");
@@ -43,7 +47,7 @@ try {
     $pdo->exec("OPTIMIZE TABLE expenses, income");
     echo "✔ Tables optimized.\n";
 
-    log_audit('data_archive', "Archived data older than $cutoff_date. Expenses: $moved_expenses, Income: $moved_income");
+    AuditHelper::log($pdo, 'data_archive', "Archived data older than $cutoff_date. Expenses: $moved_expenses, Income: $moved_income");
     echo "\n✅ Archiving complete.\n";
 
 } catch (Exception $e) {

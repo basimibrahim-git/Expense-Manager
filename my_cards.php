@@ -1,8 +1,13 @@
 <?php
 $page_title = "My Cards";
-require_once 'config.php'; // NOSONAR
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
+Layout::header();
+Layout::sidebar();
 
 // Fetch cards with current month usage
 try {
@@ -10,19 +15,19 @@ try {
     $curr_year = date('Y');
 
     $stmt = $pdo->prepare("
-        SELECT c.*, 
-        (SELECT SUM(amount) FROM expenses e 
-         WHERE e.card_id = c.id 
+        SELECT c.*,
+        (SELECT SUM(amount) FROM expenses e
+         WHERE e.card_id = c.id
          AND e.tenant_id = c.tenant_id
-         AND MONTH(e.expense_date) = :month1 
+         AND MONTH(e.expense_date) = :month1
          AND YEAR(e.expense_date) = :year1) as total_expenses,
-        (SELECT SUM(amount) FROM card_payments p 
-         WHERE p.card_id = c.id 
+        (SELECT SUM(amount) FROM card_payments p
+         WHERE p.card_id = c.id
          AND p.tenant_id = c.tenant_id
-         AND MONTH(p.payment_date) = :month2 
+         AND MONTH(p.payment_date) = :month2
          AND YEAR(p.payment_date) = :year2) as total_payments
-        FROM cards c 
-        WHERE c.tenant_id = :tenant_id 
+        FROM cards c
+        WHERE c.tenant_id = :tenant_id
         ORDER BY c.created_at DESC
     ");
     $stmt->execute([
@@ -159,7 +164,7 @@ try {
                             <i class="fa-solid fa-pen"></i>
                         </a>
                         <form action="card_actions.php" method="POST" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                            <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                             <input type="hidden" name="action" value="delete_card">
                             <input type="hidden" name="id" value="<?php echo $card['id']; ?>">
                             <button type="submit" class="btn btn-sm btn-light text-danger" title="Delete"
@@ -176,4 +181,4 @@ try {
     </div>
 <?php endif; ?>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php Layout::footer(); ?>

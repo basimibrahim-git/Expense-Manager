@@ -2,7 +2,10 @@
 // fetch_url_data.php
 // A simple proxy to fetch Open Graph and Meta tags from a URL
 
-require_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+
+Bootstrap::init();
 header('Content-Type: application/json');
 
 // 1. Validate Input

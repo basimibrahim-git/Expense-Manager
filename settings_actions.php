@@ -1,5 +1,11 @@
 <?php
-require_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\AuditHelper;
+
+Bootstrap::init();
+
 const REDIRECT_LOCATION = "Location: ";
 const REDIRECT_DASHBOARD = REDIRECT_LOCATION . BASE_URL . "dashboard.php";
 
@@ -12,7 +18,7 @@ $user_id = $_SESSION['user_id'];
 $action = $_POST['action'] ?? '';
 
 if ($action == 'toggle_currency') {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     $current = $_SESSION['preferences']['base_currency'] ?? 'AED';
     $new = ($current == 'AED') ? 'INR' : 'AED';
@@ -22,15 +28,16 @@ if ($action == 'toggle_currency') {
         $stmt->execute([$new, $user_id]);
 
         $_SESSION['preferences']['base_currency'] = $new;
-        log_audit('preference_change', "Changed base currency to $new");
+        AuditHelper::log($pdo, 'preference_change', "Changed base currency to $new");
 
-        header(REDIRECT_LOCATION . ($_SERVER['HTTP_REFERER'] ?: BASE_URL . 'dashboard.php'));
+        header(REDIRECT_DASHBOARD);
         exit();
     } catch (Exception $e) {
-        die("Update failed: " . $e->getMessage());
+        error_log("Currency toggle error: " . $e->getMessage());
+        die("Update failed: A system error occurred.");
     }
 } elseif ($action == 'toggle_theme') {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
     $current = $_SESSION['preferences']['theme_preference'] ?? 'dark';
     $new = ($current == 'dark') ? 'light' : 'dark';
 
@@ -39,10 +46,11 @@ if ($action == 'toggle_currency') {
         $stmt->execute([$new, $user_id]);
 
         $_SESSION['preferences']['theme_preference'] = $new;
-        header(REDIRECT_LOCATION . ($_SERVER['HTTP_REFERER'] ?: BASE_URL . 'dashboard.php'));
+        header(REDIRECT_DASHBOARD);
         exit();
     } catch (Exception $e) {
-        die("Update failed: " . $e->getMessage());
+        error_log("Theme toggle error: " . $e->getMessage());
+        die("Update failed: A system error occurred.");
     }
 }
 

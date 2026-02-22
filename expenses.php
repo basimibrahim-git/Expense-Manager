@@ -1,8 +1,13 @@
 <?php
 $page_title = "Expenses Overview";
-include_once 'config.php'; // NOSONAR
-include_once 'includes/header.php'; // NOSONAR
-include_once 'includes/sidebar.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\Layout;
+
+Bootstrap::init();
+
+Layout::header();
+Layout::sidebar();
 
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? 2026;
 
@@ -96,4 +101,4 @@ $current_year = date('Y');
     }
 </style>
 
-<?php include_once 'includes/footer.php'; ?> // NOSONAR
+<?php Layout::footer(); ?>

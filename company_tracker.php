@@ -1,6 +1,11 @@
 <?php
 $page_title = "Incentive Tracker";
-require_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
 
 // Auth Check
 if (!isset($_SESSION['user_id'])) {
@@ -13,7 +18,7 @@ if (!isset($_SESSION['user_id'])) {
 
 // Handle POST Actions
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
@@ -64,8 +69,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     }
 }
 
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+Layout::header();
+Layout::sidebar();
 
 // Determine View Mode: YEAR LIST vs MONTH GRID
 $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
@@ -252,7 +257,7 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
                     <!-- Add New -->
                     <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
                         <form method="POST">
-                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                            <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                             <input type="hidden" name="action" value="quick_add">
                             <input type="hidden" name="year" value="<?php echo $year; ?>">
                             <input type="hidden" name="month" id="modalMonthNum">
@@ -286,7 +291,7 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
                     <h5 class="fw-bold mb-2">Delete Entry?</h5>
                     <p id="deleteEntryMsg" class="text-muted small mb-4">This action cannot be undone.</p>
                     <form method="POST">
-                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                        <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                         <input type="hidden" name="action" value="delete_incentive">
                         <input type="hidden" name="id" id="deleteId">
                         <input type="hidden" name="year" value="<?php echo $year; ?>">
@@ -303,7 +308,7 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
     <script>
         // Pass PHP data to JS
         const monthlyData = <?php echo json_encode($monthly_data); ?>;
-        const csrfToken = "<?php echo generate_csrf_token(); ?>";
+        const csrfToken = '<?php echo SecurityHelper::generateCsrfToken(); ?>';
         const currentYear = <?php echo $year; ?>;
         const canEdit = <?php echo (($_SESSION['permission'] ?? 'edit') !== 'read_only') ? 'true' : 'false'; ?>;
         let deleteModalInstance = null;
@@ -371,4 +376,4 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
     }
 </style>
 
-<?php require_once 'includes/footer.php'; // NOSONAR ?>
+<?php Layout::footer(); ?>

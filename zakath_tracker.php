@@ -1,12 +1,17 @@
 <?php
 $page_title = "Zakath Tracker";
-require_once 'config.php';
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
 
 // 1. Auto-Healing: Create zakath_calculations Table (Handled by install.php)
 
 // Handle Status Update
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
@@ -33,8 +38,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     }
 }
 
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+Layout::header();
+Layout::sidebar();
 
 // Fetch Records
 $stmt = $pdo->prepare("SELECT * FROM zakath_calculations WHERE tenant_id = ? ORDER BY created_at DESC");
@@ -43,7 +48,9 @@ $records = $stmt->fetchAll();
 
 $total_pending = 0;
 foreach ($records as $r) {
-    if ($r['status'] == 'Pending') { $total_pending += $r['total_zakath']; }
+    if ($r['status'] == 'Pending') {
+        $total_pending += $r['total_zakath'];
+    }
 }
 ?>
 
@@ -122,7 +129,7 @@ foreach ($records as $r) {
                         <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
                             <?php if ($rec['status'] == 'Pending'): ?>
                                 <form action="" method="POST" class="flex-grow-1">
-                                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                                     <input type="hidden" name="action" value="mark_paid">
                                     <input type="hidden" name="id" value="<?php echo $rec['id']; ?>">
                                     <button type="submit" class="btn btn-success btn-sm w-100"
@@ -136,7 +143,7 @@ foreach ($records as $r) {
                             <?php endif; ?>
 
                             <form action="" method="POST">
-                                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                                 <input type="hidden" name="action" value="delete_zakath">
                                 <input type="hidden" name="id" value="<?php echo $rec['id']; ?>">
                                 <button type="submit" class="btn btn-outline-danger btn-sm"
@@ -160,4 +167,4 @@ foreach ($records as $r) {
     </div>
 <?php endif; ?>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php Layout::footer(); ?>

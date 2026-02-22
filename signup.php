@@ -1,5 +1,9 @@
 <?php
-require_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+
+Bootstrap::init();
 
 if (isset($_SESSION['user_id'])) {
     header("Location: dashboard.php");
@@ -10,7 +14,7 @@ $error = "";
 $success = "";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     // Rate Limiting / Cooldown
     $last_attempt = $_SESSION['last_signup_attempt'] ?? 0;
@@ -104,7 +108,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <?php endif; ?>
 
                 <form method="POST">
-                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
 
                     <div class="form-floating mb-3">
                         <input type="text" class="form-control" id="nameInput" name="name" placeholder="John Doe"

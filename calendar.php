@@ -1,10 +1,15 @@
 <?php
 $page_title = "My Calendar";
-require_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
 
 // 2. Handle Actions (Logic BEFORE Header)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
@@ -34,8 +39,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR 
+Layout::header();
+Layout::sidebar();
 
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
@@ -281,7 +286,7 @@ foreach ($reminders as $rem) {
             </div>
             <div class="modal-body">
                 <form method="POST">
-                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="add_reminder">
 
                     <div class="mb-3">
@@ -341,7 +346,7 @@ foreach ($reminders as $rem) {
                 <p id="deleteReminderMsg" class="text-muted small">This cannot be undone.</p>
 
                 <form method="POST">
-                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="delete_reminder">
                     <input type="hidden" name="id" id="deleteReminderId">
 
@@ -363,4 +368,4 @@ foreach ($reminders as $rem) {
     }
 </script>
 
-<?php require_once 'includes/footer.php'; ?> // NOSONAR
+<?php Layout::footer(); ?>

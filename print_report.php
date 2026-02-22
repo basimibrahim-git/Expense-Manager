@@ -1,5 +1,8 @@
 <?php
-require_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+
+Bootstrap::init();
 
 if (!isset($_SESSION['user_id'])) {
     die("Unauthorized");

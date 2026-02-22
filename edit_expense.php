@@ -1,8 +1,14 @@
 <?php
 $page_title = "Edit Expense";
-require_once 'config.php'; // NOSONAR
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
+
+Layout::header();
+Layout::sidebar();
 
 $expense_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 
@@ -56,7 +62,7 @@ $categories = ['Grocery', 'Food', 'Transport', 'Shopping', 'Utilities', 'Travel'
     <div class="col-md-8 col-lg-6">
         <div class="glass-panel p-4">
             <form action="expense_actions.php" method="POST">
-                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="update_expense">
                 <input type="hidden" name="expense_id" value="<?php echo $expense['id']; ?>">
 
@@ -166,7 +172,7 @@ $categories = ['Grocery', 'Food', 'Transport', 'Shopping', 'Utilities', 'Travel'
             </form>
             <form action="expense_actions.php" method="POST" class="d-grid"
                 onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($expense['description'])); ?> - AED <?php echo number_format($expense['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($expense['expense_date'])); ?> permanently?');">
-                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="delete_expense">
                 <input type="hidden" name="id" value="<?php echo $expense['id']; ?>">
                 <button type="submit" class="btn btn-outline-danger py-2">
@@ -184,4 +190,4 @@ function toggleCardSelect() {
 }
 </script>
 
-<?php require_once 'includes/footer.php'; // NOSONAR ?>
+<?php Layout::footer(); ?>

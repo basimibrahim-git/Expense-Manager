@@ -1,10 +1,16 @@
 <?php
 $page_title = "Monthly Interest";
-include_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\AuditHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
 
 // Handle Actions (Add/Edit/Delete)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
@@ -27,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // If it's a payment, we log it as an expense for the tracker too?
             // For now, interest tracker is separate.
 
-            log_audit('interest_entry', "Added $type: $title (AED $amount)");
+            AuditHelper::log($pdo, 'interest_entry', "Added $type: $title (AED $amount)");
             header("Location: monthly_interest.php?month=$month&year=$year&success=Record added");
             exit();
         } elseif ($_POST['action'] == 'delete_record') {
@@ -38,15 +44,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt = $pdo->prepare("DELETE FROM monthly_interest WHERE id = ? AND tenant_id = ?");
             $stmt->execute([$id, $_SESSION['tenant_id']]);
 
-            log_audit('interest_delete', "Deleted interest record ID: $id");
+            AuditHelper::log($pdo, 'interest_delete', "Deleted interest record ID: $id");
             header("Location: monthly_interest.php?month=$month&year=$year&success=Record deleted");
             exit();
         }
     }
 }
 
-include_once 'includes/header.php'; // NOSONAR
-include_once 'includes/sidebar.php'; // NOSONAR
+Layout::header();
+Layout::sidebar();
 
 $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
@@ -208,7 +214,7 @@ foreach ($records as $r) {
             </div>
             <div class="modal-body">
                 <form method="POST">
-                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="add_record">
                     <input type="hidden" name="month" value="<?php echo $month; ?>">
                     <input type="hidden" name="year" value="<?php echo $year; ?>">
@@ -268,7 +274,7 @@ foreach ($records as $r) {
                 <h5 class="fw-bold mb-2">Delete Record?</h5>
                 <p class="text-muted small" id="deleteMsg"></p>
                 <form id="deleteForm" method="POST">
-                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="delete_record">
                     <input type="hidden" name="month" value="<?php echo $month; ?>">
                     <input type="hidden" name="year" value="<?php echo $year; ?>">
@@ -313,7 +319,7 @@ foreach ($records as $r) {
             const inputCsrf = document.createElement('input');
             inputCsrf.type = 'hidden';
             inputCsrf.name = 'csrf_token';
-            inputCsrf.value = '<?php echo generate_csrf_token(); ?>';
+            inputCsrf.value = '<?php echo SecurityHelper::generateCsrfToken(); ?>';
             form.appendChild(inputCsrf);
 
             document.body.appendChild(form);
@@ -322,4 +328,4 @@ foreach ($records as $r) {
     }
 </script>
 
-<?php include_once 'includes/footer.php'; // NOSONAR ?>
+<?php Layout::footer(); ?>

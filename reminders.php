@@ -1,10 +1,15 @@
 <?php
 $page_title = "My Reminders";
-require_once 'config.php';
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
 
 // 1. Handle Actions
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
@@ -46,8 +51,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     }
 }
 
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+Layout::header();
+Layout::sidebar();
 
 // Fetch Reminders
 $stmt = $pdo->prepare("SELECT * FROM reminders WHERE tenant_id = ? ORDER BY alert_date ASC");
@@ -131,7 +136,8 @@ $reminders = $stmt->fetchAll();
                                         <i class="fa-solid fa-pen"></i>
                                     </button>
                                     <form method="POST" onsubmit="return confirm('Delete this reminder?');">
-                                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                        <input type="hidden" name="csrf_token"
+                                            value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                                         <input type="hidden" name="action" value="delete_reminder">
                                         <input type="hidden" name="id" value="<?php echo intval($rem['id']); ?>">
                                         <button type="submit"
@@ -192,7 +198,7 @@ $reminders = $stmt->fetchAll();
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="POST" id="reminderForm">
-                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="add_reminder" id="formAction">
                 <input type="hidden" name="id" id="reminderId">
                 <div class="modal-header">
@@ -282,4 +288,4 @@ $reminders = $stmt->fetchAll();
     });
 </script>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php Layout::footer(); ?>

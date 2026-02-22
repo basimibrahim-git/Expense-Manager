@@ -1,7 +1,12 @@
 <?php
 // admin/index.php
 $current_page = 'admin/index.php';
-require_once '../config.php'; // NOSONAR
+require_once __DIR__ . '/../vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\Layout;
+
+Bootstrap::init();
+
 
 // Root Admin Authorization
 if (($_SESSION['role'] ?? '') !== 'root_admin') {
@@ -45,7 +50,7 @@ try {
 </head>
 
 <body>
-    <?php include_once '../includes/sidebar.php'; // NOSONAR ?>
+    <?php Layout::sidebar(); ?>
 
     <div class="container-fluid py-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -145,7 +150,7 @@ try {
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <?php include_once '../includes/footer.php'; // NOSONAR ?>
+    <?php Layout::footer(); ?>
 </body>
 
 </html>

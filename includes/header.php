@@ -1,11 +1,3 @@
-<?php
-require_once __DIR__ . '/../config.php'; // NOSONAR
-// session is started by config.php with secure params
-if (!isset($_SESSION['user_id'])) {
-    header("Location: index.php");
-    exit();
-}
-// Get current page name for active menu highlighting
 $current_page = basename($_SERVER['PHP_SELF']);
 
 // Security Headers - Prevent clickjacking with strictest X-Frame-Options

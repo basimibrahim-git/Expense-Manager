@@ -1,15 +1,22 @@
 <?php
 $page_title = "Monthly Income";
-include_once 'config.php'; // NOSONAR
-include_once 'includes/header.php'; // NOSONAR
-include_once 'includes/sidebar.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\AuditHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
+
+Layout::header();
+Layout::sidebar();
 
 $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 
 // Handle Bulk Category Change
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'bulk_change_category') {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
@@ -25,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $stmt = $pdo->prepare("UPDATE monthly_income SET category = ? WHERE id IN ($ids_placeholder) AND tenant_id = ?");
         $stmt->execute(array_merge([$new_category], $ids, [$_SESSION['tenant_id']]));
 
-        log_audit('bulk_income_edit', "Changed category for " . count($ids) . " items to $new_category");
+        AuditHelper::log($pdo, 'bulk_income_edit', "Changed category for " . count($ids) . " items to $new_category");
         header("Location: monthly_income.php?month=$month&year=$year&success=Bulk update successful");
         exit();
     }
@@ -86,7 +93,7 @@ $total_income = array_sum(array_column($records, 'amount'));
 
 <div class="glass-panel p-0 overflow-hidden">
     <form id="bulkActionForm" method="POST">
-        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+        <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
         <input type="hidden" name="action" value="bulk_change_category">
         <input type="hidden" name="new_category" id="bulkCategoryInput">
 
@@ -242,9 +249,9 @@ $total_income = array_sum(array_column($records, 'amount'));
 
     function confirmDelete(id, source) {
         if (confirm(`Are you sure you want to delete income from "${source}"? This cannot be undone.`)) {
-            window.location.href = `income_actions.php?action=delete&id=${id}&month=<?php echo $month; ?>&year=<?php echo $year; ?>&csrf_token=<?php echo generate_csrf_token(); ?>`;
+            window.location.href = `income_actions.php?action=delete&id=${id}&month=<?php echo $month; ?>&year=<?php echo $year; ?>&csrf_token=<?php echo SecurityHelper::generateCsrfToken(); ?>`;
         }
     }
 </script>
 
-<?php include_once 'includes/footer.php'; // NOSONAR ?>
+<?php Layout::footer(); ?>

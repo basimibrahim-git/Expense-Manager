@@ -1,7 +1,11 @@
 <?php
 $page_title = "Add Income";
-require_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
+
+Bootstrap::init();
 
 Layout::header();
 Layout::sidebar();
@@ -51,7 +55,7 @@ $user_banks = $banks_stmt->fetchAll();
     <div class="col-md-6">
         <div class="glass-panel p-4">
             <form action="income_actions.php" method="POST">
-                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="add_income">
 
                 <div class="mb-3">

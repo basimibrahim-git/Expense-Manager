@@ -1,10 +1,16 @@
 <?php
 $page_title = "Monthly Incentives";
-include_once 'config.php';
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\AuditHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
 
 // Handle Actions (Add/Delete)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
@@ -23,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt = $pdo->prepare("INSERT INTO monthly_incentives (tenant_id, month, year, title, amount, status) VALUES (?, ?, ?, ?, ?, ?)");
             $stmt->execute([$_SESSION['tenant_id'], $month, $year, $title, $amount, $status]);
 
-            log_audit('add_incentive', "Added incentive: $title (AED $amount)");
+            AuditHelper::log($pdo, 'add_incentive', "Added incentive: $title (AED $amount)");
             header("Location: monthly_incentives.php?month=$month&year=$year&success=Incentive added");
             exit();
         } elseif ($_POST['action'] == 'delete_incentive') {
@@ -34,15 +40,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt = $pdo->prepare("DELETE FROM monthly_incentives WHERE id = ? AND tenant_id = ?");
             $stmt->execute([$id, $_SESSION['tenant_id']]);
 
-            log_audit('delete_incentive', "Deleted incentive ID: $id");
+            AuditHelper::log($pdo, 'delete_incentive', "Deleted incentive ID: $id");
             header("Location: monthly_incentives.php?month=$month&year=$year&success=Incentive deleted");
             exit();
         }
     }
 }
 
-include_once 'includes/header.php';
-include_once 'includes/sidebar.php';
+Layout::header();
+Layout::sidebar();
 
 $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
@@ -66,24 +72,24 @@ $total_incentives = array_sum(array_column($incentives, 'amount'));
         <form class="d-flex gap-2 me-2" method="GET">
             <select name="month" class="form-select form-select-sm">
                 <?php for ($m = 1; $m <= 12; $m++): ?>
-                        <option value="<?php echo $m; ?>" <?php echo $month == $m ? 'selected' : ''; ?>>
-                            <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
-                        </option>
+                    <option value="<?php echo $m; ?>" <?php echo $month == $m ? 'selected' : ''; ?>>
+                        <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
+                    </option>
                 <?php endfor; ?>
             </select>
             <select name="year" class="form-select form-select-sm">
                 <?php for ($y = date('Y') - 1; $y <= date('Y') + 1; $y++): ?>
-                        <option value="<?php echo $y; ?>" <?php echo $year == $y ? 'selected' : ''; ?>>
-                            <?php echo $y; ?>
-                        </option>
+                    <option value="<?php echo $y; ?>" <?php echo $year == $y ? 'selected' : ''; ?>>
+                        <?php echo $y; ?>
+                    </option>
                 <?php endfor; ?>
             </select>
             <button type="submit" class="btn btn-sm btn-light border">Go</button>
         </form>
         <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-                <button class="btn btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#addIncentiveModal">
-                    <i class="fa-solid fa-plus me-2"></i> Add Incentive
-                </button>
+            <button class="btn btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#addIncentiveModal">
+                <i class="fa-solid fa-plus me-2"></i> Add Incentive
+            </button>
         <?php endif; ?>
     </div>
 </div>
@@ -114,44 +120,44 @@ $total_incentives = array_sum(array_column($incentives, 'amount'));
             </thead>
             <tbody>
                 <?php if (empty($incentives)): ?>
+                    <tr>
+                        <td colspan="5" class="text-center py-5 text-muted">
+                            <i class="fa-solid fa-gift fa-3x mb-3 d-block opacity-25"></i>
+                            No incentives recorded for this period.
+                        </td>
+                    </tr>
+                <?php else: ?>
+                    <?php foreach ($incentives as $incentive): ?>
                         <tr>
-                            <td colspan="5" class="text-center py-5 text-muted">
-                                <i class="fa-solid fa-gift fa-3x mb-3 d-block opacity-25"></i>
-                                No incentives recorded for this period.
+                            <td class="ps-4 fw-bold">
+                                <?php echo htmlspecialchars($incentive['title']); ?>
+                            </td>
+                            <td>
+                                <span class="fw-bold text-success">AED
+                                    <?php echo number_format($incentive['amount'], 2); ?>
+                                </span>
+                            </td>
+                            <td>
+                                <span
+                                    class="badge rounded-pill <?php echo $incentive['status'] == 'received' ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning'; ?>">
+                                    <?php echo ucfirst($incentive['status']); ?>
+                                </span>
+                            </td>
+                            <td class="text-muted small">
+                                <?php echo date('d M Y', strtotime($incentive['created_at'])); ?>
+                            </td>
+                            <td class="text-end pe-4">
+                                <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                                    <button class="btn btn-sm btn-outline-danger border-0"
+                                        onclick="confirmDelete(<?php echo $incentive['id']; ?>, '<?php echo addslashes(htmlspecialchars($incentive['title'])); ?>', '<?php echo $incentive['amount']; ?>')">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                <?php else: ?>
+                                    <i class="fa-solid fa-lock text-muted small" title="Read Only"></i>
+                                <?php endif; ?>
                             </td>
                         </tr>
-                <?php else: ?>
-                        <?php foreach ($incentives as $incentive): ?>
-                                <tr>
-                                    <td class="ps-4 fw-bold">
-                                        <?php echo htmlspecialchars($incentive['title']); ?>
-                                    </td>
-                                    <td>
-                                        <span class="fw-bold text-success">AED
-                                            <?php echo number_format($incentive['amount'], 2); ?>
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <span
-                                            class="badge rounded-pill <?php echo $incentive['status'] == 'received' ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning'; ?>">
-                                            <?php echo ucfirst($incentive['status']); ?>
-                                        </span>
-                                    </td>
-                                    <td class="text-muted small">
-                                        <?php echo date('d M Y', strtotime($incentive['created_at'])); ?>
-                                    </td>
-                                    <td class="text-end pe-4">
-                                        <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-                                                <button class="btn btn-sm btn-outline-danger border-0"
-                                                    onclick="confirmDelete(<?php echo $incentive['id']; ?>, '<?php echo addslashes(htmlspecialchars($incentive['title'])); ?>', '<?php echo $incentive['amount']; ?>')">
-                                                    <i class="fa-solid fa-trash"></i>
-                                                </button>
-                                        <?php else: ?>
-                                                <i class="fa-solid fa-lock text-muted small" title="Read Only"></i>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                        <?php endforeach; ?>
+                    <?php endforeach; ?>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -168,18 +174,21 @@ $total_incentives = array_sum(array_column($incentives, 'amount'));
             </div>
             <div class="modal-body">
                 <form method="POST">
-                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="add_incentive">
                     <input type="hidden" name="month" value="<?php echo $month; ?>">
                     <input type="hidden" name="year" value="<?php echo $year; ?>">
 
                     <div class="mb-3">
                         <label for="incentiveTitle" class="form-label">Title <span class="text-danger">*</span></label>
-                        <input type="text" name="title" id="incentiveTitle" class="form-control" placeholder="e.g. Sales Bonus" required>
+                        <input type="text" name="title" id="incentiveTitle" class="form-control"
+                            placeholder="e.g. Sales Bonus" required>
                     </div>
                     <div class="mb-3">
-                        <label for="incentiveAmount" class="form-label">Amount (AED) <span class="text-danger">*</span></label>
-                        <input type="number" step="0.01" name="amount" id="incentiveAmount" class="form-control" placeholder="0.00" required>
+                        <label for="incentiveAmount" class="form-label">Amount (AED) <span
+                                class="text-danger">*</span></label>
+                        <input type="number" step="0.01" name="amount" id="incentiveAmount" class="form-control"
+                            placeholder="0.00" required>
                     </div>
                     <div class="mb-4">
                         <label for="incentiveStatus" class="form-label">Status</label>
@@ -206,7 +215,7 @@ $total_incentives = array_sum(array_column($incentives, 'amount'));
                 <h5 class="fw-bold mb-2">Delete Record?</h5>
                 <p class="text-muted small" id="deleteIncentiveMsg"></p>
                 <form method="POST">
-                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="delete_incentive">
                     <input type="hidden" name="month" value="<?php echo $month; ?>">
                     <input type="hidden" name="year" value="<?php echo $year; ?>">
@@ -229,4 +238,4 @@ $total_incentives = array_sum(array_column($incentives, 'amount'));
     }
 </script>
 
-<?php include_once 'includes/footer.php'; ?>
+<?php Layout::footer(); ?>

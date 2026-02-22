@@ -1,5 +1,11 @@
 // manage_budgets.php
-include_once 'config.php';
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\Layout;
+use App\Helpers\SecurityHelper;
+
+Bootstrap::init();
+use App\Helpers\AuditHelper;
 
 if (!isset($_SESSION['user_id'])) {
 header("Location: index.php");
@@ -25,8 +31,8 @@ $existing_budgets = $stmt->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
 $categories = ['Grocery', 'Food', 'Medical', 'Shopping', 'Utilities', 'Transport', 'Travel', 'Entertainment',
 'Education', 'Other'];
 
-include_once 'includes/header.php';
-include_once 'includes/sidebar.php';
+Layout::header();
+Layout::sidebar();
 ?>
 
 <div class="container-fluid py-4">
@@ -70,7 +76,8 @@ include_once 'includes/sidebar.php';
                 <div class="p-4">
                     <form action="budget_actions.php" method="POST">
                         <input type="hidden" name="action" value="save_budgets">
-                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                         <input type="hidden" name="month" value="<?php echo $month; ?>">
                         <input type="hidden" name="year" value="<?php echo $year; ?>">
 
@@ -167,4 +174,4 @@ include_once 'includes/sidebar.php';
     }
 </script>
 
-<?php include_once 'includes/footer.php'; ?> // NOSONAR
+<?php Layout::footer(); ?>

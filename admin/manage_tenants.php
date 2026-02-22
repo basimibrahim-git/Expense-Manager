@@ -1,7 +1,13 @@
 <?php
 // admin/manage_tenants.php
 $current_page = 'admin/manage_tenants.php';
-require_once '../config.php'; // NOSONAR
+require_once __DIR__ . '/../vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\Layout;
+use App\Helpers\SecurityHelper;
+use App\Helpers\AuditHelper;
+
+Bootstrap::init();
 
 // Root Admin Authorization
 if (($_SESSION['role'] ?? '') !== 'root_admin') {
@@ -23,9 +29,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt = $pdo->prepare("UPDATE tenants SET family_name = ? WHERE id = ?");
                 $stmt->execute([$newName, $tenantId]);
                 $success = "Family name updated successfully!";
-                log_audit('rename_tenant', "Renamed Tenant ID $tenantId to $newName");
+                AuditHelper::log($pdo, 'rename_tenant', "Renamed Tenant ID $tenantId to $newName");
             } catch (PDOException $e) {
-                $error = "Update failed: " . $e->getMessage();
+                error_log("Tenant rename failed: " . $e->getMessage());
+                $error = "Update failed: A system error occurred.";
             }
         }
     } elseif ($_POST['action'] === 'add_member') {
@@ -41,14 +48,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt = $pdo->prepare("INSERT INTO users (tenant_id, name, email, password, role, permission) VALUES (?, ?, ?, ?, ?, 'edit')");
                 $stmt->execute([$tenantId, $name, $email, $hashed, $role]);
                 $success = "User '$name' added to the family!";
-                log_audit('add_member_admin', "Added User $email to Tenant ID $tenantId");
+                AuditHelper::log($pdo, 'add_member_admin', "Added User $email to Tenant ID $tenantId");
 
                 // Set session message and redirect to prevent resubmission + clear URL
                 $_SESSION['success_msg'] = $success;
                 header("Location: manage_tenants.php");
                 exit();
             } catch (PDOException $e) {
-                $error = "Failed to add user: " . $e->getMessage();
+                error_log("Add user admin failed: " . $e->getMessage());
+                $error = "Failed to add user: A system error occurred.";
             }
         }
     }
@@ -110,7 +118,7 @@ try {
 </head>
 
 <body>
-    <?php include_once '../includes/sidebar.php'; // NOSONAR ?>
+    <?php Layout::sidebar(); ?>
 
     <div class="container-fluid py-4">
         <div class="mb-4">
@@ -120,7 +128,7 @@ try {
 
         <?php if ($error): ?>
             <div class="alert alert-danger shadow-sm border-0 rounded-pill px-4 animate__animated animate__shakeX">
-                <i class="fa-solid fa-circle-exclamation me-2"></i><?php echo $error; ?>
+                <i class="fa-solid fa-circle-exclamation me-2"></i><?php echo htmlspecialchars($error); ?>
             </div>
         <?php endif; ?>
 
@@ -314,7 +322,7 @@ try {
             }
         <?php endif; ?>
     </script>
-    <?php include_once '../includes/footer.php'; // NOSONAR ?>
+    <?php Layout::footer(); ?>
 </body>
 
 </html>

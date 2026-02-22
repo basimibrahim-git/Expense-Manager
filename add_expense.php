@@ -1,8 +1,11 @@
 <?php
 $page_title = "Add Expense";
-require_once 'config.php'; // NOSONAR
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
 
 // Fetch family's cards for dropdown
 try {
@@ -64,6 +67,9 @@ elseif ($pre_month && $pre_year) {
         $default_date = date('Y-m-d');
     }
 }
+
+Layout::header();
+Layout::sidebar();
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -83,13 +89,13 @@ elseif ($pre_month && $pre_year) {
                     <strong>Expense Saved!</strong>
                     <span class="badge bg-success ms-2"><?php echo intval($_GET['count'] ?? 1); ?> added this session</span>
                 </output>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         <?php endif; ?>
 
         <div class="glass-panel p-4">
             <form action="expense_actions.php" method="POST" class="needs-validation" novalidate>
-                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="add_expense">
                 <input type="hidden" name="add_count" value="<?php echo intval($_GET['count'] ?? 0); ?>">
 
@@ -98,13 +104,14 @@ elseif ($pre_month && $pre_year) {
                     <fieldset class="btn-group w-100" aria-labelledby="paymentMethodLabel">
                         <legend id="paymentMethodLabel" class="form-label d-block">Payment Method</legend>
                         <input type="radio" class="btn-check" name="payment_method" id="methodCash" value="Cash" checked
-                            onclick="toggleCardSelect(false)">
+                            onclick="toggleCardSelect(false)"
+                            onkeydown="if(event.key==='Enter') toggleCardSelect(false)">
                         <label class="btn btn-outline-primary py-2" for="methodCash">
                             <i class="fa-solid fa-coins me-2"></i> Cash
                         </label>
 
                         <input type="radio" class="btn-check" name="payment_method" id="methodCard" value="Card"
-                            onclick="toggleCardSelect(true)">
+                            onclick="toggleCardSelect(true)" onkeydown="if(event.key==='Enter') toggleCardSelect(true)">
                         <label class="btn btn-outline-primary py-2" for="methodCard">
                             <i class="fa-solid fa-credit-card me-2"></i> Card
                         </label>
@@ -155,7 +162,8 @@ elseif ($pre_month && $pre_year) {
                             </select>
                             <input type="number" name="amount" id="expenseAmount" class="form-control form-control-lg"
                                 placeholder="0.00" step="0.01"
-                                value="<?php echo htmlspecialchars($_GET['amount'] ?? ''); ?>" required autofocus>
+                                value="<?php echo htmlspecialchars($_GET['amount'] ?? ''); ?>" required autofocus
+                                onkeyup="calculateRewards()">
                         </div>
                     </div>
 
@@ -187,7 +195,7 @@ elseif ($pre_month && $pre_year) {
                                     Foreign = ? AED)</label>
                                 <input type="number" name="exchange_rate" id="exchangeRateInput"
                                     class="form-control form-control-sm mt-1" placeholder="e.g. 3.67" step="0.001"
-                                    value="1.00">
+                                    value="1.00" onkeyup="calculateRewards()">
                             </div>
                             <div class="text-end small">
                                 <span class="text-muted">Auto-deduction will use converted AED.</span>
@@ -235,7 +243,8 @@ elseif ($pre_month && $pre_year) {
                 <!-- Category -->
                 <div class="mb-3">
                     <label class="form-label" for="expenseCategory">Category <span class="text-danger">*</span></label>
-                    <select name="category" id="expenseCategory" class="form-select" required>
+                    <select name="category" id="expenseCategory" class="form-select" required
+                        onchange="calculateRewards()">
                         <option value="" disabled selected>Select Category</option>
                         <option value="Grocery">Grocery & Supermarkets</option>
                         <option value="Medical">Medical & Healthcare</option>
@@ -267,7 +276,8 @@ elseif ($pre_month && $pre_year) {
                             <span class="input-group-text text-success bg-success-subtle"><i
                                     class="fa-solid fa-gift"></i></span>
                             <input type="number" name="cashback_earned" id="cashbackEarned"
-                                class="form-control bg-light" placeholder="0.00" step="0.01" readonly>
+                                class="form-control bg-light" placeholder="0.00" step="0.01" readonly
+                                aria-label="Rewards Amount">
                         </div>
                     </div>
                     <div class="col-md-6">
@@ -310,11 +320,16 @@ elseif ($pre_month && $pre_year) {
 
     function calculateRewards() {
         const cardId = document.getElementById('cardSelect').value;
-        const category = document.getElementsByName('category')[0].value;
-        const amount = parseFloat(document.getElementsByName('amount')[0].value) || 0;
-        const rewardsInput = document.getElementsByName('cashback_earned')[0];
+        const categoryElem = document.getElementById('expenseCategory');
+        const category = categoryElem ? categoryElem.value : '';
+        const amountElem = document.getElementById('expenseAmount');
+        const amount = amountElem ? parseFloat(amountElem.value) || 0 : 0;
+        const rewardsInput = document.getElementById('cashbackEarned');
 
-        if (!cardId || !category || amount <= 0) return;
+        if (!cardId || !category || amount <= 0) {
+            if (rewardsInput) rewardsInput.value = "";
+            return;
+        }
 
         const card = myCards.find(c => c.id == cardId);
         if (card && card.cashback_struct) {
@@ -325,21 +340,23 @@ elseif ($pre_month && $pre_year) {
                 // If it's a numeric value, calculate
                 if (rate > 0) {
                     const earned = (amount * (rate / 100)).toFixed(2);
-                    rewardsInput.value = earned;
-
-                    // Visual feedback
-                    rewardsInput.parentElement.classList.add('pulse-success');
-                    setTimeout(() => rewardsInput.parentElement.classList.remove('pulse-success'), 1000);
+                    if (rewardsInput) {
+                        rewardsInput.value = earned;
+                        // Visual feedback
+                        rewardsInput.parentElement.classList.add('pulse-success');
+                        setTimeout(() => rewardsInput.parentElement.classList.remove('pulse-success'), 1000);
+                    }
                 }
             } catch (e) { console.error("Reward calculation error", e); }
         }
     }
 
     // Attach listeners
-    document.getElementById('cardSelect').addEventListener('change', calculateRewards);
-    document.getElementById('cardSelect').addEventListener('change', updateDeductBalance);
-    document.getElementsByName('category')[0].addEventListener('change', calculateRewards);
-    document.getElementsByName('amount')[0].addEventListener('input', calculateRewards);
+    const cardSelect = document.getElementById('cardSelect');
+    if (cardSelect) {
+        cardSelect.addEventListener('change', calculateRewards);
+        cardSelect.addEventListener('change', updateDeductBalance);
+    }
 
     function updateDeductBalance() {
         const cardId = document.getElementById('cardSelect').value;
@@ -355,7 +372,8 @@ elseif ($pre_month && $pre_year) {
             deductDiv.style.display = 'block';
         } else {
             deductDiv.style.display = 'none';
-            document.getElementById('deductBalance').checked = false;
+            const deductInput = document.getElementById('deductBalance');
+            if (deductInput) deductInput.checked = false;
         }
     }
 
@@ -382,8 +400,10 @@ elseif ($pre_month && $pre_year) {
             if (rewardsSec) rewardsSec.style.display = 'none';
             cardSelect.removeAttribute('required');
             cardSelect.value = ""; // Reset
-            document.getElementsByName('cashback_earned')[0].value = "";
-            document.getElementById('deductBalanceDiv').style.display = 'none';
+            const rewardsInput = document.getElementById('cashbackEarned');
+            if (rewardsInput) rewardsInput.value = "";
+            const deductDiv = document.getElementById('deductBalanceDiv');
+            if (deductDiv) deductDiv.style.display = 'none';
         }
     }
 </script>
@@ -409,4 +429,4 @@ elseif ($pre_month && $pre_year) {
     }
 </style>
 
-<?php require_once 'includes/footer.php'; ?> // NOSONAR
+<?php Layout::footer(); ?>

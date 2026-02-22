@@ -1,9 +1,14 @@
 <?php
 $page_title = "Add Balance";
-require_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+use App\Helpers\Layout;
+
+Bootstrap::init();
+
+Layout::header();
+Layout::sidebar();
 
 $pre_month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT);
 $pre_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
@@ -81,4 +86,4 @@ $all_banks = $banks_stmt->fetchAll();
     </div>
 </div>
 
-<?php require_once 'includes/footer.php'; ?> // NOSONAR
+<?php Layout::footer(); ?>

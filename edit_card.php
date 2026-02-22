@@ -1,8 +1,14 @@
 <?php
 $page_title = "Edit Card";
-require_once 'config.php'; // NOSONAR
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
+
+Layout::header();
+Layout::sidebar();
 
 // Get Card ID
 $card_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
@@ -49,7 +55,7 @@ $all_banks = $banks_stmt->fetchAll();
     <div class="col-md-8 col-lg-6">
         <div class="glass-panel p-4">
             <form action="card_actions.php" method="POST" id="editCardForm">
-                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="update_card">
                 <input type="hidden" name="card_id" value="<?php echo $card['id']; ?>">
 
@@ -241,7 +247,7 @@ $all_banks = $banks_stmt->fetchAll();
                 </div>
             </form>
             <form action="card_actions.php" method="POST" class="d-grid">
-                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="delete_card">
                 <input type="hidden" name="id" value="<?php echo $card['id']; ?>">
                 <button type="submit" class="btn btn-outline-danger py-2"
@@ -369,4 +375,4 @@ $all_banks = $banks_stmt->fetchAll();
     }
 </script>
 
-<?php require_once 'includes/footer.php'; // NOSONAR ?>
+<?php Layout::footer(); ?>

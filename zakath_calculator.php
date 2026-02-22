@@ -1,6 +1,11 @@
 <?php
 // zakath_calculator.php
-require_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
@@ -35,7 +40,7 @@ try {
 
 // Handle Save
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     $cycle = $_POST['cycle_name'];
     $cash = floatval($_POST['cash_balance']);
@@ -58,8 +63,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+Layout::header();
+Layout::sidebar();
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -75,7 +80,7 @@ require_once 'includes/sidebar.php'; // NOSONAR
     <div class="col-lg-8">
         <div class="glass-panel p-4">
             <form method="POST" id="zakathForm">
-                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
 
                 <h5 class="fw-bold mb-4 text-primary border-bottom pb-2">1. Cycle Information</h5>
                 <div class="mb-4">
@@ -185,4 +190,4 @@ require_once 'includes/sidebar.php'; // NOSONAR
     calcZakath();
 </script>
 
-<?php require_once 'includes/footer.php'; ?> // NOSONAR
+<?php Layout::footer(); ?>

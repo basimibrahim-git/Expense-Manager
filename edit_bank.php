@@ -1,8 +1,14 @@
 <?php
 $page_title = "Edit Bank";
-require_once 'config.php'; // NOSONAR
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
+
+Layout::header();
+Layout::sidebar();
 
 $bank_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 
@@ -49,7 +55,7 @@ if (!$bank) {
     <div class="col-md-6">
         <div class="glass-panel p-4">
             <form action="bank_actions.php" method="POST">
-                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="update_bank">
                 <input type="hidden" name="bank_id" value="<?php echo $bank['id']; ?>">
 
@@ -115,7 +121,7 @@ if (!$bank) {
                 </div>
             </form>
             <form action="bank_actions.php" method="POST" class="d-grid">
-                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="delete">
                 <input type="hidden" name="id" value="<?php echo $bank['id']; ?>">
                 <button type="submit" class="btn btn-outline-danger py-2"
@@ -127,4 +133,4 @@ if (!$bank) {
     </div>
 </div>
 
-<?php require_once 'includes/footer.php'; // NOSONAR ?>
+<?php Layout::footer(); ?>

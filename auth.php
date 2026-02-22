@@ -1,11 +1,15 @@
 <?php
-require_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
+
+Bootstrap::init();
 const REDIRECT_ERROR = "Location: index.php?error=";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // CSRF Check
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     // Rate Limiting / Cooldown
     $last_attempt = $_SESSION['last_auth_attempt'] ?? 0;

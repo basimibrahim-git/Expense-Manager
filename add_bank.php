@@ -1,8 +1,14 @@
 <?php
 $page_title = "Add Bank";
-require_once 'config.php'; // NOSONAR
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
+
+Layout::header();
+Layout::sidebar();
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -18,7 +24,7 @@ require_once 'includes/sidebar.php'; // NOSONAR
     <div class="col-md-6">
         <div class="glass-panel p-4">
             <form action="bank_actions.php" method="POST">
-                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="add_bank">
 
                 <div class="mb-3">
@@ -85,4 +91,4 @@ require_once 'includes/sidebar.php'; // NOSONAR
     </div>
 </div>
 
-<?php require_once 'includes/footer.php'; ?> // NOSONAR
+<?php Layout::footer(); ?>

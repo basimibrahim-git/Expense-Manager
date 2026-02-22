@@ -1,5 +1,9 @@
 <?php
-include_once 'config.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+
+Bootstrap::init();
 if (isset($_SESSION['user_id'])) {
     header("Location: dashboard.php");
     exit();
@@ -42,7 +46,7 @@ if (isset($_SESSION['user_id'])) {
                 <?php endif; ?>
 
                 <form action="auth.php" method="POST">
-                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <div class="form-floating mb-3">
                         <input type="email" class="form-control" id="emailInput" name="email"
                             placeholder="name@example.com" required>

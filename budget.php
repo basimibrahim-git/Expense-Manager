@@ -1,8 +1,13 @@
 <?php
 $page_title = "Smart Budget";
-require_once 'config.php'; // NOSONAR
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\Layout;
+
+Bootstrap::init();
+
+Layout::header();
+Layout::sidebar();
 
 $user_id = $_SESSION['user_id'];
 $month = date('n');
@@ -252,4 +257,4 @@ $savings_color = getStatusColor($savings_pct, 20, true);
     <?php endif; ?>
 </div>
 
-<?php require_once 'includes/footer.php'; ?> // NOSONAR
+<?php Layout::footer(); ?>

@@ -1,8 +1,13 @@
 <?php
 $page_title = "Card Details";
-require_once 'config.php'; // NOSONAR
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\Layout;
+
+Bootstrap::init();
+
+Layout::header();
+Layout::sidebar();
 
 // Get Card ID
 $card_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
@@ -148,4 +153,4 @@ if (!$card) {
     </div>
 </div>
 
-<?php require_once 'includes/footer.php'; ?> // NOSONAR
+<?php Layout::footer(); ?>

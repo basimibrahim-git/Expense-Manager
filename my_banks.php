@@ -1,8 +1,14 @@
 <?php
 $page_title = "My Bank Accounts";
-include_once 'config.php'; // NOSONAR
-include_once 'includes/header.php'; // NOSONAR
-include_once 'includes/sidebar.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
+
+Layout::header();
+Layout::sidebar();
 
 $tenant_id = $_SESSION['tenant_id'];
 define('BANK_DEFAULT_COLOR', '#0d6efd');
@@ -97,9 +103,9 @@ try {
 <script>
     function confirmDelete(id, name) {
         if (confirm(`Are you sure you want to remove "${name}"? This will not delete your transaction history, but the bank will no longer appear in your active lists.`)) {
-            window.location.href = `bank_actions.php?action=delete&id=${id}&csrf_token=<?php echo generate_csrf_token(); ?>`;
+            window.location.href = `bank_actions.php?action=delete&id=${id}&csrf_token=<?php echo SecurityHelper::generateCsrfToken(); ?>`;
         }
     }
 </script>
 
-<?php include_once 'includes/footer.php'; // NOSONAR ?>
+<?php Layout::footer(); ?>

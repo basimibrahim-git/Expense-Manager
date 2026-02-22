@@ -1,8 +1,13 @@
 <?php
 $page_title = "Monthly Balances";
-require_once 'config.php'; // NOSONAR
-require_once 'includes/header.php'; // NOSONAR
-require_once 'includes/sidebar.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
+
+Bootstrap::init();
+Layout::header();
+Layout::sidebar();
 
 $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
@@ -122,7 +127,7 @@ $difference = $actual_balance - $expected_balance;
                     <?php endif; ?>
                 </div>
                 <form method="POST" action="reconcile_fix.php">
-                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <input type="hidden" name="difference" value="<?php echo $difference; ?>">
                     <input type="hidden" name="desc" value="Reconciliation Adjustment (<?php echo $month_name; ?>)">
                     <input type="hidden" name="date"
@@ -193,7 +198,7 @@ $difference = $actual_balance - $expected_balance;
                         <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
                             <form action="balance_actions.php" method="POST" class="d-inline"
                                 onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($b['bank_name'])); ?> balance of <?php echo number_format($b['amount'], 2); ?> - recorded on <?php echo date('d M', strtotime($b['balance_date'])); ?>?');">
-                                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                                 <input type="hidden" name="action" value="delete_balance">
                                 <input type="hidden" name="id" value="<?php echo $b['id']; ?>">
                                 <button type="submit" class="btn btn-sm text-danger border-0 p-0" title="Delete">
@@ -216,7 +221,7 @@ $difference = $actual_balance - $expected_balance;
     </div>
 <?php endif; ?>
 
-<?php require_once 'includes/footer.php'; // NOSONAR ?>
+<?php Layout::footer(); ?>
 
 <!-- Bulk Action Floating Bar -->
 <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
@@ -237,7 +242,7 @@ $difference = $actual_balance - $expected_balance;
     </div>
 
     <form id="bulkActionForm" action="balance_actions.php" method="POST" class="d-none">
-        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+        <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
         <input type="hidden" name="action" id="bulkActionType">
         <div id="bulkActionIds"></div>
     </form>

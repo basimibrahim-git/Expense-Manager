@@ -1,14 +1,18 @@
 <?php
 $page_title = "Financial Goals";
-include_once 'config.php';
-include_once 'includes/header.php'; // NOSONAR
-include_once 'includes/sidebar.php'; // NOSONAR
+require_once __DIR__ . '/vendor/autoload.php';
+use App\Core\Bootstrap;
+
+Bootstrap::init();
+use App\Helpers\AuditHelper;
+use App\Helpers\SecurityHelper;
+use App\Helpers\Layout;
 
 $user_id = $_SESSION['user_id'];
 
 // Handle Form Submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
@@ -57,6 +61,9 @@ $goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $total_saved = array_sum(array_column($goals, 'current_saved'));
 $total_target = array_sum(array_column($goals, 'target_amount'));
+
+Layout::header();
+Layout::sidebar();
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -129,7 +136,7 @@ $total_target = array_sum(array_column($goals, 'target_amount'));
                     <div class="d-flex justify-content-between align-items-start mb-3">
                         <div class="d-flex align-items-center gap-3">
                             <div class="rounded-circle bg-primary-subtle p-3 text-primary">
-                                <i class="fa-solid <?php echo htmlspecialchars($goal['icon']); ?> fa-lg"></i>
+                                <i class="fa-solid <?php echo htmlspecialchars($goal['icon'] ?? 'fa-bullseye'); ?> fa-lg"></i>
                             </div>
                             <div>
                                 <h5 class="fw-bold mb-0">
@@ -151,7 +158,8 @@ $total_target = array_sum(array_column($goals, 'target_amount'));
                                     <li>
                                         <form method="POST"
                                             onsubmit="return confirmSubmit(this, 'Delete goal: <?php echo addslashes(htmlspecialchars($goal['name'])); ?> (Target: AED <?php echo number_format($goal['target_amount'], 2); ?>)?');">
-                                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                            <input type="hidden" name="csrf_token"
+                                                value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                                             <input type="hidden" name="action" value="delete_goal">
                                             <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
                                             <button type="submit" class="dropdown-item text-danger"><i
@@ -188,7 +196,7 @@ $total_target = array_sum(array_column($goals, 'target_amount'));
 
                         <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
                             <form method="POST" class="d-flex gap-2">
-                                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                                 <input type="hidden" name="action" value="add_funds">
                                 <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
                                 <input type="number" name="amount" class="form-control form-control-sm" placeholder="Add Amount"
@@ -217,7 +225,7 @@ $total_target = array_sum(array_column($goals, 'target_amount'));
             </div>
             <div class="modal-body">
                 <form method="POST">
-                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="add_goal">
                     <div class="mb-3">
                         <label for="goalName" class="form-label">Goal Name</label>
@@ -260,4 +268,4 @@ $total_target = array_sum(array_column($goals, 'target_amount'));
     </div>
 </div>
 
-<?php include_once 'includes/footer.php'; ?>
+<?php Layout::footer(); ?>
