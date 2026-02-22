@@ -42,4 +42,32 @@ class SecurityHelper
         }
         return true;
     }
+
+    /**
+     * Sanitizes a redirect URL to prevent Open Redirect vulnerabilities.
+     * Ensures the link is internal to our domain.
+     *
+     * @param string|null $url
+     * @param string $default
+     * @return string
+     */
+
+    public static function getSafeRedirect(?string $url, string $default = 'dashboard.php'): string
+    {
+        $redirect = $default;
+
+        if (!empty($url)) {
+            $parsed = parse_url($url);
+            $isInternal = !isset($parsed['host']) || (isset($_SERVER['HTTP_HOST']) && $parsed['host'] === $_SERVER['HTTP_HOST']);
+
+            if ($isInternal) {
+                $redirect = $url;
+            }
+        }
+
+        return $redirect;
+    }
 }
+
+
+

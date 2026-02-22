@@ -168,3 +168,6 @@ foreach ($records as $r) {
 <?php endif; ?>
 
 <?php Layout::footer(); ?>
+</body>
+
+</html>

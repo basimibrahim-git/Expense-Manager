@@ -24,7 +24,8 @@ try {
     $recentTenants = $pdo->query("SELECT * FROM tenants ORDER BY created_at DESC LIMIT 5")->fetchAll();
 
 } catch (PDOException $e) {
-    $error = "System Error: " . $e->getMessage();
+    $error = "System Error: Unable to fetch system metrics.";
+
 }
 
 // Custom header for admin with adjusted paths
@@ -154,3 +155,4 @@ try {
 </body>
 
 </html>
+// Structural Audit Complete

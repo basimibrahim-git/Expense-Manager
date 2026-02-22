@@ -64,7 +64,8 @@ try {
     $hrs = floor($mins / 60);
     $mins -= $hrs * 60;
     $offset = sprintf('%+d:%02d', $hrs * $sgn, $mins);
-    $pdo->exec("SET time_zone='$offset'");
+    $pdo->prepare("SET time_zone = ?")->execute([$offset]);
+
 } catch (\PDOException $e) {
     // Production Error Handling
     error_log("Database Connection Error: " . $e->getMessage()); // Log to server error log

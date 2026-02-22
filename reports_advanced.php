@@ -62,8 +62,10 @@ $heatmap_data = [];
 $max_val = 0;
 foreach ($heatmap_month_dow as $row) {
     $heatmap_data[$row['month']][$row['dow']] = $row['total'];
-    if ($row['total'] > $max_val)
+    if ($row['total'] > $max_val) {
         $max_val = $row['total'];
+    }
+
 }
 ?>
 
@@ -165,14 +167,17 @@ foreach ($heatmap_month_dow as $row) {
             </thead>
             <tbody>
                 <?php foreach ($yoy_data as $row):
-                    if ($row['current_year'] == 0 && $row['previous_year'] == 0)
+                    if ($row['current_year'] == 0 && $row['previous_year'] == 0) {
                         continue;
+                    }
                     $diff = $row['current_year'] - $row['previous_year'];
                     $pct = ($row['previous_year'] > 0) ? ($diff / $row['previous_year']) * 100 : 100;
                     $color = ($diff > 0) ? 'text-danger' : 'text-success';
                     $icon = ($diff > 0) ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down';
-                    if ($row['previous_year'] == 0)
+                    if ($row['previous_year'] == 0) {
                         $icon = 'fa-plus';
+                    }
+
                     ?>
                     <tr>
                         <td class="ps-4 fw-bold">
@@ -188,7 +193,8 @@ foreach ($heatmap_month_dow as $row) {
                             <i class="fa-solid <?php echo $icon; ?> <?php echo $color; ?>"></i>
                         </td>
                         <td class="text-end pe-4 fw-bold <?php echo $color; ?>">
-                            <?php echo ($diff > 0 ? '+' : ''); ?>
+                            <?php echo $diff > 0 ? '+' : ''; ?>
+
                             <?php echo number_format($pct, 1); ?>%
                         </td>
                     </tr>
@@ -235,3 +241,4 @@ foreach ($heatmap_month_dow as $row) {
 </script>
 
 <?php Layout::footer(); ?>
+

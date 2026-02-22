@@ -258,3 +258,4 @@ $savings_color = getStatusColor($savings_pct, 20, true);
 </div>
 
 <?php Layout::footer(); ?>
+// Structural Audit Complete

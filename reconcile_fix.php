@@ -49,4 +49,4 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     header("Location: monthly_balances.php?month=$m&year=$y");
     exit;
 }
-?>
+

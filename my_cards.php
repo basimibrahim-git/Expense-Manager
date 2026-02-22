@@ -74,7 +74,13 @@ try {
             $used = ($card['total_expenses'] ?: 0) - ($card['total_payments'] ?: 0);
             $limit = $card['limit_amount'] ?: 0;
             $usage_pct = $limit > 0 ? min(($used / $limit) * 100, 100) : 0;
-            $usage_color = $usage_pct < 50 ? 'success' : ($usage_pct < 85 ? 'warning' : 'danger');
+            $usage_color = 'danger';
+            if ($usage_pct < 50) {
+                $usage_color = 'success';
+            } elseif ($usage_pct < 85) {
+                $usage_color = 'warning';
+            }
+
 
             $f4 = $card['first_four'] ?: '****';
             $l4 = $card['last_four'] ?: '****';

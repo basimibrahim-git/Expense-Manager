@@ -83,7 +83,7 @@ Layout::sidebar();
 <?php endif; ?>
 <?php if ($success): ?>
     <div class="alert alert-success shadow-sm border-0">
-        <?php echo $success; ?>
+        <?php echo htmlspecialchars($success); ?>
     </div>
 <?php endif; ?>
 

@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Permission Check: Read-Only users cannot perform POST actions
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        $redirect = $_SERVER['HTTP_REFERER'] ?? 'dashboard.php';
+        $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'dashboard.php');
         header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "error=Unauthorized: Read-only access");
         exit();
     }
@@ -73,7 +73,7 @@ if ($action == 'add_balance' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt->execute(array_merge($ids, [$tenant_id]));
         AuditHelper::log($pdo, 'bulk_delete_balances', "Bulk Deleted " . count($ids) . " Balance snapshots. IDs: " . implode(',', $ids));
     }
-    $redirect = $_SERVER['HTTP_REFERER'] ?? 'bank_balances.php';
+    $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'bank_balances.php');
     header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Bulk deleted");
     exit();
 }

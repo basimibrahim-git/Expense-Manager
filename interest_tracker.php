@@ -90,7 +90,7 @@ $current_year = date('Y');
                     for ($y = $start_year; $y <= $end_year; $y++):
                         $selected = ($y == $year) ? 'selected' : '';
                         ?>
-                            <option value="<?php echo $y; ?>" <?php echo $selected; ?>><?php echo $y; ?></option>
+                        <option value="<?php echo $y; ?>" <?php echo $selected; ?>><?php echo $y; ?></option>
                     <?php endfor; ?>
                 </select>
             </form>
@@ -127,69 +127,69 @@ $current_year = date('Y');
 
     <!-- Record Payment Button -->
     <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-            <button class="btn btn-dark w-100 py-3 fw-bold mb-4 shadow" data-bs-toggle="modal"
-                data-bs-target="#recordPaymentModal">
-                <i class="fa-solid fa-hand-holding-dollar me-2"></i> Record Interest Payment (Charity)
-            </button>
+        <button class="btn btn-dark w-100 py-3 fw-bold mb-4 shadow" data-bs-toggle="modal"
+            data-bs-target="#recordPaymentModal">
+            <i class="fa-solid fa-hand-holding-dollar me-2"></i> Record Interest Payment (Charity)
+        </button>
     <?php endif; ?>
 </div>
 
 <!-- Monthly Grid -->
 <div class="row g-4">
     <?php foreach ($months as $num => $name): ?>
-            <?php
-            $total = $monthly_totals[$num] ?? 0;
-            $is_current = ($year == $current_year && $num == $current_month);
-            $has_data = $total != 0; // Show even if negative (overpaid?) or positive
-        
-            // Style Logic
-            $bg_style = "background: white;";
-            $text_class = "text-dark";
-            $muted_class = "text-muted";
+        <?php
+        $total = $monthly_totals[$num] ?? 0;
+        $is_current = ($year == $current_year && $num == $current_month);
+        $has_data = $total != 0; // Show even if negative (overpaid?) or positive
+    
+        // Style Logic
+        $bg_style = "background: white;";
+        $text_class = "text-dark";
+        $muted_class = "text-muted";
 
-            if ($is_current) {
-                $bg_style = "background: linear-gradient(135deg, #0dcaf0, #0aa2c0); color: white;";
-                $text_class = "text-white";
-                $muted_class = "text-white-50";
-            }
+        if ($is_current) {
+            $bg_style = "background: linear-gradient(135deg, #0dcaf0, #0aa2c0); color: white;";
+            $text_class = "text-white";
+            $muted_class = "text-white-50";
+        }
 
-            // Status Indication
-            $status_html = "";
-            if ($total > 0) {
-                $amount_html = '<h4 class="fw-bold mb-0 ' . ($is_current ? 'text-white' : 'text-danger') . '"><small style="font-size: 0.6em">AED</small> ' . number_format($total, 2) . '</h4>';
-                $status_html = '<small class="' . $muted_class . '">Outstanding</small>';
-            } elseif ($total < 0) {
-                $amount_html = '<h4 class="fw-bold mb-0 ' . ($is_current ? 'text-white' : 'text-success') . '"><small style="font-size: 0.6em">AED</small> ' . number_format(abs($total), 2) . ' <i class="fa-solid fa-check ms-1"></i></h4>';
-                $status_html = '<small class="' . $muted_class . '">Overpaid / Credit</small>';
-            } elseif ($has_data && $total == 0) {
-                $amount_html = '<h4 class="fw-bold mb-0 ' . ($is_current ? 'text-white' : 'text-success') . '"><i class="fa-solid fa-check-circle"></i> Paid</h4>';
-            } else {
-                $amount_html = '<div class="' . $muted_class . ' small py-1">- No Entry -</div>';
-            }
+        // Status Indication
+        $status_html = "";
+        if ($total > 0) {
+            $amount_html = '<h4 class="fw-bold mb-0 ' . ($is_current ? 'text-white' : 'text-danger') . '"><small style="font-size: 0.6em">AED</small> ' . number_format($total, 2) . '</h4>';
+            $status_html = '<small class="' . $muted_class . '">Outstanding</small>';
+        } elseif ($total < 0) {
+            $amount_html = '<h4 class="fw-bold mb-0 ' . ($is_current ? 'text-white' : 'text-success') . '"><small style="font-size: 0.6em">AED</small> ' . number_format(abs($total), 2) . ' <i class="fa-solid fa-check ms-1"></i></h4>';
+            $status_html = '<small class="' . $muted_class . '">Overpaid / Credit</small>';
+        } elseif ($has_data && $total == 0) {
+            $amount_html = '<h4 class="fw-bold mb-0 ' . ($is_current ? 'text-white' : 'text-success') . '"><i class="fa-solid fa-check-circle"></i> Paid</h4>';
+        } else {
+            $amount_html = '<div class="' . $muted_class . ' small py-1">- No Entry -</div>';
+        }
 
-            ?>
-            <div class="col-6 col-md-4 col-lg-3">
-                <a href="monthly_interest.php?month=<?php echo $num; ?>&year=<?php echo $year; ?>" class="text-decoration-none">
-                    <div class="card shadow-sm border-0 h-100 <?php echo $is_current ? 'shadow-lg transform-scale' : ''; ?>"
-                        style="<?php echo $bg_style; ?> transition: transform 0.2s;">
-                        <div class="card-body p-4 d-flex flex-column justify-content-between text-center">
-                            <div>
-                                <h5 class="fw-bold mb-1 <?php echo $text_class; ?>">
-                                    <?php echo $name; ?>
-                                </h5>
-                                <small class="<?php echo $muted_class; ?>"><?php echo $year; ?></small>
-                            </div>
+        ?>
+        <div class="col-6 col-md-4 col-lg-3">
+            <a href="monthly_interest.php?month=<?php echo $num; ?>&year=<?php echo $year; ?>" class="text-decoration-none">
+                <div class="card shadow-sm border-0 h-100 <?php echo $is_current ? 'shadow-lg transform-scale' : ''; ?>"
+                    style="<?php echo $bg_style; ?> transition: transform 0.2s;">
+                    <div class="card-body p-4 d-flex flex-column justify-content-between text-center">
+                        <div>
+                            <h5 class="fw-bold mb-1 <?php echo $text_class; ?>">
+                                <?php echo $name; ?>
+                            </h5>
+                            <small class="<?php echo $muted_class; ?>"><?php echo $year; ?></small>
+                        </div>
 
-                            <div class="mt-4">
-                                <?php echo $amount_html; ?>
-                                <?php if ($has_data) {
-                                    echo '<div class="mt-1">' . $status_html . '</div>';
-                                } ?>
-                            </div>
+                        <div class="mt-4">
+                            <?php echo $amount_html; ?>
+                            <?php if ($has_data) {
+                                echo '<div class="mt-1">' . $status_html . '</div>';
+                            } ?>
                         </div>
                     </div>
-                </a>
-            </div>
+                </div>
+            </a>
+        </div>
     <?php endforeach; ?>
 </div>
 
@@ -264,15 +264,15 @@ $current_year = date('Y');
                     </div>
                     <ul class="list-group list-group-flush">
                         <?php if (empty($global_pending_breakdown)): ?>
-                                <li class="list-group-item text-center text-muted py-3">No pending interest found.</li>
+                            <li class="list-group-item text-center text-muted py-3">No pending interest found.</li>
                         <?php else: ?>
-                                <?php foreach ($global_pending_breakdown as $row): ?>
-                                        <li class="list-group-item d-flex justify-content-between align-items-center py-3">
-                                            <span class="fw-bold"><?php echo $row['year']; ?></span>
-                                            <span class="text-danger fw-bold">AED
-                                                <?php echo number_format($row['net_balance'], 2); ?></span>
-                                        </li>
-                                <?php endforeach; ?>
+                            <?php foreach ($global_pending_breakdown as $row): ?>
+                                <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+                                    <span class="fw-bold"><?php echo $row['year']; ?></span>
+                                    <span class="text-danger fw-bold">AED
+                                        <?php echo number_format($row['net_balance'], 2); ?></span>
+                                </li>
+                            <?php endforeach; ?>
                         <?php endif; ?>
                     </ul>
                 </div>
@@ -291,3 +291,6 @@ $current_year = date('Y');
 </style>
 
 <?php Layout::footer(); ?>
+</body>
+
+</html>

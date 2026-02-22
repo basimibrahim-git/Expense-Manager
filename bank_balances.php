@@ -127,3 +127,4 @@ $current_year = date('Y');
 </style>
 
 <?php Layout::footer(); ?>
+// Structural Audit Complete

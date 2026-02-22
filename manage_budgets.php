@@ -1,21 +1,22 @@
+<?php
 // manage_budgets.php
 require_once __DIR__ . '/vendor/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\Layout;
 use App\Helpers\SecurityHelper;
-
-Bootstrap::init();
 use App\Helpers\AuditHelper;
 
+Bootstrap::init();
+
 if (!isset($_SESSION['user_id'])) {
-header("Location: index.php");
-exit();
+    header("Location: index.php");
+    exit();
 }
 
 // Permission Check
 if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-header("Location: budget.php?error=Unauthorized: Read-only access");
-exit();
+    header("Location: budget.php?error=Unauthorized: Read-only access");
+    exit();
 }
 
 $tenant_id = $_SESSION['tenant_id'];
@@ -28,8 +29,18 @@ $stmt->execute([$tenant_id, $month, $year]);
 $existing_budgets = $stmt->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
 
 // predefined categories for easy setup
-$categories = ['Grocery', 'Food', 'Medical', 'Shopping', 'Utilities', 'Transport', 'Travel', 'Entertainment',
-'Education', 'Other'];
+$categories = [
+    'Grocery',
+    'Food',
+    'Medical',
+    'Shopping',
+    'Utilities',
+    'Transport',
+    'Travel',
+    'Entertainment',
+    'Education',
+    'Other'
+];
 
 Layout::header();
 Layout::sidebar();
@@ -175,3 +186,6 @@ Layout::sidebar();
 </script>
 
 <?php Layout::footer(); ?>
+</body>
+
+</html>

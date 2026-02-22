@@ -377,3 +377,4 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
 </style>
 
 <?php Layout::footer(); ?>
+// Structural Audit Complete

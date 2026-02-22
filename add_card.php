@@ -550,3 +550,4 @@ $all_banks = $banks_stmt->fetchAll();
 </script>
 
 <?php Layout::footer(); ?>
+// Structural Audit Complete

@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $hashed = password_hash($pass, PASSWORD_DEFAULT);
                 $stmt = $pdo->prepare("INSERT INTO users (tenant_id, name, email, password, role, permission) VALUES (?, ?, ?, ?, ?, 'edit')");
                 $stmt->execute([$tenantId, $name, $email, $hashed, $role]);
-                $success = "User '$name' added to the family!";
+                $success = "User '" . htmlspecialchars($name) . "' added to the family!";
                 AuditHelper::log($pdo, 'add_member_admin', "Added User $email to Tenant ID $tenantId");
 
                 // Set session message and redirect to prevent resubmission + clear URL
@@ -102,7 +102,8 @@ try {
     ");
     $tenants = $stmt->fetchAll();
 } catch (PDOException $e) {
-    $error = "Failed to load tenants: " . $e->getMessage();
+    error_log("Load tenants failed: " . $e->getMessage());
+    $error = "Failed to load tenants: A system error occurred.";
 }
 ?>
 <!DOCTYPE html>
@@ -134,7 +135,7 @@ try {
 
         <?php if ($success): ?>
             <div class="alert alert-success shadow-sm border-0 rounded-pill px-4 animate__animated animate__fadeIn">
-                <i class="fa-solid fa-circle-check me-2"></i><?php echo $success; ?>
+                <i class="fa-solid fa-circle-check me-2"></i><?php echo htmlspecialchars($success); ?>
             </div>
         <?php endif; ?>
 
@@ -158,16 +159,16 @@ try {
                                         <?php echo htmlspecialchars($tenant['family_name']); ?>
                                     </span>
                                     <small class="text-muted d-block">ID: #
-                                        <?php echo $tenant['id']; ?>
+                                        <?php echo htmlspecialchars($tenant['id']); ?>
                                     </small>
                                 </td>
                                 <td>
                                     <?php echo htmlspecialchars($tenant['admin_name'] ?? 'Unassigned'); ?>
                                 </td>
                                 <td>
-                                    <a href="?view_members=<?php echo $tenant['id']; ?>" class="text-decoration-none">
+                                    <a href="?view_members=<?php echo htmlspecialchars($tenant['id']); ?>" class="text-decoration-none">
                                         <span class="badge bg-primary rounded-pill cursor-pointer hover-shadow">
-                                            <?php echo $tenant['user_count']; ?> Users
+                                            <?php echo htmlspecialchars($tenant['user_count']); ?> Users
                                         </span>
                                     </a>
                                 </td>
@@ -179,11 +180,11 @@ try {
                                 <td class="text-end pe-4">
                                     <div class="d-flex justify-content-end align-items-center gap-2">
                                         <button class="btn btn-sm btn-outline-success border-0" title="Add Member"
-                                            onclick="openAddMemberModal(<?php echo $tenant['id']; ?>, '<?php echo addslashes(htmlspecialchars($tenant['family_name'])); ?>')">
+                                            onclick="openAddMemberModal(<?php echo htmlspecialchars($tenant['id']); ?>, '<?php echo addslashes(htmlspecialchars($tenant['family_name'])); ?>')">
                                             <i class="fa-solid fa-user-plus"></i>
                                         </button>
                                         <button class="btn btn-sm btn-outline-primary border-0" title="Rename Family"
-                                            onclick="openEditModal(<?php echo $tenant['id']; ?>, '<?php echo addslashes(htmlspecialchars($tenant['family_name'])); ?>')">
+                                            onclick="openEditModal(<?php echo htmlspecialchars($tenant['id']); ?>, '<?php echo addslashes(htmlspecialchars($tenant['family_name'])); ?>')">
                                             <i class="fa-solid fa-pen-to-square"></i>
                                         </button>
                                         <span class="badge bg-success">Active</span>
@@ -290,7 +291,7 @@ try {
                                     </div>
                                     <span
                                         class="badge <?php echo $m['role'] === 'family_admin' ? 'bg-warning' : 'bg-secondary'; ?> rounded-pill">
-                                        <?php echo $m['role']; ?>
+                                        <?php echo htmlspecialchars($m['role']); ?>
                                     </span>
                                 </div>
                             <?php endforeach; ?>

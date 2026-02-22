@@ -7,6 +7,14 @@ use App\Helpers\SecurityHelper;
 
 Bootstrap::init();
 
+// SQL Fragments for Filtering
+const SQL_FILTER_CATEGORY = " AND e.category = :cat";
+const SQL_FILTER_PAYMENT = " AND e.payment_method = :pm";
+const SQL_FILTER_CARD = " AND e.card_id = :card_id";
+const SQL_FILTER_START_DATE = " AND e.expense_date >= :start";
+const SQL_FILTER_END_DATE = " AND e.expense_date <= :end";
+
+
 Layout::header();
 Layout::sidebar();
 
@@ -38,23 +46,23 @@ $count_query = "SELECT COUNT(*) FROM expenses e
 $count_params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];
 
 if ($category_filter) {
-    $count_query .= " AND e.category = :cat";
+    $count_query .= SQL_FILTER_CATEGORY;
     $count_params['cat'] = $category_filter;
 }
 if ($payment_filter) {
-    $count_query .= " AND e.payment_method = :pm";
+    $count_query .= SQL_FILTER_PAYMENT;
     $count_params['pm'] = $payment_filter;
 }
 if ($card_filter) {
-    $count_query .= " AND e.card_id = :card_id";
+    $count_query .= SQL_FILTER_CARD;
     $count_params['card_id'] = $card_filter;
 }
 if ($start_date) {
-    $count_query .= " AND e.expense_date >= :start";
+    $count_query .= SQL_FILTER_START_DATE;
     $count_params['start'] = $start_date;
 }
 if ($end_date) {
-    $count_query .= " AND e.expense_date <= :end";
+    $count_query .= SQL_FILTER_END_DATE;
     $count_params['end'] = $end_date;
 }
 
@@ -75,23 +83,23 @@ $query = "SELECT e.*, c.bank_name, c.card_name, u.name as spender_name
 $params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];
 
 if ($category_filter) {
-    $query .= " AND e.category = :cat";
+    $query .= SQL_FILTER_CATEGORY;
     $params['cat'] = $category_filter;
 }
 if ($payment_filter) {
-    $query .= " AND e.payment_method = :pm";
+    $query .= SQL_FILTER_PAYMENT;
     $params['pm'] = $payment_filter;
 }
 if ($card_filter) {
-    $query .= " AND e.card_id = :card_id";
+    $query .= SQL_FILTER_CARD;
     $params['card_id'] = $card_filter;
 }
 if ($start_date) {
-    $query .= " AND e.expense_date >= :start";
+    $query .= SQL_FILTER_START_DATE;
     $params['start'] = $start_date;
 }
 if ($end_date) {
-    $query .= " AND e.expense_date <= :end";
+    $query .= SQL_FILTER_END_DATE;
     $params['end'] = $end_date;
 }
 
@@ -109,19 +117,19 @@ try {
 
     // Append the same filters as count/list
     if ($category_filter) {
-        $total_query .= " AND e.category = :cat";
+        $total_query .= SQL_FILTER_CATEGORY;
     }
     if ($payment_filter) {
-        $total_query .= " AND e.payment_method = :pm";
+        $total_query .= SQL_FILTER_PAYMENT;
     }
     if ($card_filter) {
-        $total_query .= " AND e.card_id = :card_id";
+        $total_query .= SQL_FILTER_CARD;
     }
     if ($start_date) {
-        $total_query .= " AND e.expense_date >= :start";
+        $total_query .= SQL_FILTER_START_DATE;
     }
     if ($end_date) {
-        $total_query .= " AND e.expense_date <= :end";
+        $total_query .= SQL_FILTER_END_DATE;
     }
 
     $total_stmt = $pdo->prepare($total_query);
@@ -271,11 +279,11 @@ try {
                         <span><?php echo $cat; ?></span>
                         <span class="fw-bold"><?php echo number_format($pct, 0); ?>%</span>
                     </div>
-                    <div class="progress" style="height: 6px;"
+                    <progress class="w-100" style="height: 6px;" value="<?php echo min($spent, $limit); ?>"
+                        max="<?php echo $limit ?: 1; ?>"
                         title="Spent AED <?php echo number_format($spent); ?> of AED <?php echo number_format($limit); ?>">
-                        <div class="progress-bar bg-<?php echo $color; ?>" role="progressbar"
-                            style="width: <?php echo min($pct, 100); ?>%"></div>
-                    </div>
+                        <?php echo number_format($pct, 0); ?>%
+                    </progress>
                     <div class="x-small text-muted mt-1">
                         AED <?php echo number_format($spent); ?> / <?php echo number_format($limit); ?>
                     </div>
@@ -447,8 +455,12 @@ try {
                     </button>
                     <ul class="dropdown-menu border-0 shadow">
                         <?php foreach ($categories as $cat): ?>
-                            <li><a class="dropdown-item" href="#"
-                                    onclick="bulkAction('change_category', '<?php echo $cat; ?>')"><?php echo $cat; ?></a></li>
+                            <li>
+                                <button type="button" class="dropdown-item"
+                                    onclick="bulkAction('change_category', '<?php echo $cat; ?>')">
+                                    <?php echo $cat; ?>
+                                </button>
+                            </li>
                         <?php endforeach; ?>
                     </ul>
                 </div>

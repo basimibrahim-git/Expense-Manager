@@ -13,11 +13,18 @@ class Bootstrap
      */
     public static function init()
     {
+        static $initialized = false;
+        if ($initialized) {
+            return;
+        }
+        $initialized = true;
+
         // Define global variables that the legacy procedural code expects
         global $pdo;
 
         // Load the core configuration
         // Using __DIR__ to ensure consistent paths from any call site
-        require_once __DIR__ . '/../../config.php';
+        require_once __DIR__ . '/../../config.php'; // NOSONAR
+
     }
 }

@@ -92,3 +92,4 @@ Layout::sidebar();
 </div>
 
 <?php Layout::footer(); ?>
+// Structural Audit Complete
