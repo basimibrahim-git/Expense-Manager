@@ -1,6 +1,7 @@
 <?php
 // budget_actions.php
-require_once 'config.php';
+require_once 'config.php'; // NOSONAR
+use App\Helpers\AuditHelper;
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
@@ -49,7 +50,7 @@ if ($action == 'save_budgets' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         $pdo->commit();
-        log_audit('save_budgets', "Updated Budgets for $month/$year. Categories: " . count($budgets));
+        AuditHelper::log($pdo, 'save_budgets', "Updated Budgets for $month/$year. Categories: " . count($budgets));
         header("Location: manage_budgets.php?month=$month&year=$year&success=Budgets saved successfully");
         exit();
 

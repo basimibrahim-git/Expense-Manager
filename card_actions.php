@@ -1,5 +1,6 @@
 <?php
 require_once 'config.php'; // NOSONAR
+use App\Helpers\AuditHelper;
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
@@ -56,7 +57,7 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("INSERT INTO cards (user_id, tenant_id, bank_name, card_name, card_type, network, tier, limit_amount, bill_day, statement_day, cashback_struct, bank_url, features, bank_id, first_four, last_four, fee_type, card_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([$user_id, $tenant_id, $bank_name, $card_name, $card_type, $network, $tier, $limit_amount, $bill_day, $statement_day, $cashback_struct, $bank_url, $features, $bank_id, $first_four, $last_four, $fee_type, $card_image]);
 
-        log_audit('add_card', "Added Card: $card_name ($bank_name)");
+        AuditHelper::log($pdo, 'add_card', "Added Card: $card_name ($bank_name)");
         header("Location: my_cards.php?success=Card added successfully");
         exit();
 
@@ -113,7 +114,7 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("UPDATE cards SET bank_name=?, card_name=?, card_type=?, network=?, tier=?, limit_amount=?, bill_day=?, statement_day=?, cashback_struct=?, bank_url=?, features=?, is_default=?, bank_id=?, first_four=?, last_four=?, fee_type=?, card_image=? WHERE id=? AND tenant_id=?");
         $stmt->execute([$bank_name, $card_name, $card_type, $network, $tier, $limit_amount, $bill_day, $statement_day, $cashback_struct, $bank_url, $features, $is_default, $bank_id, $first_four, $last_four, $fee_type, $card_image, $card_id, $tenant_id]);
 
-        log_audit('update_card', "Updated Card: $card_name (ID: $card_id)");
+        AuditHelper::log($pdo, 'update_card', "Updated Card: $card_name (ID: $card_id)");
         if ($stmt->rowCount() > 0) {
             header("Location: edit_card.php?id=$card_id&success=Card updated successfully");
         } else {
@@ -137,7 +138,7 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         try {
             $stmt = $pdo->prepare("DELETE FROM cards WHERE id = ? AND tenant_id = ?");
             $stmt->execute([$card_id, $tenant_id]);
-            log_audit('delete_card', "Deleted Card ID: $card_id");
+            AuditHelper::log($pdo, 'delete_card', "Deleted Card ID: $card_id");
             header("Location: my_cards.php?success=Card deleted");
             exit();
         } catch (PDOException $e) {
@@ -165,7 +166,7 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("INSERT INTO card_payments (user_id, tenant_id, card_id, bank_id, amount, payment_date) VALUES (?, ?, ?, ?, ?, ?)");
         $stmt->execute([$user_id, $tenant_id, $card_id, $bank_id, $amount, $date]);
 
-        log_audit('record_card_payment', "Recorded Card Payment: $amount (Card ID: $card_id)");
+        AuditHelper::log($pdo, 'record_card_payment', "Recorded Card Payment: $amount (Card ID: $card_id)");
         header("Location: my_cards.php?success=Payment recorded successfully");
         exit();
     } catch (PDOException $e) {

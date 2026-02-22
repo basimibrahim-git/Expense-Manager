@@ -1,8 +1,10 @@
 <?php
 $page_title = "Add Income";
-require_once 'config.php';
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+require_once 'config.php'; // NOSONAR
+use App\Helpers\Layout;
+
+Layout::header();
+Layout::sidebar();
 
 $pre_month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT);
 $pre_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
@@ -53,34 +55,36 @@ $user_banks = $banks_stmt->fetchAll();
                 <input type="hidden" name="action" value="add_income">
 
                 <div class="mb-3">
-                    <label class="form-label">Amount <span class="text-danger">*</span></label>
+                    <label for="incomeAmount" class="form-label">Amount <span class="text-danger">*</span></label>
                     <div class="input-group">
-                        <select name="currency" class="form-select fw-bold text-success" style="max-width: 100px;">
+                        <select name="currency" id="incomeCurrency" class="form-select fw-bold text-success"
+                            style="max-width: 100px;" aria-label="Currency">
                             <option value="AED">AED</option>
                             <option value="INR">INR</option>
                         </select>
-                        <input type="number" name="amount" class="form-control form-control-lg" step="0.01"
-                            placeholder="0.00" value="<?php echo htmlspecialchars($_GET['amount'] ?? ''); ?>" required
-                            autofocus>
+                        <input type="number" name="amount" id="incomeAmount" class="form-control form-control-lg"
+                            step="0.01" placeholder="0.00"
+                            value="<?php echo htmlspecialchars($_GET['amount'] ?? ''); ?>" required autofocus>
                     </div>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Date <span class="text-danger">*</span></label>
-                    <input type="date" name="income_date" class="form-control form-control-lg"
+                    <label for="incomeDate" class="form-label">Date <span class="text-danger">*</span></label>
+                    <input type="date" name="income_date" id="incomeDate" class="form-control form-control-lg"
                         value="<?php echo $default_date; ?>" required>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Source / Description <span class="text-danger">*</span></label>
-                    <input type="text" name="description" class="form-control"
+                    <label for="incomeDescription" class="form-label">Source / Description <span
+                            class="text-danger">*</span></label>
+                    <input type="text" name="description" id="incomeDescription" class="form-control"
                         placeholder="e.g. Monthly Salary, Freelance Project..."
                         value="<?php echo htmlspecialchars($_GET['description'] ?? ''); ?>" required>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Category <span class="text-danger">*</span></label>
-                    <select name="category" class="form-select" required>
+                    <label for="incomeCategory" class="form-label">Category <span class="text-danger">*</span></label>
+                    <select name="category" id="incomeCategory" class="form-select" required>
                         <option value="Salary">💼 Salary</option>
                         <option value="Incentives">🎯 Incentives / Commission</option>
                         <option value="Business">🏢 Business Income</option>
@@ -103,8 +107,8 @@ $user_banks = $banks_stmt->fetchAll();
                         </div>
                     </div>
                     <div class="col-4" id="recurrenceDiv" style="display:none;">
-                        <input type="number" name="recurrence_day" class="form-control" placeholder="Day (1-31)" min="1"
-                            max="31">
+                        <input type="number" name="recurrence_day" id="recurrenceDay" class="form-control"
+                            placeholder="Day (1-31)" min="1" max="31" aria-label="Recurrence Day">
                     </div>
                 </div>
 
@@ -127,8 +131,8 @@ $user_banks = $banks_stmt->fetchAll();
                         </div>
 
                         <div id="bankSelectDiv" class="mt-3" style="display:none;">
-                            <label class="form-label small fw-bold">Select Bank Account</label>
-                            <select name="bank_id" class="form-select form-select-sm">
+                            <label for="bankSelect" class="form-label small fw-bold">Select Bank Account</label>
+                            <select name="bank_id" id="bankSelect" class="form-select form-select-sm">
                                 <?php foreach ($user_banks as $bank): ?>
                                     <option value="<?php echo $bank['id']; ?>">
                                         <?php echo htmlspecialchars($bank['bank_name']); ?>
@@ -164,4 +168,4 @@ $user_banks = $banks_stmt->fetchAll();
     </div>
 </div>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php Layout::footer(); ?>

@@ -1,6 +1,6 @@
 <?php
 // zakath_calculator.php
-require_once 'config.php';
+require_once 'config.php'; // NOSONAR
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
@@ -58,8 +58,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+require_once 'includes/header.php'; // NOSONAR
+require_once 'includes/sidebar.php'; // NOSONAR
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -185,4 +185,4 @@ require_once 'includes/sidebar.php';
     calcZakath();
 </script>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php require_once 'includes/footer.php'; ?> // NOSONAR

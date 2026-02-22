@@ -1,5 +1,6 @@
 <?php
 require_once 'config.php'; // NOSONAR
+use App\Helpers\AuditHelper;
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
@@ -105,10 +106,10 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $count = intval($_POST['add_count'] ?? 0) + 1;
 
         if ($add_another) {
-            log_audit('add_expense', "Added Expense: $desc ($final_amount AED)");
+            AuditHelper::log($pdo, 'add_expense', "Added Expense: $desc ($final_amount AED)");
             header("Location: add_expense.php?added=1&count=$count&date=$date");
         } else {
-            log_audit('add_expense', "Added Expense: $desc ($final_amount AED)");
+            AuditHelper::log($pdo, 'add_expense', "Added Expense: $desc ($final_amount AED)");
             header("Location: expenses.php?success=Expense added successfully");
         }
         exit();
@@ -122,7 +123,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     if ($id) {
         $stmt = $pdo->prepare("DELETE FROM expenses WHERE id = ? AND tenant_id = ?");
         $stmt->execute([$id, $tenant_id]);
-        log_audit('delete_expense', "Deleted Expense ID: $id");
+        AuditHelper::log($pdo, 'delete_expense', "Deleted Expense ID: $id");
     }
     header("Location: expenses.php?success=Deleted");
     exit();
@@ -206,7 +207,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
                     }
                 }
 
-                log_audit('log_subscription', "Auto-Drafted Subscription: $desc ($amount AED)");
+                AuditHelper::log($pdo, 'log_subscription', "Auto-Drafted Subscription: $desc ($amount AED)");
                 $redirect = $_SERVER['HTTP_REFERER'] ?? 'subscriptions.php';
                 header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Logged successfully");
                 exit();
@@ -225,7 +226,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $placeholders = str_repeat('?,', count($ids) - 1) . '?';
         $stmt = $pdo->prepare("DELETE FROM expenses WHERE id IN ($placeholders) AND tenant_id = ?");
         $stmt->execute(array_merge($ids, [$tenant_id]));
-        log_audit('bulk_delete_expenses', "Bulk Deleted " . count($ids) . " Expenses. IDs: " . implode(',', $ids));
+        AuditHelper::log($pdo, 'bulk_delete_expenses', "Bulk Deleted " . count($ids) . " Expenses. IDs: " . implode(',', $ids));
     }
     $redirect = $_SERVER['HTTP_REFERER'] ?? 'expenses.php';
     header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Bulk deleted");
@@ -237,7 +238,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $placeholders = str_repeat('?,', count($ids) - 1) . '?';
         $stmt = $pdo->prepare("UPDATE expenses SET category = ? WHERE id IN ($placeholders) AND tenant_id = ?");
         $stmt->execute(array_merge([$category], $ids, [$tenant_id]));
-        log_audit('bulk_change_category', "Bulk Changed Category to $category for " . count($ids) . " Expenses. IDs: " . implode(',', $ids));
+        AuditHelper::log($pdo, 'bulk_change_category', "Bulk Changed Category to $category for " . count($ids) . " Expenses. IDs: " . implode(',', $ids));
     }
     $redirect = $_SERVER['HTTP_REFERER'] ?? 'expenses.php';
     header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Bulk category updated");
@@ -308,7 +309,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             $tenant_id
         ]);
 
-        log_audit('update_expense', "Updated Expense: $desc ($final_amount AED) - ID: $expense_id");
+        AuditHelper::log($pdo, 'update_expense', "Updated Expense: $desc ($final_amount AED) - ID: $expense_id");
         header("Location: edit_expense.php?id=$expense_id&success=Expense updated successfully");
         exit();
 

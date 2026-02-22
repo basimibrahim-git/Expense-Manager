@@ -1,5 +1,6 @@
 <?php
 require_once 'config.php'; // NOSONAR
+use App\Helpers\AuditHelper;
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
@@ -41,7 +42,7 @@ if ($action == 'add_balance' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("INSERT INTO bank_balances (user_id, tenant_id, bank_id, bank_name, amount, balance_date, currency) VALUES (?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([$user_id, $tenant_id, $bank_id, $bank_name, $amount, $date, $currency]);
 
-        log_audit('manual_balance_update', "Updated Balance for $bank_name: $amount $currency");
+        AuditHelper::log($pdo, 'manual_balance_update', "Updated Balance for $bank_name: $amount $currency");
         $month = date('n', strtotime($date));
         $year = date('Y', strtotime($date));
         header("Location: monthly_balances.php?month=$month&year=$year&success=Balance Added");
@@ -56,7 +57,7 @@ if ($action == 'add_balance' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     if ($id) {
         $stmt = $pdo->prepare("DELETE FROM bank_balances WHERE id = ? AND tenant_id = ?");
         $stmt->execute([$id, $tenant_id]);
-        log_audit('delete_balance_snapshot', "Deleted Balance Snapshot ID: $id");
+        AuditHelper::log($pdo, 'delete_balance_snapshot', "Deleted Balance Snapshot ID: $id");
     }
     header("Location: bank_balances.php?success=Deleted");
     exit();
@@ -66,7 +67,7 @@ if ($action == 'add_balance' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $placeholders = str_repeat('?,', count($ids) - 1) . '?';
         $stmt = $pdo->prepare("DELETE FROM bank_balances WHERE id IN ($placeholders) AND tenant_id = ?");
         $stmt->execute(array_merge($ids, [$tenant_id]));
-        log_audit('bulk_delete_balances', "Bulk Deleted " . count($ids) . " Balance snapshots. IDs: " . implode(',', $ids));
+        AuditHelper::log($pdo, 'bulk_delete_balances', "Bulk Deleted " . count($ids) . " Balance snapshots. IDs: " . implode(',', $ids));
     }
     $redirect = $_SERVER['HTTP_REFERER'] ?? 'bank_balances.php';
     header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Bulk deleted");

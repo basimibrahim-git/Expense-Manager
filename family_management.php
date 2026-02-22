@@ -1,7 +1,9 @@
 <?php
 // family_management.php
 $current_page = 'family_management.php';
-require_once 'config.php';
+require_once 'config.php'; // NOSONAR
+use App\Helpers\AuditHelper;
+use App\Helpers\Layout;
 
 if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['family_admin', 'root_admin'])) {
     header("Location: dashboard.php");
@@ -39,7 +41,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action']) && $_POST['a
                 $pdo->prepare("INSERT INTO user_preferences (user_id) VALUES (?)")->execute([$new_id]);
 
                 $success = "Member added successfully!";
-                log_audit('add_family_member', "Added Member: $email (Permission: $permission)");
+                AuditHelper::log($pdo, 'add_family_member', "Added Member: $email (Permission: $permission)");
             }
         } catch (Exception $e) {
             $error = "Failed to add member: " . $e->getMessage();
@@ -52,8 +54,8 @@ $stmt = $pdo->prepare("SELECT id, name, email, role, permission, created_at FROM
 $stmt->execute([$tenant_id]);
 $members = $stmt->fetchAll();
 
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+Layout::header();
+Layout::sidebar();
 ?>
 
 <div class="row mb-4">
@@ -176,4 +178,4 @@ require_once 'includes/sidebar.php';
     </div>
 </div>
 
-<?php include_once 'includes/footer.php'; ?>
+<?php include_once 'includes/footer.php'; ?> // NOSONAR

@@ -1,0 +1,11 @@
+{
+    "name": "basimibrahim/expense-manager",
+    "description": "Expense Manager v3",
+    "type": "project",
+    "require": {},
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    }
+}

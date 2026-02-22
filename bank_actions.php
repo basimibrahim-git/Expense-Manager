@@ -1,5 +1,6 @@
 <?php
 require_once 'config.php'; // NOSONAR
+use App\Helpers\AuditHelper;
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
@@ -46,7 +47,7 @@ if ($action == 'add_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("INSERT INTO banks (user_id, tenant_id, bank_name, account_type, account_number, iban, currency, notes, is_default) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([$user_id, $tenant_id, $bank_name, $account_type, $account_number, $iban, $currency, $notes, $is_default]);
 
-        log_audit('add_bank', "Added Bank: $bank_name ($currency)");
+        AuditHelper::log($pdo, 'add_bank', "Added Bank: $bank_name ($currency)");
         header("Location: my_banks.php?success=Bank added successfully");
         exit();
 
@@ -83,7 +84,7 @@ elseif ($action == 'update_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("UPDATE banks SET bank_name = ?, account_type = ?, account_number = ?, iban = ?, currency = ?, notes = ?, is_default = ? WHERE id = ? AND tenant_id = ?");
         $stmt->execute([$bank_name, $account_type, $account_number, $iban, $currency, $notes, $is_default, $bank_id, $tenant_id]);
 
-        log_audit('update_bank', "Updated Bank: $bank_name (ID: $bank_id)");
+        AuditHelper::log($pdo, 'update_bank', "Updated Bank: $bank_name (ID: $bank_id)");
         header("Location: edit_bank.php?id=$bank_id&success=Bank updated successfully");
         exit();
 
@@ -105,7 +106,7 @@ elseif ($action == 'delete' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_P
         // Delete bank
         $stmt = $pdo->prepare("DELETE FROM banks WHERE id = ? AND tenant_id = ?");
         $stmt->execute([$bank_id, $tenant_id]);
-        log_audit('delete_bank', "Deleted Bank ID: $bank_id");
+        AuditHelper::log($pdo, 'delete_bank', "Deleted Bank ID: $bank_id");
     }
 
     header("Location: my_banks.php?success=Bank deleted");

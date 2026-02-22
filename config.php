@@ -105,25 +105,24 @@ if (session_status() === PHP_SESSION_NONE) {
 
 function generate_csrf_token() // NOSONAR
 {
-    if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-    }
-    return $_SESSION['csrf_token'];
+    return \App\Helpers\SecurityHelper::generateCsrfToken();
 }
 
 function verify_csrf_token($token) // NOSONAR
 {
-    if (!isset($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], (string) $token)) {
-        // Log only a non-sensitive message.
-        error_log("CSRF Mismatch for session id: " . session_id() . " (token not logged)");
+    if (!\App\Helpers\SecurityHelper::verifyCsrfToken($token)) {
         header("Location: dashboard.php?error=Security session expired. Please try again.");
         exit();
     }
     return true;
 }
 
+// Load Composer Autoloader
+require_once __DIR__ . '/vendor/autoload.php';
+
 // v3 Enhancements: Core Utilities
-require_once __DIR__ . '/includes/audit_helper.php'; // NOSONAR
+// procedural version removed in favor of App\Helpers\AuditHelper
+// require_once __DIR__ . '/includes/audit_helper.php'; // NOSONAR
 
 // Load User Preferences into Session
 if (isset($_SESSION['user_id']) && !isset($_SESSION['preferences'])) {

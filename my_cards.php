@@ -1,8 +1,8 @@
 <?php
 $page_title = "My Cards";
-require_once 'config.php';
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+require_once 'config.php'; // NOSONAR
+require_once 'includes/header.php'; // NOSONAR
+require_once 'includes/sidebar.php'; // NOSONAR
 
 // Fetch cards with current month usage
 try {

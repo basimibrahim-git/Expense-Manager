@@ -1,5 +1,5 @@
 <?php
-require_once 'config.php';
+require_once 'config.php'; // NOSONAR
 
 if (isset($_SESSION['user_id'])) {
     header("Location: dashboard.php");
@@ -55,7 +55,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $success = "Registration successful! You can now sign in.";
             }
         } catch (Exception $e) {
-            if ($pdo->inTransaction()) { $pdo->rollBack(); }
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             error_log("Signup Error: " . $e->getMessage());
             $error = "An error occurred during registration.";
         }

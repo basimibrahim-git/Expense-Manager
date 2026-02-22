@@ -66,8 +66,8 @@ $all_methods = $stmt_methods->fetchAll(PDO::FETCH_COLUMN);
             <form method="GET">
                 <div class="mb-3">
                     <label for="searchQuery" class="form-label small fw-bold">Keyword</label>
-                    <input type="text" name="q" id="searchQuery" class="form-control form-control-sm" placeholder="Search..."
-                        value="<?php echo htmlspecialchars($keyword ?? ''); ?>">
+                    <input type="text" name="q" id="searchQuery" class="form-control form-control-sm"
+                        placeholder="Search..." value="<?php echo htmlspecialchars($keyword ?? ''); ?>">
                 </div>
 
                 <div class="mb-3">
@@ -78,7 +78,7 @@ $all_methods = $stmt_methods->fetchAll(PDO::FETCH_COLUMN);
                             <option value="<?php echo $cat; ?>" <?php echo $category == $cat ? 'selected' : ''; ?>>
                                 <?php echo $cat; ?>
                             </option>
-                        <?php endfor; ?>
+                        <?php endforeach; ?>
                     </select>
                 </div>
 
@@ -90,17 +90,17 @@ $all_methods = $stmt_methods->fetchAll(PDO::FETCH_COLUMN);
                             <option value="<?php echo $m; ?>" <?php echo $method == $m ? 'selected' : ''; ?>>
                                 <?php echo $m; ?>
                             </option>
-                        <?php endfor; ?>
+                        <?php endforeach; ?>
                     </select>
                 </div>
 
                 <div class="mb-4">
-                    <label class="form-label small fw-bold">Amount Range</label>
+                    <label for="minAmount" class="form-label small fw-bold">Amount Range</label>
                     <div class="d-flex gap-2">
-                        <input type="number" name="min" class="form-control form-control-sm" placeholder="Min"
-                            value="<?php echo $min_amount; ?>">
-                        <input type="number" name="max" class="form-control form-control-sm" placeholder="Max"
-                            value="<?php echo $max_amount; ?>">
+                        <input type="number" name="min" id="minAmount" class="form-control form-control-sm"
+                            placeholder="Min" value="<?php echo $min_amount; ?>">
+                        <input type="number" name="max" id="maxAmount" class="form-control form-control-sm"
+                            placeholder="Max" value="<?php echo $max_amount; ?>">
                     </div>
                 </div>
 

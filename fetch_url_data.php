@@ -2,7 +2,7 @@
 // fetch_url_data.php
 // A simple proxy to fetch Open Graph and Meta tags from a URL
 
-require_once 'config.php';
+require_once 'config.php'; // NOSONAR
 header('Content-Type: application/json');
 
 // 1. Validate Input

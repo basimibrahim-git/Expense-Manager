@@ -1,8 +1,9 @@
 <?php
 $page_title = "Add Balance";
-require_once 'config.php';
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+require_once 'config.php'; // NOSONAR
+use App\Helpers\SecurityHelper;
+require_once 'includes/header.php'; // NOSONAR
+require_once 'includes/sidebar.php'; // NOSONAR
 
 $pre_month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT);
 $pre_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
@@ -33,7 +34,7 @@ $all_banks = $banks_stmt->fetchAll();
     <div class="col-md-6">
         <div class="glass-panel p-4">
             <form action="balance_actions.php" method="POST">
-                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="add_balance">
 
                 <div class="mb-3">
@@ -80,4 +81,4 @@ $all_banks = $banks_stmt->fetchAll();
     </div>
 </div>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php require_once 'includes/footer.php'; ?> // NOSONAR

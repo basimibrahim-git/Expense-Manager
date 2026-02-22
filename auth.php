@@ -1,5 +1,6 @@
 <?php
 require_once 'config.php'; // NOSONAR
+use App\Helpers\AuditHelper;
 const REDIRECT_ERROR = "Location: index.php?error=";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -36,7 +37,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $_SESSION['tenant_id'] = $user['tenant_id'];
                 $_SESSION['role'] = $user['role'];
                 $_SESSION['permission'] = $user['permission'];
-                log_audit('login_success', "User Login: $email");
+                AuditHelper::log($pdo, 'login_success', "User Login: $email");
                 header("Location: dashboard.php");
                 exit();
             } else {

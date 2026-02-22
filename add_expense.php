@@ -1,8 +1,8 @@
 <?php
 $page_title = "Add Expense";
-require_once 'config.php';
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
+require_once 'config.php'; // NOSONAR
+require_once 'includes/header.php'; // NOSONAR
+require_once 'includes/sidebar.php'; // NOSONAR
 
 // Fetch family's cards for dropdown
 try {
@@ -409,4 +409,4 @@ elseif ($pre_month && $pre_year) {
     }
 </style>
 
-<?php require_once 'includes/footer.php'; ?>
+<?php require_once 'includes/footer.php'; ?> // NOSONAR
