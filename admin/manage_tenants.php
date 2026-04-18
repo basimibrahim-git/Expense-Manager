@@ -20,6 +20,12 @@ $success = "";
 
 // Handle Actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    if (!SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        $_SESSION['error_msg'] = "Invalid security token. Please try again.";
+        header("Location: manage_tenants.php");
+        exit();
+    }
+
     if ($_POST['action'] === 'rename_tenant') {
         $tenantId = intval($_POST['tenant_id']);
         $newName = trim($_POST['family_name']);
@@ -38,11 +44,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     } elseif ($_POST['action'] === 'add_member') {
         $tenantId = intval($_POST['tenant_id']);
         $name = trim($_POST['name']);
-        $email = trim($_POST['email']);
+        $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
         $pass = $_POST['password'];
         $role = $_POST['role'] ?? 'user';
 
-        if ($tenantId > 0 && !empty($name) && !empty($email) && !empty($pass)) {
+        if ($tenantId > 0 && !empty($name) && $email !== false && $email !== null && !empty($pass)) {
             try {
                 $hashed = password_hash($pass, PASSWORD_DEFAULT);
                 $stmt = $pdo->prepare("INSERT INTO users (tenant_id, name, email, password, role, permission) VALUES (?, ?, ?, ?, ?, 'edit')");
@@ -57,6 +63,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             } catch (PDOException $e) {
                 error_log("Add user admin failed: " . $e->getMessage());
                 $error = "Failed to add user: A system error occurred.";
+            }
+        } else {
+            if (!$email) {
+                $error = "A valid email address is required.";
+            } else {
+                $error = "All fields are required.";
             }
         }
     }
@@ -114,7 +126,7 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Tenants | ExpenseMngr</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     <link rel="stylesheet" href="../assets/css/style.css">
 </head>
 
@@ -123,7 +135,9 @@ try {
 
     <div class="container-fluid py-4">
         <div class="mb-4">
+            <!-- Security Audit: Validated Outputs and Generic Errors -->
             <h2 class="fw-bold mb-0 text-danger"><i class="fa-solid fa-people-roof me-2"></i>Tenant Management</h2>
+
             <p class="text-muted">Overview of all family accounts in the system</p>
         </div>
 
@@ -166,7 +180,8 @@ try {
                                     <?php echo htmlspecialchars($tenant['admin_name'] ?? 'Unassigned'); ?>
                                 </td>
                                 <td>
-                                    <a href="?view_members=<?php echo htmlspecialchars($tenant['id']); ?>" class="text-decoration-none">
+                                    <a href="?view_members=<?php echo htmlspecialchars($tenant['id']); ?>"
+                                        class="text-decoration-none">
                                         <span class="badge bg-primary rounded-pill cursor-pointer hover-shadow">
                                             <?php echo htmlspecialchars($tenant['user_count']); ?> Users
                                         </span>
@@ -209,6 +224,7 @@ try {
                 <div class="modal-body">
                     <form method="POST">
                         <input type="hidden" name="action" value="rename_tenant">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(SecurityHelper::generateCsrfToken()); ?>">
                         <input type="hidden" name="tenant_id" id="editTenantId">
                         <div class="mb-3">
                             <label for="editFamilyName"
@@ -236,6 +252,7 @@ try {
                 <div class="modal-body">
                     <form method="POST">
                         <input type="hidden" name="action" value="add_member">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(SecurityHelper::generateCsrfToken()); ?>">
                         <input type="hidden" name="tenant_id" id="addMemberTenantId">
                         <div class="mb-3">
                             <label for="addMemberName" class="form-label small text-muted text-uppercase fw-bold">Full

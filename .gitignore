@@ -1,4 +1,5 @@
 .env
+.claude
 .vscode/
 .agent/
 error.log

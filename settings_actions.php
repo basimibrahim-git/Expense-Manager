@@ -7,7 +7,8 @@ use App\Helpers\AuditHelper;
 Bootstrap::init();
 
 const REDIRECT_LOCATION = "Location: ";
-const REDIRECT_DASHBOARD = REDIRECT_LOCATION . BASE_URL . "dashboard.php";
+const REDIRECT_DASHBOARD = REDIRECT_LOCATION . BASE_URL . "dashboard.php"; // Safe internal redirect
+
 
 if (!isset($_SESSION['user_id'])) {
     header(REDIRECT_LOCATION . BASE_URL . "index.php");
@@ -18,7 +19,10 @@ $user_id = $_SESSION['user_id'];
 $action = $_POST['action'] ?? '';
 
 if ($action == 'toggle_currency') {
-    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
+    if (!SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        header(REDIRECT_DASHBOARD . "?error=" . urlencode("Invalid security token. Please try again."));
+        exit();
+    }
 
     $current = $_SESSION['preferences']['base_currency'] ?? 'AED';
     $new = ($current == 'AED') ? 'INR' : 'AED';
@@ -37,7 +41,10 @@ if ($action == 'toggle_currency') {
         die("Update failed: A system error occurred.");
     }
 } elseif ($action == 'toggle_theme') {
-    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
+    if (!SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        header(REDIRECT_DASHBOARD . "?error=" . urlencode("Invalid security token. Please try again."));
+        exit();
+    }
     $current = $_SESSION['preferences']['theme_preference'] ?? 'dark';
     $new = ($current == 'dark') ? 'light' : 'dark';
 

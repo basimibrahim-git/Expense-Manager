@@ -30,8 +30,13 @@ if ($action == 'add_balance' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $user_id = $_SESSION['user_id'];
     $bank_id = filter_input(INPUT_POST, 'bank_id', FILTER_VALIDATE_INT);
     $amount = floatval($_POST['amount']);
-    $currency = $_POST['currency'] ?? 'AED';
-    $date = htmlspecialchars($_POST['balance_date']);
+    $currency = trim($_POST['currency'] ?? 'AED');
+    $dateRaw = $_POST['balance_date'] ?? '';
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateRaw) || !strtotime($dateRaw)) {
+        header("Location: add_balance.php?error=Invalid date format");
+        exit();
+    }
+    $date = $dateRaw;
 
     if (!$bank_id) {
         header("Location: add_balance.php?error=Select a bank");

@@ -96,7 +96,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
         'lifetime' => 0,
         'path' => '/',
-        'domain' => $_SERVER['HTTP_HOST'] ?? '',
+        'domain' => '',
         'secure' => $secure,
         'httponly' => true,
         'samesite' => 'Lax' // use 'Strict' if app doesn't need cross-site cookies

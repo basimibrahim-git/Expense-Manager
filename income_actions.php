@@ -30,10 +30,15 @@ $tenant_id = $_SESSION['tenant_id'];
 if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $user_id = $_SESSION['user_id'];
     $amount = floatval($_POST['amount']);
-    $currency = $_POST['currency'] ?? 'AED';
-    $date = htmlspecialchars($_POST['income_date']);
-    $desc = htmlspecialchars($_POST['description']);
-    $category = htmlspecialchars($_POST['category']);
+    $currency = trim($_POST['currency'] ?? 'AED');
+    $dateRaw = $_POST['income_date'] ?? '';
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateRaw) || !strtotime($dateRaw)) {
+        header("Location: add_income.php?error=Invalid date format");
+        exit();
+    }
+    $date = $dateRaw;
+    $desc = trim($_POST['description'] ?? '');
+    $category = trim($_POST['category'] ?? '');
 
     // Foresight Fields
     $is_recurring = isset($_POST['is_recurring']) && $_POST['is_recurring'] == '1' ? 1 : 0;
@@ -109,7 +114,7 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     exit();
 } elseif ($action == 'bulk_change_category' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ids']) && is_array($_POST['ids'])) {
     $ids = array_map('intval', $_POST['ids']);
-    $category = htmlspecialchars($_POST['category']);
+    $category = trim($_POST['category'] ?? '');
     if (!empty($ids) && !empty($category)) {
         $placeholders = str_repeat('?,', count($ids) - 1) . '?';
         $stmt = $pdo->prepare("UPDATE income SET category = ? WHERE id IN ($placeholders) AND tenant_id = ?");
@@ -129,10 +134,15 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     $amount = floatval($_POST['amount']);
-    $currency = $_POST['currency'] ?? 'AED';
-    $date = htmlspecialchars($_POST['income_date']);
-    $desc = htmlspecialchars($_POST['description']);
-    $category = htmlspecialchars($_POST['category']);
+    $currency = trim($_POST['currency'] ?? 'AED');
+    $dateRaw = $_POST['income_date'] ?? '';
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateRaw) || !strtotime($dateRaw)) {
+        header("Location: edit_income.php?id=$income_id&error=Invalid date format");
+        exit();
+    }
+    $date = $dateRaw;
+    $desc = trim($_POST['description'] ?? '');
+    $category = trim($_POST['category'] ?? '');
     $is_recurring = isset($_POST['is_recurring']) && $_POST['is_recurring'] == '1' ? 1 : 0;
     $recurrence_day = filter_input(INPUT_POST, 'recurrence_day', FILTER_VALIDATE_INT);
 

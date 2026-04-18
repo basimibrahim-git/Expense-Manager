@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     }
 
     if ($_POST['action'] == 'add_reminder') {
-        $title = htmlspecialchars($_POST['title']);
+        $title = trim($_POST['title'] ?? '');
         $date = $_POST['alert_date'] . ' ' . ($_POST['alert_time'] ?? '00:00:00');
         $recur_type = $_POST['recurrence_type'] ?? 'none';
         $color = $_POST['color'] ?? 'primary';
@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         exit;
     } elseif ($_POST['action'] == 'update_reminder') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
-        $title = htmlspecialchars($_POST['title']);
+        $title = trim($_POST['title'] ?? '');
         $date = $_POST['alert_date'] . ' ' . ($_POST['alert_time'] ?? '00:00:00');
         $recur_type = $_POST['recurrence_type'] ?? 'none';
 

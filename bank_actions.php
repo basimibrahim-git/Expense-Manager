@@ -15,7 +15,10 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 $user_id = $_SESSION['user_id'];
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
+    if (!SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        header("Location: dashboard.php?error=" . urlencode("Invalid security token. Please try again."));
+        exit();
+    }
 
     // Permission Check: Read-Only users cannot perform POST actions
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
@@ -30,12 +33,12 @@ $tenant_id = $_SESSION['tenant_id'];
 
 // ADD BANK
 if ($action == 'add_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
-    $bank_name = htmlspecialchars($_POST['bank_name']);
-    $account_type = htmlspecialchars($_POST['account_type'] ?? 'Current');
-    $account_number = htmlspecialchars($_POST['account_number'] ?? '');
-    $iban = htmlspecialchars($_POST['iban'] ?? '');
-    $currency = htmlspecialchars($_POST['currency'] ?? 'AED');
-    $notes = htmlspecialchars($_POST['notes'] ?? '');
+    $bank_name = trim($_POST['bank_name'] ?? '');
+    $account_type = trim($_POST['account_type'] ?? 'Current');
+    $account_number = trim($_POST['account_number'] ?? '');
+    $iban = trim($_POST['iban'] ?? '');
+    $currency = trim($_POST['currency'] ?? 'AED');
+    $notes = trim($_POST['notes'] ?? '');
     $is_default = isset($_POST['is_default']) && $_POST['is_default'] == '1' ? 1 : 0;
 
     if (empty($bank_name)) {
@@ -44,6 +47,8 @@ if ($action == 'add_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     try {
+        $pdo->beginTransaction();
+
         // If setting as default, clear other banks' default status
         if ($is_default) {
             $pdo->prepare("UPDATE banks SET is_default = 0 WHERE tenant_id = ?")->execute([$tenant_id]);
@@ -52,11 +57,15 @@ if ($action == 'add_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("INSERT INTO banks (user_id, tenant_id, bank_name, account_type, account_number, iban, currency, notes, is_default) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([$user_id, $tenant_id, $bank_name, $account_type, $account_number, $iban, $currency, $notes, $is_default]);
 
+        $pdo->commit();
         AuditHelper::log($pdo, 'add_bank', "Added Bank: $bank_name ($currency)");
         header("Location: my_banks.php?success=Bank added successfully");
         exit();
 
     } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log("Add Bank Error: " . $e->getMessage());
         header("Location: add_bank.php?error=" . urlencode("Failed to add bank."));
         exit();
@@ -72,15 +81,17 @@ elseif ($action == 'update_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
-    $bank_name = htmlspecialchars($_POST['bank_name']);
-    $account_type = htmlspecialchars($_POST['account_type'] ?? 'Current');
-    $account_number = htmlspecialchars($_POST['account_number'] ?? '');
-    $iban = htmlspecialchars($_POST['iban'] ?? '');
-    $currency = htmlspecialchars($_POST['currency'] ?? 'AED');
-    $notes = htmlspecialchars($_POST['notes'] ?? '');
+    $bank_name = trim($_POST['bank_name'] ?? '');
+    $account_type = trim($_POST['account_type'] ?? 'Current');
+    $account_number = trim($_POST['account_number'] ?? '');
+    $iban = trim($_POST['iban'] ?? '');
+    $currency = trim($_POST['currency'] ?? 'AED');
+    $notes = trim($_POST['notes'] ?? '');
     $is_default = isset($_POST['is_default']) && $_POST['is_default'] == '1' ? 1 : 0;
 
     try {
+        $pdo->beginTransaction();
+
         // If setting as default, clear other banks' default status
         if ($is_default) {
             $pdo->prepare("UPDATE banks SET is_default = 0 WHERE tenant_id = ?")->execute([$tenant_id]);
@@ -89,11 +100,15 @@ elseif ($action == 'update_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("UPDATE banks SET bank_name = ?, account_type = ?, account_number = ?, iban = ?, currency = ?, notes = ?, is_default = ? WHERE id = ? AND tenant_id = ?");
         $stmt->execute([$bank_name, $account_type, $account_number, $iban, $currency, $notes, $is_default, $bank_id, $tenant_id]);
 
+        $pdo->commit();
         AuditHelper::log($pdo, 'update_bank', "Updated Bank: $bank_name (ID: $bank_id)");
         header("Location: edit_bank.php?id=$bank_id&success=Bank updated successfully");
         exit();
 
     } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log("Update Bank Error: " . $e->getMessage());
         header("Location: edit_bank.php?id=$bank_id&error=" . urlencode("Failed to update bank."));
         exit();

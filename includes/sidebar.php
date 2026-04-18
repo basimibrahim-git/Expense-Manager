@@ -166,7 +166,9 @@
 
     <div class="mt-auto px-3 pb-3">
         <form action="<?php echo BASE_URL; ?>settings_actions.php" method="POST" class="mb-2">
-            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+            <input type="hidden" name="csrf_token"
+                value="<?php echo App\Helpers\SecurityHelper::generateCsrfToken(); ?>">
+
             <input type="hidden" name="action" value="toggle_currency">
             <button type="submit" class="btn btn-outline-secondary w-100 border-0 text-start bg-light hover-shadow">
                 <i class="fa-solid fa-coins me-2"></i>

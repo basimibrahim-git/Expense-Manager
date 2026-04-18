@@ -12,6 +12,10 @@ class Layout
      */
     public static function header()
     {
+        if (!isset($_SESSION['user_id'])) {
+            header('Location: ' . BASE_URL . 'index.php');
+            exit();
+        }
         require_once __DIR__ . '/../../includes/header.php';
     }
 

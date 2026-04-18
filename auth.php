@@ -9,7 +9,10 @@ const REDIRECT_ERROR = "Location: index.php?error=";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // CSRF Check
-    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
+    if (!SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        header(REDIRECT_ERROR . urlencode("Invalid security token. Please try again."));
+        exit();
+    }
 
     // Rate Limiting / Cooldown
     $last_attempt = $_SESSION['last_auth_attempt'] ?? 0;

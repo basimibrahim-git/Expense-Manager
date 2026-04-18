@@ -14,7 +14,10 @@ if (!isset($_SESSION['user_id'])) {
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
+    if (!SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        header("Location: dashboard.php?error=" . urlencode("Invalid security token. Please try again."));
+        exit();
+    }
 
     // Permission Check: Read-Only users cannot perform POST actions
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
@@ -29,64 +32,86 @@ $tenant_id = $_SESSION['tenant_id'];
 
 if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $user_id = $_SESSION['user_id'];
-    $amount = floatval($_POST['amount']);
-    $date = htmlspecialchars($_POST['expense_date']);
-    $desc = htmlspecialchars($_POST['description']);
-    $category = htmlspecialchars($_POST['category']);
-    $method = htmlspecialchars($_POST['payment_method']);
-    $is_sub = isset($_POST['is_subscription']) && $_POST['is_subscription'] == '1' ? 1 : 0;
-    $spent_by = filter_input(INPUT_POST, 'spent_by_user_id', FILTER_VALIDATE_INT) ?: $user_id;
 
-    // Multi-Currency Logic
-    $currency = $_POST['currency'] ?? 'AED';
-    $exchange_rate = floatval($_POST['exchange_rate'] ?? 1.0);
-    $tags = htmlspecialchars($_POST['tags'] ?? '');
-
-    $final_amount = $amount;
-    $original_amount = null;
-
-    if ($currency !== 'AED') {
-        $original_amount = $amount; // Store the foreign amount
-        $final_amount = $amount * $exchange_rate; // Convert to AED
-    }
-
-    // ROI & Anatomy
-    $cashback = floatval($_POST['cashback_earned'] ?? 0);
-    $is_fixed = isset($_POST['is_fixed']) && $_POST['is_fixed'] == '1' ? 1 : 0;
-
-    // Validate
-    if ($final_amount <= 0 || empty($desc) || empty($category)) {
-        header("Location: add_expense.php?error=Invalid input");
+    // --- Shared fields ---
+    $dateRaw = $_POST['expense_date'] ?? '';
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateRaw) || !strtotime($dateRaw)) {
+        header("Location: add_expense.php?error=Invalid date format");
         exit();
     }
+    $date = $dateRaw;
 
+    $method = trim($_POST['payment_method'] ?? '');
+    $currency = trim($_POST['currency'] ?? 'AED');
+    $exchange_rate = floatval($_POST['exchange_rate'] ?? 1.0);
+    $deduct = isset($_POST['deduct_balance']) && $_POST['deduct_balance'] == '1';
+
+    $spent_by_raw = filter_input(INPUT_POST, 'spent_by_user_id', FILTER_VALIDATE_INT) ?: $user_id;
+    if ($spent_by_raw !== $user_id) {
+        $chkStmt = $pdo->prepare("SELECT id FROM users WHERE id = ? AND tenant_id = ?");
+        $chkStmt->execute([$spent_by_raw, $tenant_id]);
+        $spent_by = $chkStmt->fetchColumn() ? $spent_by_raw : $user_id;
+    } else {
+        $spent_by = $user_id;
+    }
+
+    // Card validation (shared across all rows)
     $card_id = null;
+    $card_info = null;
     if ($method === 'Card') {
         $card_id = filter_input(INPUT_POST, 'card_id', FILTER_VALIDATE_INT);
         if (!$card_id) {
             header("Location: add_expense.php?error=Please select a card");
             exit();
         }
+        $cardCheck = $pdo->prepare("SELECT id, bank_name, card_type, bank_id FROM cards WHERE id = ? AND tenant_id = ?");
+        $cardCheck->execute([$card_id, $tenant_id]);
+        $card_info = $cardCheck->fetch();
+        if (!$card_info) {
+            header("Location: add_expense.php?error=Invalid card selected");
+            exit();
+        }
+    }
+
+    // --- Per-row expense data ---
+    $rows = $_POST['expenses'] ?? [];
+    if (empty($rows) || !is_array($rows)) {
+        header("Location: add_expense.php?error=No expenses to save");
+        exit();
     }
 
     try {
+        $pdo->beginTransaction();
+
         $stmt = $pdo->prepare("INSERT INTO expenses (user_id, tenant_id, spent_by_user_id, amount, description, category, payment_method, card_id, expense_date, is_subscription, currency, original_amount, tags, cashback_earned, is_fixed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$user_id, $tenant_id, $spent_by, $final_amount, $desc, $category, $method, $card_id, $date, $is_sub, $currency, $original_amount, $tags, $cashback, $is_fixed]);
 
-        // Deep Linking: Deduct from Bank Balance (ONLY for Debit cards)
-        $deduct = isset($_POST['deduct_balance']) && $_POST['deduct_balance'] == '1';
-        if ($deduct && $card_id) {
-            // 1. Get Card Info - only deduct for DEBIT cards
-            $cStmt = $pdo->prepare("SELECT bank_name, card_type, bank_id FROM cards WHERE id = ? AND tenant_id = ?");
-            $cStmt->execute([$card_id, $tenant_id]);
-            $card_info = $cStmt->fetch();
+        $saved = 0;
+        foreach ($rows as $row) {
+            $amount    = floatval($row['amount'] ?? 0);
+            $desc      = trim($row['description'] ?? '');
+            $category  = trim($row['category'] ?? '');
+            $tags      = trim($row['tags'] ?? '');
+            $is_sub    = isset($row['is_subscription']) ? 1 : 0;
+            $is_fixed  = isset($row['is_fixed']) ? 1 : 0;
+            $cashback  = floatval($row['cashback_earned'] ?? 0);
 
-            // Only proceed if it's a DEBIT card (not Credit)
-            if ($card_info && strtolower($card_info['card_type']) === 'debit') {
+            if ($amount <= 0 || empty($desc) || empty($category)) continue;
+
+            $final_amount   = $amount;
+            $original_amount = null;
+            if ($currency !== 'AED') {
+                $original_amount = $amount;
+                $final_amount    = $amount * $exchange_rate;
+            }
+
+            $stmt->execute([$user_id, $tenant_id, $spent_by, $final_amount, $desc, $category, $method, $card_id, $date, $is_sub, $currency, $original_amount, $tags, $cashback, $is_fixed]);
+            $saved++;
+
+            // Deduct from bank balance for debit cards — re-query balance each iteration so deductions stack correctly
+            if ($deduct && $card_info && strtolower($card_info['card_type']) === 'debit') {
                 $bank_name = $card_info['bank_name'];
-                $bank_id = $card_info['bank_id'];
+                $bank_id   = $card_info['bank_id'];
 
-                // 2. Get Latest Balance (Try bank_id first for precision, fallback to name)
                 if ($bank_id) {
                     $bStmt = $pdo->prepare("SELECT amount FROM bank_balances WHERE tenant_id = ? AND (bank_id = ? OR bank_name = ?) ORDER BY balance_date DESC, id DESC LIMIT 1");
                     $bStmt->execute([$tenant_id, $bank_id, $bank_name]);
@@ -95,31 +120,29 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
                     $bStmt->execute([$tenant_id, $bank_name]);
                 }
                 $current_bal = $bStmt->fetchColumn() ?: 0;
+                $new_bal     = $current_bal - $final_amount;
 
-                // 3. New Balance
-                $new_bal = $current_bal - $amount;
-
-                // 4. Insert Snapshot
                 $insStmt = $pdo->prepare("INSERT INTO bank_balances (user_id, tenant_id, bank_name, amount, balance_date, bank_id) VALUES (?, ?, ?, ?, ?, ?)");
                 $insStmt->execute([$user_id, $tenant_id, $bank_name, $new_bal, $date, $bank_id]);
             }
-            // Credit cards don't deduct from bank balance - they're a liability, not cash
         }
 
-        // Check if user wants to add another
-        $add_another = isset($_POST['add_another']) && $_POST['add_another'] == '1';
-        $count = intval($_POST['add_count'] ?? 0) + 1;
-
-        if ($add_another) {
-            AuditHelper::log($pdo, 'add_expense', "Added Expense: $desc ($final_amount AED)");
-            header("Location: add_expense.php?added=1&count=$count&date=$date");
-        } else {
-            AuditHelper::log($pdo, 'add_expense', "Added Expense: $desc ($final_amount AED)");
-            header("Location: expenses.php?success=Expense added successfully");
+        if ($saved === 0) {
+            $pdo->rollBack();
+            header("Location: add_expense.php?error=No valid expenses to save");
+            exit();
         }
+
+        $pdo->commit();
+        AuditHelper::log($pdo, 'add_expense', "Added $saved expense(s) on $date");
+        $month = filter_input(INPUT_POST, 'month', FILTER_VALIDATE_INT) ?: date('n');
+        $year  = filter_input(INPUT_POST, 'year',  FILTER_VALIDATE_INT) ?: date('Y');
+        header("Location: add_expense.php?added=$saved&date=" . urlencode($date) . "&month=$month&year=$year");
         exit();
 
     } catch (PDOException $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log("Bulk expense insert: " . $e->getMessage());
         header("Location: add_expense.php?error=System error occurred during expense processing.");
         exit();
     }
@@ -240,7 +263,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     exit();
 } elseif ($action == 'bulk_change_category' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ids']) && is_array($_POST['ids'])) {
     $ids = array_map('intval', $_POST['ids']);
-    $category = htmlspecialchars($_POST['category']);
+    $category = trim($_POST['category'] ?? '');
     if (!empty($ids) && !empty($category)) {
         $placeholders = str_repeat('?,', count($ids) - 1) . '?';
         $stmt = $pdo->prepare("UPDATE expenses SET category = ? WHERE id IN ($placeholders) AND tenant_id = ?");
@@ -261,11 +284,16 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     $amount = floatval($_POST['amount']);
-    $date = htmlspecialchars($_POST['expense_date']);
-    $desc = htmlspecialchars($_POST['description']);
-    $category = htmlspecialchars($_POST['category']);
-    $method = htmlspecialchars($_POST['payment_method']);
-    $tags = htmlspecialchars($_POST['tags'] ?? '');
+    $dateRaw = $_POST['expense_date'] ?? '';
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateRaw) || !strtotime($dateRaw)) {
+        header("Location: edit_expense.php?id=$expense_id&error=Invalid date format");
+        exit();
+    }
+    $date = $dateRaw;
+    $desc = trim($_POST['description'] ?? '');
+    $category = trim($_POST['category'] ?? '');
+    $method = trim($_POST['payment_method'] ?? '');
+    $tags = trim($_POST['tags'] ?? '');
     $is_sub = isset($_POST['is_subscription']) && $_POST['is_subscription'] == '1' ? 1 : 0;
     $cashback = floatval($_POST['cashback_earned'] ?? 0);
     $is_fixed = isset($_POST['is_fixed']) && $_POST['is_fixed'] == '1' ? 1 : 0;

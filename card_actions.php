@@ -14,7 +14,10 @@ if (!isset($_SESSION['user_id'])) {
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
+    if (!SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        header("Location: dashboard.php?error=" . urlencode("Invalid security token. Please try again."));
+        exit();
+    }
 
     // Permission Check: Read-Only users cannot perform POST actions
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
@@ -29,19 +32,19 @@ $tenant_id = $_SESSION['tenant_id'];
 
 if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $user_id = $_SESSION['user_id'];
-    $bank_name = htmlspecialchars($_POST['bank_name']);
-    $card_name = htmlspecialchars($_POST['card_name']);
-    $card_type = htmlspecialchars($_POST['card_type']);
-    $network = htmlspecialchars($_POST['network']);
-    $tier = htmlspecialchars($_POST['tier']);
-    $fee_type = htmlspecialchars($_POST['fee_type'] ?? 'LTF');
+    $bank_name = trim($_POST['bank_name'] ?? '');
+    $card_name = trim($_POST['card_name'] ?? '');
+    $card_type = trim($_POST['card_type'] ?? '');
+    $network = trim($_POST['network'] ?? '');
+    $tier = trim($_POST['tier'] ?? '');
+    $fee_type = trim($_POST['fee_type'] ?? 'LTF');
     $card_image = filter_var($_POST['card_image'] ?? '', FILTER_SANITIZE_URL);
 
     $limit_amount = floatval($_POST['limit_amount']);
     $bill_day = filter_input(INPUT_POST, 'bill_day', FILTER_VALIDATE_INT) ?: 1;
     $statement_day = filter_input(INPUT_POST, 'statement_day', FILTER_VALIDATE_INT) ?: 1;
-    $first_four = htmlspecialchars($_POST['first_four'] ?? '');
-    $last_four = htmlspecialchars($_POST['last_four'] ?? '');
+    $first_four = trim($_POST['first_four'] ?? '');
+    $last_four = trim($_POST['last_four'] ?? '');
 
     // Process Category-Specific Cashback percentages
     $cb_categories = ['Grocery', 'Food', 'Transport', 'Shopping', 'Utilities', 'Travel', 'Medical', 'Entertainment', 'Education', 'Other'];
@@ -79,19 +82,19 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         die("Invalid ID");
     }
 
-    $bank_name = htmlspecialchars($_POST['bank_name']);
-    $card_name = htmlspecialchars($_POST['card_name']);
-    $card_type = htmlspecialchars($_POST['card_type']);
-    $network = htmlspecialchars($_POST['network']);
-    $tier = htmlspecialchars($_POST['tier']);
-    $fee_type = htmlspecialchars($_POST['fee_type'] ?? 'LTF');
+    $bank_name = trim($_POST['bank_name'] ?? '');
+    $card_name = trim($_POST['card_name'] ?? '');
+    $card_type = trim($_POST['card_type'] ?? '');
+    $network = trim($_POST['network'] ?? '');
+    $tier = trim($_POST['tier'] ?? '');
+    $fee_type = trim($_POST['fee_type'] ?? 'LTF');
     $card_image = filter_var($_POST['card_image'] ?? '', FILTER_SANITIZE_URL);
 
     $limit_amount = floatval($_POST['limit_amount']);
     $bill_day = filter_input(INPUT_POST, 'bill_day', FILTER_VALIDATE_INT) ?: 1;
     $statement_day = filter_input(INPUT_POST, 'statement_day', FILTER_VALIDATE_INT) ?: 1;
-    $first_four = htmlspecialchars($_POST['first_four'] ?? '');
-    $last_four = htmlspecialchars($_POST['last_four'] ?? '');
+    $first_four = trim($_POST['first_four'] ?? '');
+    $last_four = trim($_POST['last_four'] ?? '');
 
     // Process Category-Specific Cashback percentages
     $cb_categories = ['Grocery', 'Food', 'Transport', 'Shopping', 'Utilities', 'Travel', 'Medical', 'Entertainment', 'Education', 'Other'];
@@ -110,6 +113,8 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $bank_id = filter_input(INPUT_POST, 'bank_id', FILTER_VALIDATE_INT) ?: null;
 
     try {
+        $pdo->beginTransaction();
+
         // If setting as default, clear other cards' default status first
         if ($is_default) {
             $pdo->prepare("UPDATE cards SET is_default = 0 WHERE tenant_id = ?")->execute([$tenant_id]);
@@ -118,6 +123,7 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         // Ensure user owns the card
         $stmt = $pdo->prepare("UPDATE cards SET bank_name=?, card_name=?, card_type=?, network=?, tier=?, limit_amount=?, bill_day=?, statement_day=?, cashback_struct=?, bank_url=?, features=?, is_default=?, bank_id=?, first_four=?, last_four=?, fee_type=?, card_image=? WHERE id=? AND tenant_id=?");
         $stmt->execute([$bank_name, $card_name, $card_type, $network, $tier, $limit_amount, $bill_day, $statement_day, $cashback_struct, $bank_url, $features, $is_default, $bank_id, $first_four, $last_four, $fee_type, $card_image, $card_id, $tenant_id]);
+        $pdo->commit();
 
         AuditHelper::log($pdo, 'update_card', "Updated Card: $card_name (ID: $card_id)");
         if ($stmt->rowCount() > 0) {
@@ -131,6 +137,9 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
 
     } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log("Card Update Error: " . $e->getMessage());
         header("Location: edit_card.php?id=$card_id&error=" . urlencode("Failed to update card details."));
         exit();
@@ -160,7 +169,12 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $bank_id = null; // Ensure NULL if empty/false to pass FK constraint
     }
     $amount = floatval($_POST['amount']);
-    $date = htmlspecialchars($_POST['payment_date']);
+    $dateRaw = $_POST['payment_date'] ?? '';
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateRaw) || !strtotime($dateRaw)) {
+        header("Location: pay_card.php?error=Invalid date format");
+        exit();
+    }
+    $date = $dateRaw;
 
     if (!$card_id || $amount <= 0) {
         header("Location: pay_card.php?error=Invalid input");

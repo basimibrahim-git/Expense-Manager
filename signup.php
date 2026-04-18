@@ -136,6 +136,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                     <button type="submit" class="btn btn-primary w-100 py-3 mb-3">Create Family Account</button>
 
+
                     <div class="text-center">
                         <span class="text-muted small">Already have an account? </span>
                         <a href="index.php" class="text-decoration-none small fw-bold"
