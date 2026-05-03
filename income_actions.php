@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
@@ -91,6 +91,23 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
+} elseif ($action == 'delete' && $_SERVER['REQUEST_METHOD'] == 'GET' && isset($_GET['id'])) {
+    if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+        $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
+        $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
+        header("Location: monthly_income.php?month=$month&year=$year&error=Unauthorized: Read-only access");
+        exit();
+    }
+    $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+    $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
+    $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
+    if ($id) {
+        $stmt = $pdo->prepare("DELETE FROM income WHERE id = ? AND tenant_id = ?");
+        $stmt->execute([$id, $tenant_id]);
+        AuditHelper::log($pdo, 'delete_income', "Deleted Income ID: $id");
+    }
+    header("Location: monthly_income.php?month=$month&year=$year&success=Income deleted");
+    exit();
 } elseif ($action == 'delete_income' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['id'])) {
     $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
     if ($id) {

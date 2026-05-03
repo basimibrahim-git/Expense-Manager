@@ -1,6 +1,6 @@
 <?php
 $page_title = "Dashboard";
-require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
@@ -161,6 +161,7 @@ $runway_months = ($avg_monthly_spend > 0) ? $net_worth / $avg_monthly_spend : 0;
 $budget_stmt = $pdo->prepare("SELECT category, amount FROM budgets WHERE tenant_id = ? AND month = ? AND year = ?");
 $budget_stmt->execute([$tenant_id, $curr_month, $curr_year]);
 $dash_budgets = $budget_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
 $total_budgeted = array_sum($dash_budgets);
 $budget_utilization = ($total_budgeted > 0) ? ($expense_now / $total_budgeted) * 100 : 0;
 

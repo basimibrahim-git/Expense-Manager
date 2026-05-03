@@ -106,7 +106,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 
 // Load Composer Autoloader
-require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/autoload.php';
 
 // procedural version removed in favor of App\Helpers\AuditHelper
 

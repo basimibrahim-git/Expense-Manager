@@ -1,6 +1,6 @@
 <?php
 $page_title = "Monthly Income";
-require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     if (!empty($ids) && !empty($new_category)) {
         $ids_placeholder = implode(',', array_fill(0, count($ids), '?'));
-        $stmt = $pdo->prepare("UPDATE monthly_income SET category = ? WHERE id IN ($ids_placeholder) AND tenant_id = ?");
+        $stmt = $pdo->prepare("UPDATE income SET category = ? WHERE id IN ($ids_placeholder) AND tenant_id = ?");
         $stmt->execute(array_merge([$new_category], $ids, [$_SESSION['tenant_id']]));
 
         AuditHelper::log($pdo, 'bulk_income_edit', "Changed category for " . count($ids) . " items to $new_category");
@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 }
 
 // Fetch Records
-$stmt = $pdo->prepare("SELECT * FROM monthly_income WHERE tenant_id = ? AND month = ? AND year = ? ORDER BY id DESC");
+$stmt = $pdo->prepare("SELECT * FROM income WHERE tenant_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ? ORDER BY income_date DESC");
 $stmt->execute([$_SESSION['tenant_id'], $month, $year]);
 $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

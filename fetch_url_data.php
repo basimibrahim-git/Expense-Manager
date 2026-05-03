@@ -2,7 +2,7 @@
 // fetch_url_data.php
 // A simple proxy to fetch Open Graph and Meta tags from a URL
 
-require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 
 Bootstrap::init();

@@ -1,6 +1,6 @@
 <?php
 $page_title = "Add Income";
-require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
@@ -173,4 +173,3 @@ $user_banks = $banks_stmt->fetchAll();
 </div>
 
 <?php Layout::footer(); ?>
-// Structural Audit Complete

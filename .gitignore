@@ -4,3 +4,6 @@
 .agent/
 error.log
 codecheck.bat
+logs/cronlog.txt
+debug_budget.php
+.error.log

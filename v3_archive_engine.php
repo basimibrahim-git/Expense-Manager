@@ -1,6 +1,6 @@
 <?php
 // v3_archive_engine.php - Maintenance script for cleaning up old data.
-require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\AuditHelper;
 

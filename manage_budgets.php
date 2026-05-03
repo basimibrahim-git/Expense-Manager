@@ -1,6 +1,6 @@
 <?php
 // manage_budgets.php
-require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\Layout;
 use App\Helpers\SecurityHelper;
@@ -23,10 +23,19 @@ $tenant_id = $_SESSION['tenant_id'];
 $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?: date('n');
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?: date('Y');
 
-// Fetch current budgets for the selected period
-$stmt = $pdo->prepare("SELECT category, amount, currency FROM budgets WHERE tenant_id = ? AND month = ? AND year = ?");
-$stmt->execute([$tenant_id, $month, $year]);
-$existing_budgets = $stmt->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
+// If copying from a previous month, load those values as defaults (but keep current month in the form)
+$copy_month = filter_input(INPUT_GET, 'copy_month', FILTER_VALIDATE_INT);
+$copy_year  = filter_input(INPUT_GET, 'copy_year',  FILTER_VALIDATE_INT);
+
+if ($copy_month && $copy_year) {
+    $stmt = $pdo->prepare("SELECT category, amount, currency FROM budgets WHERE tenant_id = ? AND month = ? AND year = ?");
+    $stmt->execute([$tenant_id, $copy_month, $copy_year]);
+    $existing_budgets = $stmt->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
+} else {
+    $stmt = $pdo->prepare("SELECT category, amount, currency FROM budgets WHERE tenant_id = ? AND month = ? AND year = ?");
+    $stmt->execute([$tenant_id, $month, $year]);
+    $existing_budgets = $stmt->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
+}
 
 // predefined categories for easy setup
 $categories = [
@@ -175,17 +184,12 @@ Layout::sidebar();
 
 <script>
     function copyLastMonth() {
-        if (confirm('This will load budget values from the previous month. Unsaved changes will be lost. Continue?')) {
-            const lastMonth = <?php echo $month == 1 ? 12 : $month - 1; ?>;
-            const lastYear = <?php echo $month == 1 ? $year - 1 : $year; ?>;
-            window.location.href = `manage_budgets.php?month=${lastMonth}&year=${lastYear}&copy_source=1`;
-            // In a real app, we'd probably use AJAX or a specific POST action to copy.
-            // For simplicity here, we'll let the user navigate and they can save.
+        if (confirm('This will pre-fill values from the previous month. The form will still save to <?php echo date('F Y', mktime(0,0,0,$month,1,$year)); ?>. Continue?')) {
+            const copyMonth = <?php echo $month == 1 ? 12 : $month - 1; ?>;
+            const copyYear  = <?php echo $month == 1 ? $year - 1 : $year; ?>;
+            window.location.href = `manage_budgets.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>&copy_month=${copyMonth}&copy_year=${copyYear}`;
         }
     }
 </script>
 
 <?php Layout::footer(); ?>
-</body>
-
-</html>

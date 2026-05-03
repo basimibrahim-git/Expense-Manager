@@ -1,7 +1,7 @@
 <?php
 // admin/manage_tenants.php
 $current_page = 'admin/manage_tenants.php';
-require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\Layout;
 use App\Helpers\SecurityHelper;

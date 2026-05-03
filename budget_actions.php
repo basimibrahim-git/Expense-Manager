@@ -1,6 +1,6 @@
 <?php
 // budget_actions.php
-require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
@@ -56,7 +56,8 @@ if ($action == 'save_budgets' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $pdo->commit();
         AuditHelper::log($pdo, 'save_budgets', "Updated Budgets for $month/$year. Categories: " . count($budgets));
-        header("Location: manage_budgets.php?month=$month&year=$year&success=Budgets saved successfully");
+        $month_name = date('F', mktime(0, 0, 0, $month, 1, $year));
+        header("Location: manage_budgets.php?month=$month&year=$year&success=Budgets saved for $month_name $year");
         exit();
 
     } catch (Exception $e) {

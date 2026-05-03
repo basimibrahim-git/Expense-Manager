@@ -1,6 +1,6 @@
 <?php
 $page_title = "Monthly Expenses";
-require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\Layout;
 use App\Helpers\SecurityHelper;
@@ -227,18 +227,18 @@ try {
                 value="<?php echo htmlspecialchars($end_date ?? ''); ?>" onchange="this.form.submit()">
         </div>
 
-        <div class="col-6 col-md-2 text-end d-flex gap-2">
+        <div class="col-6 col-md-2 d-flex gap-1 justify-content-end align-items-end">
             <a href="print_report.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>" target="_blank"
-                class="btn btn-outline-primary btn-sm flex-grow-1">
-                <i class="fa-solid fa-print me-1"></i> Print
+                class="btn btn-outline-primary btn-sm" title="Print Report">
+                <i class="fa-solid fa-print"></i>
             </a>
             <a href="export_actions.php?action=export_expenses&month=<?php echo $month; ?>&year=<?php echo $year; ?>&category=<?php echo $category_filter; ?>&payment_method=<?php echo $payment_filter; ?>&card_id=<?php echo $card_filter; ?>&start=<?php echo $start_date; ?>&end=<?php echo $end_date; ?>"
-                class="btn btn-outline-secondary btn-sm flex-grow-1">
-                <i class="fa-solid fa-file-csv me-1"></i> Export
+                class="btn btn-outline-secondary btn-sm" title="Export CSV">
+                <i class="fa-solid fa-file-csv"></i>
             </a>
             <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
                 <a href="add_expense.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>"
-                    class="btn btn-primary btn-sm flex-grow-1">
+                    class="btn btn-primary btn-sm">
                     <i class="fa-solid fa-plus me-1"></i> Add
                 </a>
             <?php endif; ?>
