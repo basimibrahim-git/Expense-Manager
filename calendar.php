@@ -171,15 +171,16 @@ foreach ($reminders as $rem) {
 </div>
 
 <div class="glass-panel p-4">
+    <div class="calendar-wrapper">
     <!-- Days Header -->
-    <div class="row text-center fw-bold text-muted mb-3 d-none d-md-flex">
-        <div class="col">Mon</div>
-        <div class="col">Tue</div>
-        <div class="col">Wed</div>
-        <div class="col">Thu</div>
-        <div class="col">Fri</div>
-        <div class="col">Sat</div>
-        <div class="col">Sun</div>
+    <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;min-width:560px;" class="text-center fw-bold text-muted mb-2 d-none d-md-grid">
+        <div>Mon</div>
+        <div>Tue</div>
+        <div>Wed</div>
+        <div>Thu</div>
+        <div>Fri</div>
+        <div>Sat</div>
+        <div>Sun</div>
     </div>
 
     <div class="calendar-grid">
@@ -204,7 +205,7 @@ foreach ($reminders as $rem) {
                 // If it's a reminder, we allow delete
                 $is_rem = ($evt['type'] === 'reminder');
 
-                echo "<div class='event-badge bg-{$evt['color']}-subtle text-{$evt['color']} small text-truncate d-flex justify-content-between align-items-center role='button' title='{$evt['title']}'>";
+                echo "<div class='event-badge bg-{$evt['color']}-subtle text-{$evt['color']} small d-flex justify-content-between align-items-center' title='" . htmlspecialchars($evt['title']) . "'>";
                 echo "<span><i class='fa-solid {$evt['icon']} me-1'></i>" . htmlspecialchars($evt['title']) . "</span>";
 
                 if ($is_rem) {
@@ -226,20 +227,29 @@ foreach ($reminders as $rem) {
         }
         ?>
     </div>
+    </div><!-- end calendar-wrapper -->
 </div>
 
 <style>
+    .calendar-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
     .calendar-grid {
         display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: 10px;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 8px;
+        min-width: 560px;
     }
 
     .calendar-day {
         min-height: 100px;
+        min-width: 0;
+        overflow: hidden;
         background: rgba(255, 255, 255, 0.5);
         border-radius: 10px;
-        padding: 10px;
+        padding: 8px;
         border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
@@ -249,21 +259,32 @@ foreach ($reminders as $rem) {
     }
 
     .day-number {
-        font-size: 1.1em;
-        margin-bottom: 5px;
+        font-size: 1em;
+        margin-bottom: 4px;
     }
 
     .event-badge {
-        font-size: 0.75em;
-        padding: 3px 6px;
+        font-size: 0.72em;
+        padding: 2px 5px;
         border-radius: 4px;
-        margin-bottom: 3px;
+        margin-bottom: 2px;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .event-badge span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+        flex: 1;
     }
 
     @media (max-width: 768px) {
         .calendar-grid {
             display: flex;
             flex-direction: column;
+            min-width: unset;
         }
 
         .calendar-day {
@@ -369,4 +390,3 @@ foreach ($reminders as $rem) {
 </script>
 
 <?php Layout::footer(); ?>
-// Structural Audit Complete

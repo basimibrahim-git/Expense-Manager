@@ -16,6 +16,8 @@ class Layout
             header('Location: ' . BASE_URL . 'index.php');
             exit();
         }
+        $current_page = $GLOBALS['current_page'] ?? basename($_SERVER['PHP_SELF']);
+        $page_title   = $GLOBALS['page_title'] ?? '';
         require_once __DIR__ . '/../../includes/header.php';
     }
 
@@ -24,6 +26,8 @@ class Layout
      */
     public static function sidebar()
     {
+        $current_page = $GLOBALS['current_page'] ?? basename($_SERVER['PHP_SELF']);
+        $activeClass  = 'active';
         require_once __DIR__ . '/../../includes/sidebar.php';
     }
 

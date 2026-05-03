@@ -6,6 +6,7 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
 use App\Helpers\AuditHelper;
+use App\Helpers\ExchangeRateHelper;
 
 Bootstrap::init();
 
@@ -15,7 +16,11 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-$tenant_id = $_SESSION['tenant_id'];
+$tenant_id     = $_SESSION['tenant_id'];
+$base_currency  = $_SESSION['preferences']['base_currency'] ?? 'AED';
+$inr_to_aed     = ExchangeRateHelper::getRate('INR', 'AED', $pdo);
+$aed_to_inr     = ($inr_to_aed > 0) ? (1 / $inr_to_aed) : 22.0;
+$currency_label = $base_currency;
 
 // Create tables if not exist
 $pdo->exec("CREATE TABLE IF NOT EXISTS net_worth_items (
@@ -107,18 +112,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
 
     } elseif ($action === 'take_snapshot') {
-        // Compute totals inline for snapshot
-        $stmt = $pdo->prepare("SELECT COALESCE(SUM(balance), 0) FROM banks WHERE tenant_id = ?");
-        $stmt->execute([$tenant_id]);
-        $snap_bank = (float)$stmt->fetchColumn();
+        // Compute totals inline for snapshot — convert each row to AED first
+        $stmt = $pdo->prepare(
+            "SELECT bb.amount, bb.currency
+             FROM bank_balances bb
+             INNER JOIN (
+                 SELECT bank_id, MAX(balance_date) AS max_date
+                 FROM bank_balances
+                 WHERE tenant_id = ?
+                 GROUP BY bank_id
+             ) latest ON bb.bank_id = latest.bank_id AND bb.balance_date = latest.max_date
+             WHERE bb.tenant_id = ?"
+        );
+        $stmt->execute([$tenant_id, $tenant_id]);
+        $snap_bank = 0.0;
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $snap_bank += ($row['currency'] === 'INR')
+                ? (float)$row['amount'] * $inr_to_aed
+                : (float)$row['amount'];
+        }
 
         $stmt = $pdo->prepare("SELECT COALESCE(SUM(current_saved), 0) FROM sinking_funds WHERE tenant_id = ?");
         $stmt->execute([$tenant_id]);
-        $snap_savings = (float)$stmt->fetchColumn();
+        $snap_savings = (float)$stmt->fetchColumn(); // stored in AED
 
-        $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM lending_tracker WHERE tenant_id = ? AND status = 'Pending'");
+        $stmt = $pdo->prepare("SELECT amount, currency FROM lending_tracker WHERE tenant_id = ? AND status = 'Pending'");
         $stmt->execute([$tenant_id]);
-        $snap_lent = (float)$stmt->fetchColumn();
+        $snap_lent = 0.0;
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $snap_lent += ($row['currency'] === 'INR')
+                ? (float)$row['amount'] * $inr_to_aed
+                : (float)$row['amount'];
+        }
 
         $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM net_worth_items WHERE tenant_id = ? AND type = 'asset'");
         $stmt->execute([$tenant_id]);
@@ -148,19 +173,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ── Data Fetching ──────────────────────────────────────────────────────────────
 
 // Auto-tracked assets
-$stmt = $pdo->prepare("SELECT COALESCE(SUM(balance), 0) FROM banks WHERE tenant_id = ?");
-$stmt->execute([$tenant_id]);
-$bank_balances = (float)$stmt->fetchColumn();
+$stmt = $pdo->prepare(
+    "SELECT bb.amount, bb.currency
+     FROM bank_balances bb
+     INNER JOIN (
+         SELECT bank_id, MAX(balance_date) AS max_date
+         FROM bank_balances
+         WHERE tenant_id = ?
+         GROUP BY bank_id
+     ) latest ON bb.bank_id = latest.bank_id AND bb.balance_date = latest.max_date
+     WHERE bb.tenant_id = ?"
+);
+$stmt->execute([$tenant_id, $tenant_id]);
+$bank_balances_total = 0.0;
+foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+    $bank_balances_total += ($row['currency'] === 'INR')
+        ? (float)$row['amount'] * $inr_to_aed
+        : (float)$row['amount'];
+}
+// Apply base currency display multiplier
+if ($base_currency === 'INR') {
+    $bank_balances_total *= $aed_to_inr;
+}
 
 $stmt = $pdo->prepare("SELECT COALESCE(SUM(current_saved), 0) FROM sinking_funds WHERE tenant_id = ?");
 $stmt->execute([$tenant_id]);
-$savings_goals = (float)$stmt->fetchColumn();
+$savings_goals_aed = (float)$stmt->fetchColumn();
+$savings_goals = ($base_currency === 'INR') ? $savings_goals_aed * $aed_to_inr : $savings_goals_aed;
 
-$stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM lending_tracker WHERE tenant_id = ? AND status = 'Pending'");
+$stmt = $pdo->prepare("SELECT amount, currency FROM lending_tracker WHERE tenant_id = ? AND status = 'Pending'");
 $stmt->execute([$tenant_id]);
-$money_lent = (float)$stmt->fetchColumn();
+$money_lent_aed = 0.0;
+foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+    $money_lent_aed += ($row['currency'] === 'INR')
+        ? (float)$row['amount'] * $inr_to_aed
+        : (float)$row['amount'];
+}
+$money_lent = ($base_currency === 'INR') ? $money_lent_aed * $aed_to_inr : $money_lent_aed;
 
-$auto_total = $bank_balances + $savings_goals + $money_lent;
+$auto_total = $bank_balances_total + $savings_goals + $money_lent;
 
 // Manual items
 $stmt = $pdo->prepare("SELECT * FROM net_worth_items WHERE tenant_id = ? ORDER BY type, sort_order, id");
@@ -250,7 +301,7 @@ Layout::sidebar();
                 <i class="fa-solid fa-arrow-trend-up fa-3x text-success"></i>
             </div>
             <h6 class="text-muted fw-bold text-uppercase small mb-2">Total Assets</h6>
-            <h3 class="fw-bold text-success mb-1">AED <span class="blur-sensitive"><?php echo number_format($total_assets, 2); ?></span></h3>
+            <h3 class="fw-bold text-success mb-1"><?php echo $currency_label; ?> <span class="blur-sensitive"><?php echo number_format($total_assets, 2); ?></span></h3>
             <div class="small text-muted">Auto-tracked + manual</div>
         </div>
     </div>
@@ -260,7 +311,7 @@ Layout::sidebar();
                 <i class="fa-solid fa-arrow-trend-down fa-3x text-danger"></i>
             </div>
             <h6 class="text-muted fw-bold text-uppercase small mb-2">Total Liabilities</h6>
-            <h3 class="fw-bold text-danger mb-1">AED <span class="blur-sensitive"><?php echo number_format($total_liabilities, 2); ?></span></h3>
+            <h3 class="fw-bold text-danger mb-1"><?php echo $currency_label; ?> <span class="blur-sensitive"><?php echo number_format($total_liabilities, 2); ?></span></h3>
             <div class="small text-muted">Manual entries</div>
         </div>
     </div>
@@ -271,7 +322,7 @@ Layout::sidebar();
             </div>
             <h6 class="text-muted fw-bold text-uppercase small mb-2">Net Worth</h6>
             <h3 class="fw-bold <?php echo $net_worth >= 0 ? 'text-primary' : 'text-danger'; ?> mb-1">
-                AED <span class="blur-sensitive"><?php echo number_format($net_worth, 2); ?></span>
+                <?php echo $currency_label; ?> <span class="blur-sensitive"><?php echo number_format($net_worth, 2); ?></span>
             </h3>
             <div class="small text-muted">Assets minus liabilities</div>
         </div>
@@ -291,7 +342,7 @@ Layout::sidebar();
                         <span class="fw-semibold">Bank Balances</span>
                         <div class="small text-muted">From linked bank accounts</div>
                     </div>
-                    <span class="fw-bold text-success blur-sensitive">AED <?php echo number_format($bank_balances, 2); ?></span>
+                    <span class="fw-bold text-success blur-sensitive"><?php echo $currency_label; ?> <?php echo number_format($bank_balances_total, 2); ?></span>
                 </li>
                 <li class="list-group-item bg-transparent px-0 d-flex justify-content-between align-items-center border-bottom py-3">
                     <div>
@@ -299,7 +350,7 @@ Layout::sidebar();
                         <span class="fw-semibold">Savings Goals</span>
                         <div class="small text-muted">Sinking funds balance</div>
                     </div>
-                    <span class="fw-bold text-info blur-sensitive">AED <?php echo number_format($savings_goals, 2); ?></span>
+                    <span class="fw-bold text-info blur-sensitive"><?php echo $currency_label; ?> <?php echo number_format($savings_goals, 2); ?></span>
                 </li>
                 <li class="list-group-item bg-transparent px-0 d-flex justify-content-between align-items-center py-3">
                     <div>
@@ -307,12 +358,12 @@ Layout::sidebar();
                         <span class="fw-semibold">Money Lent Out</span>
                         <div class="small text-muted">Pending repayments</div>
                     </div>
-                    <span class="fw-bold text-warning blur-sensitive">AED <?php echo number_format($money_lent, 2); ?></span>
+                    <span class="fw-bold text-warning blur-sensitive"><?php echo $currency_label; ?> <?php echo number_format($money_lent, 2); ?></span>
                 </li>
             </ul>
             <div class="border-top pt-3 mt-2 d-flex justify-content-between fw-bold">
                 <span class="text-muted">Auto Total</span>
-                <span class="text-success blur-sensitive">AED <?php echo number_format($auto_total, 2); ?></span>
+                <span class="text-success blur-sensitive"><?php echo $currency_label; ?> <?php echo number_format($auto_total, 2); ?></span>
             </div>
         </div>
     </div>
@@ -358,7 +409,7 @@ Layout::sidebar();
                                     <?php endif; ?>
                                 </td>
                                 <td><span class="badge bg-success-subtle text-success"><?php echo htmlspecialchars($item['category']); ?></span></td>
-                                <td class="text-end fw-bold text-success blur-sensitive">AED <?php echo number_format($item['amount'], 2); ?></td>
+                                <td class="text-end fw-bold text-success blur-sensitive"><?php echo $currency_label; ?> <?php echo number_format($item['amount'], 2); ?></td>
                                 <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
                                 <td class="text-end">
                                     <button class="btn btn-sm btn-outline-primary border-0"
@@ -379,7 +430,7 @@ Layout::sidebar();
                         <tfoot>
                             <tr class="table-success">
                                 <td colspan="2" class="fw-bold">Manual Assets Total</td>
-                                <td class="text-end fw-bold blur-sensitive">AED <?php echo number_format($manual_assets_total, 2); ?></td>
+                                <td class="text-end fw-bold blur-sensitive"><?php echo $currency_label; ?> <?php echo number_format($manual_assets_total, 2); ?></td>
                                 <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?><td></td><?php endif; ?>
                             </tr>
                         </tfoot>
@@ -430,7 +481,7 @@ Layout::sidebar();
                             <?php endif; ?>
                         </td>
                         <td><span class="badge bg-danger-subtle text-danger"><?php echo htmlspecialchars($item['category']); ?></span></td>
-                        <td class="text-end fw-bold text-danger blur-sensitive">AED <?php echo number_format($item['amount'], 2); ?></td>
+                        <td class="text-end fw-bold text-danger blur-sensitive"><?php echo $currency_label; ?> <?php echo number_format($item['amount'], 2); ?></td>
                         <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
                         <td class="text-end">
                             <button class="btn btn-sm btn-outline-primary border-0"
@@ -451,7 +502,7 @@ Layout::sidebar();
                 <tfoot>
                     <tr class="table-danger">
                         <td colspan="2" class="fw-bold">Total Liabilities</td>
-                        <td class="text-end fw-bold blur-sensitive">AED <?php echo number_format($total_liabilities, 2); ?></td>
+                        <td class="text-end fw-bold blur-sensitive"><?php echo $currency_label; ?> <?php echo number_format($total_liabilities, 2); ?></td>
                         <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?><td></td><?php endif; ?>
                     </tr>
                 </tfoot>
@@ -509,7 +560,7 @@ Layout::sidebar();
                 tooltip: {
                     callbacks: {
                         label: function(ctx) {
-                            return ' AED ' + ctx.parsed.y.toLocaleString('en-AE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                            return ' <?php echo $currency_label; ?> ' + ctx.parsed.y.toLocaleString('en-AE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                         }
                     }
                 }
@@ -518,7 +569,7 @@ Layout::sidebar();
                 y: {
                     ticks: {
                         callback: function(value) {
-                            return 'AED ' + value.toLocaleString('en-AE', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+                            return '<?php echo $currency_label; ?> ' + value.toLocaleString('en-AE', {minimumFractionDigits: 0, maximumFractionDigits: 0});
                         }
                     },
                     grid: { color: 'rgba(0,0,0,0.05)' }
