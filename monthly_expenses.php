@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $page_title = "Monthly Expenses";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -142,7 +142,6 @@ try {
     $cat_budgets = $budget_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
     $actual_stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category");
-    $actual_stmt->execute([$_SESSION['tenant_id'], $month, $year]);
     $actual_stmt->execute([$_SESSION['tenant_id'], $month, $year]);
     $cat_actuals = $actual_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
@@ -480,7 +479,7 @@ try {
     </form>
 <?php endif; ?>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     document.addEventListener('DOMContentLoaded', function () {
         const selectAll = document.getElementById('selectAll');
         const rowCheckboxes = document.querySelectorAll('.row-checkbox');

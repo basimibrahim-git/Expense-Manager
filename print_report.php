@@ -22,7 +22,7 @@ $stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND 
 $stmt->execute([$tenant_id, $month, $year]);
 $total_expense = $stmt->fetchColumn() ?: 0;
 
-$stmt = $pdo->prepare("SELECT * FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? ORDER BY expense_date ASC");
+$stmt = $pdo->prepare("SELECT expense_date, description, category, payment_method, amount FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? ORDER BY expense_date ASC");
 $stmt->execute([$tenant_id, $month, $year]);
 $expenses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $page_title = "My Calendar";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -104,7 +104,7 @@ foreach ($cards as $card) {
 }
 
 // C. Custom Reminders
-$stmt = $pdo->prepare("SELECT * FROM reminders WHERE tenant_id = ?");
+$stmt = $pdo->prepare("SELECT id, title, alert_date, recurrence_type, color FROM reminders WHERE tenant_id = ?");
 $stmt->execute([$_SESSION['tenant_id']]);
 $reminders = $stmt->fetchAll();
 
@@ -360,7 +360,7 @@ foreach ($reminders as $rem) {
     </div>
 </div>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     function confirmDeleteReminder(id, title) {
         document.getElementById('deleteReminderId').value = id;
         document.getElementById('deleteReminderMsg').innerHTML = `Delete reminder: <strong>${title}</strong>? <br><span class="text-danger small">This cannot be undone.</span>`;

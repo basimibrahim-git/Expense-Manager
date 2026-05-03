@@ -1,9 +1,10 @@
-<?php
+﻿<?php
 $page_title = "Dashboard";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
+use App\Helpers\ExchangeRateHelper;
 
 Bootstrap::init();
 Layout::header();
@@ -16,7 +17,13 @@ $curr_year = date('Y');
 
 // Base Currency Scaling Logic
 $base_currency = $_SESSION['preferences']['base_currency'] ?? 'AED';
-$currency_multiplier = ($base_currency == 'INR') ? 24 : 1;
+if ($base_currency === 'INR') {
+    $currency_multiplier = ExchangeRateHelper::getRate('AED', 'INR', $pdo);
+} elseif ($base_currency === 'AED') {
+    $currency_multiplier = 1.0;
+} else {
+    $currency_multiplier = 1.0;
+}
 $currency_label = $base_currency;
 
 // 1. Fetch Summary Stats (Current Month)
@@ -886,9 +893,9 @@ usort($upcoming_bills, function ($a, $b) {
 </div>
 
 <!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     // Interest Chart (Moved here to ensure Chart.js is loaded)
     const interestCtx = document.getElementById('interestChart').getContext('2d');
     new Chart(interestCtx, {

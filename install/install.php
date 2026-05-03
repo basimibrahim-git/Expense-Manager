@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // install/install.php
 // Automated Installer for Expense Manager
 
@@ -17,6 +17,21 @@ session_start();
 // Helper to determine root path
 $rootDir = dirname(__DIR__);
 $envFile = $rootDir . '/.env';
+
+// Block reinstallation if already set up
+$installLockFile = __DIR__ . '/.installed';
+if (file_exists($installLockFile) || file_exists($envFile)) {
+    http_response_code(403);
+    echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Already Installed</title>'
+       . '<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>'
+       . '<body class="bg-light d-flex align-items-center justify-content-center" style="min-height:100vh">'
+       . '<div class="text-center p-5">'
+       . '<h2 class="fw-bold">Already Installed</h2>'
+       . '<p class="text-muted">Expense Manager is already configured. Delete or rename <code>.env</code> to reinstall.</p>'
+       . '<a href="../index.php" class="btn btn-primary">Go to Login</a>'
+       . '</div></body></html>';
+    exit();
+}
 
 // Functions
 function writeEnvFile($path, $data)
@@ -385,6 +400,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $success = "Installation Complete!";
                 $step = 5;
+                // Write secondary install lock file
+                file_put_contents($installLockFile, date('c'));
             }
 
         } catch (Exception $e) {
@@ -585,7 +602,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     Install Database Tables <i class="fa-solid fa-hammer ms-2"></i>
                                 </button>
                             </div>
-                            <script>
+                            <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
                                 function showLoader() {
                                     document.getElementById('installSpinner').style.display = 'inline-block';
                                     document.getElementById('dbIcon').style.display = 'none';
@@ -640,7 +657,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     self-destruct after you leave.</p>
                             </div>
 
-                            <script>
+                            <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
                                 function cleanup() {
                                     // Trigger cleanup via beacon or simple timeout fetch
                                     // Since we are redirecting, we can attempt a sync fetch or

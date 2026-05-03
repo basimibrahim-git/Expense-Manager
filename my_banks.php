@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $page_title = "My Bank Accounts";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -100,7 +100,7 @@ try {
     <?php endif; ?>
 </div>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     function confirmDelete(id, name) {
         if (confirm(`Are you sure you want to remove "${name}"? This will not delete your transaction history, but the bank will no longer appear in your active lists.`)) {
             window.location.href = `bank_actions.php?action=delete&id=${id}&csrf_token=<?php echo SecurityHelper::generateCsrfToken(); ?>`;

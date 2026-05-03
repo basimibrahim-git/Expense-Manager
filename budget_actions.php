@@ -46,7 +46,7 @@ if ($action == 'save_budgets' && $_SERVER['REQUEST_METHOD'] == 'POST') {
                 $stmt = $pdo->prepare("INSERT INTO budgets (user_id, tenant_id, category, amount, month, year)
                                      VALUES (?, ?, ?, ?, ?, ?)
                                      ON DUPLICATE KEY UPDATE amount = VALUES(amount)");
-                $stmt->execute([$user_id, $tenant_id, htmlspecialchars($category), $amount, $month, $year]);
+                $stmt->execute([$user_id, $tenant_id, $category, $amount, $month, $year]);
             } else {
                 // Delete if entry exists and new amount is 0
                 $stmt = $pdo->prepare("DELETE FROM budgets WHERE tenant_id = ? AND category = ? AND month = ? AND year = ?");

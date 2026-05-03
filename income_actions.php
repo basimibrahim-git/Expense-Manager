@@ -36,6 +36,11 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         header("Location: add_income.php?error=Invalid date format");
         exit();
     }
+    $year_check = (int)substr($dateRaw, 0, 4);
+    if ($year_check < 2000 || $year_check > 2100) {
+        header("Location: add_income.php?error=Invalid year");
+        exit();
+    }
     $date = $dateRaw;
     $desc = trim($_POST['description'] ?? '');
     $category = trim($_POST['category'] ?? '');
@@ -119,13 +124,16 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     header("Location: income.php?success=Deleted");
     exit();
 } elseif ($action == 'bulk_delete' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ids']) && is_array($_POST['ids'])) {
-    $ids = array_map('intval', $_POST['ids']);
-    if (!empty($ids)) {
-        $placeholders = str_repeat('?,', count($ids) - 1) . '?';
-        $stmt = $pdo->prepare("DELETE FROM income WHERE id IN ($placeholders) AND tenant_id = ?");
-        $stmt->execute(array_merge($ids, [$tenant_id]));
-        AuditHelper::log($pdo, 'bulk_delete_income', "Bulk Deleted " . count($ids) . " Income records. IDs: " . implode(',', $ids));
+    $ids = array_slice(array_map('intval', (array)($_POST['ids'] ?? [])), 0, 500);
+    if (empty($ids)) {
+        $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'income.php');
+        header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "error=No valid IDs provided");
+        exit();
     }
+    $placeholders = str_repeat('?,', count($ids) - 1) . '?';
+    $stmt = $pdo->prepare("DELETE FROM income WHERE id IN ($placeholders) AND tenant_id = ?");
+    $stmt->execute(array_merge($ids, [$tenant_id]));
+    AuditHelper::log($pdo, 'bulk_delete_income', "Bulk Deleted " . count($ids) . " Income records. IDs: " . implode(',', $ids));
     $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'income.php');
     header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Bulk deleted");
     exit();
@@ -155,6 +163,11 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $dateRaw = $_POST['income_date'] ?? '';
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateRaw) || !strtotime($dateRaw)) {
         header("Location: edit_income.php?id=$income_id&error=Invalid date format");
+        exit();
+    }
+    $year_check = (int)substr($dateRaw, 0, 4);
+    if ($year_check < 2000 || $year_check > 2100) {
+        header("Location: add_income.php?error=Invalid year");
         exit();
     }
     $date = $dateRaw;

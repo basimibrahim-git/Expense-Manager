@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $page_title = "Add Expense";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -265,7 +265,7 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
     </div>
 </template>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     const myCards = <?php echo json_encode($cards); ?>;
     let rowIndex = 0;
 
@@ -450,7 +450,7 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
 </div>
 
 <?php if ($saved_count > 0): ?>
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     document.addEventListener('DOMContentLoaded', function () {
         new bootstrap.Modal(document.getElementById('addedModal')).show();
     });

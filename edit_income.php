@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $page_title = "Edit Income";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -18,7 +18,7 @@ if (!$income_id) {
 }
 
 // Fetch income
-$stmt = $pdo->prepare("SELECT * FROM income WHERE id = ? AND tenant_id = ?");
+$stmt = $pdo->prepare("SELECT id, income_date, amount, description, category, is_recurring, recurrence_day FROM income WHERE id = ? AND tenant_id = ?");
 $stmt->execute([$income_id, $_SESSION['tenant_id']]);
 $income = $stmt->fetch();
 
@@ -145,7 +145,7 @@ $categories = [
     </div>
 </div>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     function toggleRecurrence() {
         const div = document.getElementById('recurrenceDiv');
         div.style.display = document.getElementById('isRecurring').checked ? 'block' : 'none';

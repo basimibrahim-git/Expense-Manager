@@ -14,10 +14,7 @@ if (!isset($_SESSION['user_id'])) {
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    if (!SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '')) {
-        header("Location: dashboard.php?error=" . urlencode("Invalid security token. Please try again."));
-        exit();
-    }
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     // Permission Check: Read-Only users cannot perform POST actions
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
@@ -79,7 +76,8 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $user_id = $_SESSION['user_id'];
 
     if (!$card_id) {
-        die("Invalid ID");
+        header("Location: my_cards.php?error=" . urlencode("Invalid request"));
+        exit();
     }
 
     $bank_name = trim($_POST['bank_name'] ?? '');
@@ -121,8 +119,8 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         // Ensure user owns the card
-        $stmt = $pdo->prepare("UPDATE cards SET bank_name=?, card_name=?, card_type=?, network=?, tier=?, limit_amount=?, bill_day=?, statement_day=?, cashback_struct=?, bank_url=?, features=?, is_default=?, bank_id=?, first_four=?, last_four=?, fee_type=?, card_image=? WHERE id=? AND tenant_id=?");
-        $stmt->execute([$bank_name, $card_name, $card_type, $network, $tier, $limit_amount, $bill_day, $statement_day, $cashback_struct, $bank_url, $features, $is_default, $bank_id, $first_four, $last_four, $fee_type, $card_image, $card_id, $tenant_id]);
+        $stmt = $pdo->prepare("UPDATE cards SET bank_name=?, card_name=?, card_type=?, network=?, tier=?, limit_amount=?, bill_day=?, statement_day=?, cashback_struct=?, bank_url=?, features=?, is_default=?, bank_id=?, first_four=?, last_four=?, fee_type=?, card_image=? WHERE id=? AND tenant_id=? AND user_id=?");
+        $stmt->execute([$bank_name, $card_name, $card_type, $network, $tier, $limit_amount, $bill_day, $statement_day, $cashback_struct, $bank_url, $features, $is_default, $bank_id, $first_four, $last_four, $fee_type, $card_image, $card_id, $tenant_id, $user_id]);
         $pdo->commit();
 
         AuditHelper::log($pdo, 'update_card', "Updated Card: $card_name (ID: $card_id)");
@@ -150,8 +148,8 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
     if ($card_id) {
         try {
-            $stmt = $pdo->prepare("DELETE FROM cards WHERE id = ? AND tenant_id = ?");
-            $stmt->execute([$card_id, $tenant_id]);
+            $stmt = $pdo->prepare("DELETE FROM cards WHERE id = ? AND tenant_id = ? AND user_id = ?");
+            $stmt->execute([$card_id, $tenant_id, $user_id]);
             AuditHelper::log($pdo, 'delete_card', "Deleted Card ID: $card_id");
             header("Location: my_cards.php?success=Card deleted");
             exit();

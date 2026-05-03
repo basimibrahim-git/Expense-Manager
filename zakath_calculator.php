@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // zakath_calculator.php
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -161,7 +161,7 @@ Layout::sidebar();
     </div>
 </div>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     const inputs = document.querySelectorAll('.calc-input');
     inputs.forEach(input => {
         input.addEventListener('input', calcZakath);

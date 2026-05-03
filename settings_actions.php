@@ -19,10 +19,7 @@ $user_id = $_SESSION['user_id'];
 $action = $_POST['action'] ?? '';
 
 if ($action == 'toggle_currency') {
-    if (!SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '')) {
-        header(REDIRECT_DASHBOARD . "?error=" . urlencode("Invalid security token. Please try again."));
-        exit();
-    }
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     $current = $_SESSION['preferences']['base_currency'] ?? 'AED';
     $new = ($current == 'AED') ? 'INR' : 'AED';
@@ -41,10 +38,7 @@ if ($action == 'toggle_currency') {
         die("Update failed: A system error occurred.");
     }
 } elseif ($action == 'toggle_theme') {
-    if (!SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '')) {
-        header(REDIRECT_DASHBOARD . "?error=" . urlencode("Invalid security token. Please try again."));
-        exit();
-    }
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
     $current = $_SESSION['preferences']['theme_preference'] ?? 'dark';
     $new = ($current == 'dark') ? 'light' : 'dark';
 

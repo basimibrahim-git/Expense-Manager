@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $page_title = "Monthly Incentives";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -230,7 +230,7 @@ $total_incentives = array_sum(array_column($incentives, 'amount'));
     </div>
 </div>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     function confirmDelete(id, title, amount) {
         document.getElementById('deleteIncentiveId').value = id;
         document.getElementById('deleteIncentiveMsg').innerHTML = `Are you sure you want to delete <strong>${title}</strong> (AED ${amount})? <br><span class="text-danger small">This cannot be undone.</span>`;

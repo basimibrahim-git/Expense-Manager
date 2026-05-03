@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $page_title = "Monthly Interest";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -289,7 +289,7 @@ foreach ($records as $r) {
     </div>
 </div>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     function confirmDelete(id, title, amount) {
         document.getElementById('deleteId').value = id;
         document.getElementById('deleteMsg').innerHTML = `Are you sure you want to delete <strong>${title}</strong> (AED ${amount})?`;

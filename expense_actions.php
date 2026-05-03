@@ -14,10 +14,7 @@ if (!isset($_SESSION['user_id'])) {
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    if (!SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '')) {
-        header("Location: dashboard.php?error=" . urlencode("Invalid security token. Please try again."));
-        exit();
-    }
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     // Permission Check: Read-Only users cannot perform POST actions
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
@@ -37,6 +34,11 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $dateRaw = $_POST['expense_date'] ?? '';
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateRaw) || !strtotime($dateRaw)) {
         header("Location: add_expense.php?error=Invalid date format");
+        exit();
+    }
+    $year_check = (int)substr($dateRaw, 0, 4);
+    if ($year_check < 2000 || $year_check > 2100) {
+        header("Location: add_expense.php?error=Invalid year");
         exit();
     }
     $date = $dateRaw;
@@ -81,6 +83,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     try {
+        $pdo->exec("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
         $pdo->beginTransaction();
 
         $stmt = $pdo->prepare("INSERT INTO expenses (user_id, tenant_id, spent_by_user_id, amount, description, category, payment_method, card_id, expense_date, is_subscription, currency, original_amount, tags, cashback_earned, is_fixed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
@@ -172,7 +175,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     if ($template_id) {
         try {
             // 1. Fetch Template
-            $stmt = $pdo->prepare("SELECT * FROM expenses WHERE id = ? AND tenant_id = ?");
+            $stmt = $pdo->prepare("SELECT description, amount, category, payment_method, card_id, currency, original_amount, tags, cashback_earned, is_fixed FROM expenses WHERE id = ? AND tenant_id = ?");
             $stmt->execute([$template_id, $tenant_id]);
             $tpl = $stmt->fetch();
 
@@ -250,13 +253,16 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     header("Location: subscriptions.php");
     exit();
 } elseif ($action == 'bulk_delete' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ids']) && is_array($_POST['ids'])) {
-    $ids = array_map('intval', $_POST['ids']);
-    if (!empty($ids)) {
-        $placeholders = str_repeat('?,', count($ids) - 1) . '?';
-        $stmt = $pdo->prepare("DELETE FROM expenses WHERE id IN ($placeholders) AND tenant_id = ?");
-        $stmt->execute(array_merge($ids, [$tenant_id]));
-        AuditHelper::log($pdo, 'bulk_delete_expenses', "Bulk Deleted " . count($ids) . " Expenses. IDs: " . implode(',', $ids));
+    $ids = array_slice(array_map('intval', (array)($_POST['ids'] ?? [])), 0, 500);
+    if (empty($ids)) {
+        $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'expenses.php');
+        header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "error=No valid IDs provided");
+        exit();
     }
+    $placeholders = str_repeat('?,', count($ids) - 1) . '?';
+    $stmt = $pdo->prepare("DELETE FROM expenses WHERE id IN ($placeholders) AND tenant_id = ?");
+    $stmt->execute(array_merge($ids, [$tenant_id]));
+    AuditHelper::log($pdo, 'bulk_delete_expenses', "Bulk Deleted " . count($ids) . " Expenses. IDs: " . implode(',', $ids));
     $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'expenses.php');
 
     header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Bulk deleted");
@@ -287,6 +293,11 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $dateRaw = $_POST['expense_date'] ?? '';
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateRaw) || !strtotime($dateRaw)) {
         header("Location: edit_expense.php?id=$expense_id&error=Invalid date format");
+        exit();
+    }
+    $year_check = (int)substr($dateRaw, 0, 4);
+    if ($year_check < 2000 || $year_check > 2100) {
+        header("Location: add_expense.php?error=Invalid year");
         exit();
     }
     $date = $dateRaw;

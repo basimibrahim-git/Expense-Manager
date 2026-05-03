@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $page_title = "Monthly Sadaqa";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -263,7 +263,7 @@ $total_sadaqa = array_sum(array_column($records, 'amount'));
     </div>
 </div>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     function confirmDelete(id, title, amount) {
         document.getElementById('deleteSadaqaId').value = id;
         document.getElementById('deleteSadaqaMsg').innerHTML = `Delete <strong>${title}</strong> (AED ${amount})? <br><span class="text-danger small">This cannot be undone.</span>`;

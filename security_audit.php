@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // security_audit.php
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -241,7 +241,7 @@ Layout::sidebar();
     </div>
 </div>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     function viewAuditDetails(log) {
         const modal = new bootstrap.Modal(document.getElementById('auditDetailModal'));
 

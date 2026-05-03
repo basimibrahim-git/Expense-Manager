@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $page_title = "Edit Card";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -290,7 +290,7 @@ $all_banks = $banks_stmt->fetchAll();
     </div>
 </div>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     function isValidUrl(string) {
         try { new URL(string); return true; } catch (_) { return false; }
     }

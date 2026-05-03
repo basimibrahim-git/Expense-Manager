@@ -54,11 +54,14 @@ AND YEAR(e.expense_date) = :year";
         $query .= " AND e.expense_date <= :end";
         $params['end'] = $end_date;
     }
-    $query .= " ORDER BY e.expense_date DESC";
+    $query .= " ORDER BY e.expense_date DESC LIMIT 50000";
     try {
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
         $expenses = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (count($expenses) > 10000) {
+            error_log("[Export] Large export: " . count($expenses) . " rows for tenant " . $_SESSION['tenant_id']);
+        }
 
         header(CONTENT_TYPE_CSV);
         header('Content-Disposition: attachment; filename="expenses_' . $month . '_' . $year . CSV_EXTENSION . '"');
@@ -117,8 +120,7 @@ AND YEAR(e.expense_date) = :year";
     $start_date = filter_input(INPUT_GET, 'start');
     $end_date = filter_input(INPUT_GET, 'end');
 
-    $query = "SELECT * FROM income WHERE tenant_id = :tenant_id AND MONTH(income_date) = :month AND YEAR(income_date) =
-    :year";
+    $query = "SELECT income_date, description, category, amount, currency, is_recurring FROM income WHERE tenant_id = :tenant_id AND MONTH(income_date) = :month AND YEAR(income_date) = :year";
     $params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];
 
     if ($category_filter) {
@@ -133,11 +135,14 @@ AND YEAR(e.expense_date) = :year";
         $query .= " AND income_date <= :end";
         $params['end'] = $end_date;
     }
-    $query .= " ORDER BY income_date DESC";
+    $query .= " ORDER BY income_date DESC LIMIT 50000";
     try {
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
         $income = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (count($income) > 10000) {
+            error_log("[Export] Large export: " . count($income) . " rows for tenant " . $_SESSION['tenant_id']);
+        }
 
         header(CONTENT_TYPE_CSV);
         header('Content-Disposition: attachment; filename="income_' . $month . '_' . $year . CSV_EXTENSION . '"');
@@ -171,13 +176,16 @@ AND YEAR(e.expense_date) = :year";
     $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 
     $query = "SELECT * FROM sadaqa_tracker WHERE tenant_id = :tenant_id AND MONTH(sadaqa_date) = :month AND
-        YEAR(sadaqa_date) = :year ORDER BY sadaqa_date DESC";
+        YEAR(sadaqa_date) = :year ORDER BY sadaqa_date DESC LIMIT 50000";
     $params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];
 
     try {
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
         $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (count($records) > 10000) {
+            error_log("[Export] Large export: " . count($records) . " rows for tenant " . $_SESSION['tenant_id']);
+        }
 
         header(CONTENT_TYPE_CSV);
         header('Content-Disposition: attachment; filename="sadaqa_' . $month . '_' . $year . CSV_EXTENSION . '"');
@@ -199,13 +207,16 @@ AND YEAR(e.expense_date) = :year";
     $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 
     $query = "SELECT * FROM company_incentives WHERE tenant_id = :tenant_id AND MONTH(incentive_date) = :month AND
-        YEAR(incentive_date) = :year ORDER BY incentive_date DESC";
+        YEAR(incentive_date) = :year ORDER BY incentive_date DESC LIMIT 50000";
     $params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];
 
     try {
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
         $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (count($records) > 10000) {
+            error_log("[Export] Large export: " . count($records) . " rows for tenant " . $_SESSION['tenant_id']);
+        }
 
         header(CONTENT_TYPE_CSV);
         header('Content-Disposition: attachment; filename="incentives_' . $month . '_' . $year . CSV_EXTENSION . '"');
@@ -227,13 +238,16 @@ AND YEAR(e.expense_date) = :year";
     $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
 
     $query = "SELECT * FROM interest_tracker WHERE tenant_id = :tenant_id AND MONTH(interest_date) = :month AND
-        YEAR(interest_date) = :year ORDER BY interest_date DESC";
+        YEAR(interest_date) = :year ORDER BY interest_date DESC LIMIT 50000";
     $params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];
 
     try {
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
         $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (count($records) > 10000) {
+            error_log("[Export] Large export: " . count($records) . " rows for tenant " . $_SESSION['tenant_id']);
+        }
 
         header(CONTENT_TYPE_CSV);
         header('Content-Disposition: attachment; filename="interest_' . $month . '_' . $year . CSV_EXTENSION . '"');
@@ -257,13 +271,16 @@ AND YEAR(e.expense_date) = :year";
         die(SYSTEM_ERROR_MSG);
     }
 } elseif ($action == 'export_zakath') {
-    $query = "SELECT * FROM zakath_calculations WHERE tenant_id = :tenant_id ORDER BY created_at DESC";
+    $query = "SELECT * FROM zakath_calculations WHERE tenant_id = :tenant_id ORDER BY created_at DESC LIMIT 50000";
     $params = ['tenant_id' => $_SESSION['tenant_id']];
 
     try {
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
         $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (count($records) > 10000) {
+            error_log("[Export] Large export: " . count($records) . " rows for tenant " . $_SESSION['tenant_id']);
+        }
 
         header(CONTENT_TYPE_CSV);
         header('Content-Disposition: attachment; filename="zakath_calculations' . CSV_EXTENSION . '"');
@@ -299,13 +316,16 @@ AND YEAR(e.expense_date) = :year";
         die(SYSTEM_ERROR_MSG);
     }
 } elseif ($action == 'export_reminders') {
-    $query = "SELECT * FROM reminders WHERE tenant_id = :tenant_id ORDER BY alert_date ASC";
+    $query = "SELECT alert_date, title, recurrence_type FROM reminders WHERE tenant_id = :tenant_id ORDER BY alert_date ASC LIMIT 50000";
     $params = ['tenant_id' => $_SESSION['tenant_id']];
 
     try {
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
         $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (count($records) > 10000) {
+            error_log("[Export] Large export: " . count($records) . " rows for tenant " . $_SESSION['tenant_id']);
+        }
 
         header(CONTENT_TYPE_CSV);
         header('Content-Disposition: attachment; filename="reminders' . CSV_EXTENSION . '"');
@@ -323,13 +343,16 @@ AND YEAR(e.expense_date) = :year";
         die(SYSTEM_ERROR_MSG);
     }
 } elseif ($action == 'export_lending') {
-    $query = "SELECT * FROM lending_tracker WHERE tenant_id = :tenant_id ORDER BY lent_date DESC";
+    $query = "SELECT * FROM lending_tracker WHERE tenant_id = :tenant_id ORDER BY lent_date DESC LIMIT 50000";
     $params = ['tenant_id' => $_SESSION['tenant_id']];
 
     try {
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
         $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (count($records) > 10000) {
+            error_log("[Export] Large export: " . count($records) . " rows for tenant " . $_SESSION['tenant_id']);
+        }
 
         header(CONTENT_TYPE_CSV);
         header('Content-Disposition: attachment; filename="lending_records' . CSV_EXTENSION . '"');

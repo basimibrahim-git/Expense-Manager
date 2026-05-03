@@ -15,10 +15,7 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 $user_id = $_SESSION['user_id'];
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    if (!SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '')) {
-        header("Location: dashboard.php?error=" . urlencode("Invalid security token. Please try again."));
-        exit();
-    }
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     // Permission Check: Read-Only users cannot perform POST actions
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
@@ -97,8 +94,8 @@ elseif ($action == 'update_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             $pdo->prepare("UPDATE banks SET is_default = 0 WHERE tenant_id = ?")->execute([$tenant_id]);
         }
 
-        $stmt = $pdo->prepare("UPDATE banks SET bank_name = ?, account_type = ?, account_number = ?, iban = ?, currency = ?, notes = ?, is_default = ? WHERE id = ? AND tenant_id = ?");
-        $stmt->execute([$bank_name, $account_type, $account_number, $iban, $currency, $notes, $is_default, $bank_id, $tenant_id]);
+        $stmt = $pdo->prepare("UPDATE banks SET bank_name = ?, account_type = ?, account_number = ?, iban = ?, currency = ?, notes = ?, is_default = ? WHERE id = ? AND tenant_id = ? AND user_id = ?");
+        $stmt->execute([$bank_name, $account_type, $account_number, $iban, $currency, $notes, $is_default, $bank_id, $tenant_id, $user_id]);
 
         $pdo->commit();
         AuditHelper::log($pdo, 'update_bank', "Updated Bank: $bank_name (ID: $bank_id)");
@@ -124,8 +121,8 @@ elseif ($action == 'delete' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_P
         $pdo->prepare("UPDATE cards SET bank_id = NULL WHERE bank_id = ? AND tenant_id = ?")->execute([$bank_id, $tenant_id]);
 
         // Delete bank
-        $stmt = $pdo->prepare("DELETE FROM banks WHERE id = ? AND tenant_id = ?");
-        $stmt->execute([$bank_id, $tenant_id]);
+        $stmt = $pdo->prepare("DELETE FROM banks WHERE id = ? AND tenant_id = ? AND user_id = ?");
+        $stmt->execute([$bank_id, $tenant_id, $user_id]);
         AuditHelper::log($pdo, 'delete_bank', "Deleted Bank ID: $bank_id");
     }
 

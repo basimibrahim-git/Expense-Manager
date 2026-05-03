@@ -28,6 +28,17 @@ if (file_exists($envFile)) {
     }
 }
 
+// Force HTTPS in production
+if (($_ENV['APP_ENV'] ?? 'production') === 'production'
+    && PHP_SAPI !== 'cli'
+    && empty($_SERVER['HTTPS'])
+    && ($_SERVER['SERVER_PORT'] ?? 80) != 443) {
+    $host = $_SERVER['HTTP_HOST'] ?? '';
+    $uri  = $_SERVER['REQUEST_URI'] ?? '/';
+    header('Location: https://' . $host . $uri, true, 301);
+    exit();
+}
+
 // Set Timezone
 date_default_timezone_set($_ENV['APP_TIMEZONE'] ?? 'Asia/Dubai');
 
@@ -89,6 +100,16 @@ if (!is_writable($logDataDir) && !is_writable($logFile)) {
 ini_set('log_errors', 1);
 ini_set('error_log', $logFile);
 
+// Global exception handler — logs the error, shows a generic message to the user
+set_exception_handler(function (Throwable $e): void {
+    error_log('[Uncaught] ' . get_class($e) . ': ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+    if (PHP_SAPI !== 'cli' && !headers_sent()) {
+        http_response_code(500);
+    }
+    echo 'An unexpected error occurred. Please try again later.';
+    exit(1);
+});
+
 // CSRF Protection & Session Hardening
 if (session_status() === PHP_SESSION_NONE) {
     // secure session cookie params
@@ -99,9 +120,23 @@ if (session_status() === PHP_SESSION_NONE) {
         'domain' => '',
         'secure' => $secure,
         'httponly' => true,
-        'samesite' => 'Lax' // use 'Strict' if app doesn't need cross-site cookies
+        'samesite' => 'Strict'
     ]);
     session_start();
+}
+
+// Server-side session idle timeout (1 hour)
+if (isset($_SESSION['user_id'])) {
+    if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > 3600) {
+        session_unset();
+        session_destroy();
+        if (PHP_SAPI !== 'cli' && !headers_sent()) {
+            header('Location: index.php?error=' . urlencode('Session expired'));
+            exit();
+        }
+    } else {
+        $_SESSION['last_activity'] = time();
+    }
 }
 
 

@@ -87,7 +87,7 @@
 
 
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     document.addEventListener('keydown', function (e) {
         if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
             e.preventDefault();
@@ -183,7 +183,7 @@
 </script>
 
 <!-- Service Worker Registration -->
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('sw.js');
@@ -192,7 +192,7 @@
 </script>
 
 <!-- Bootstrap JS Bundle -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>"></script>
 </body>
 
 </html>

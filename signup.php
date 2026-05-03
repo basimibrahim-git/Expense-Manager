@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
@@ -26,9 +26,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
         $family_name = trim($_POST['family_name']);
         $password = $_POST['password'];
+
+        // Server-side password strength validation
+        if (!empty($password)) {
+            if (strlen($password) < 8) {
+                $error = "Password must be at least 8 characters long.";
+            } elseif (!preg_match('/[A-Za-z]/', $password)) {
+                $error = "Password must contain at least one letter.";
+            } elseif (!preg_match('/[0-9]/', $password)) {
+                $error = "Password must contain at least one number.";
+            }
+        }
     }
 
-    if (empty($name) || !$email || empty($family_name) || empty($password)) {
+    if (!empty($error)) {
+        // already set above — fall through to display
+    } elseif (empty($name) || !$email || empty($family_name) || empty($password)) {
         $error = "Please fill in all fields correctly.";
     } else {
         try {
@@ -128,10 +141,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <label for="familyInput">Family Name (e.g., The Ibrahim Family)</label>
                     </div>
 
-                    <div class="form-floating mb-4">
-                        <input type="password" class="form-control" id="passwordInput" name="password"
-                            placeholder="Password" required>
-                        <label for="passwordInput">Password</label>
+                    <div class="mb-4">
+                        <div class="form-floating">
+                            <input type="password" class="form-control" id="passwordInput" name="password"
+                                placeholder="Password" required oninput="checkPasswordStrength(this.value)">
+                            <label for="passwordInput">Password</label>
+                        </div>
+                        <div id="pwRequirements" class="mt-1 small" style="display:none;">
+                            <span id="pwLen"  class="me-2">&#10007; 8+ characters</span>
+                            <span id="pwLet"  class="me-2">&#10007; letter</span>
+                            <span id="pwNum"  class="me-2">&#10007; number</span>
+                        </div>
                     </div>
 
                     <button type="submit" class="btn btn-primary w-100 py-3 mb-3">Create Family Account</button>
@@ -147,6 +167,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
+        var _pwLabels = { pwLen: '8+ characters', pwLet: 'letter', pwNum: 'number' };
+
+        function checkPasswordStrength(val) {
+            var box = document.getElementById('pwRequirements');
+            box.style.display = val.length > 0 ? 'block' : 'none';
+
+            var checks = {
+                pwLen: val.length >= 8,
+                pwLet: /[A-Za-z]/.test(val),
+                pwNum: /[0-9]/.test(val)
+            };
+
+            for (var id in checks) {
+                var ok = checks[id];
+                var el = document.getElementById(id);
+                el.style.color = ok ? 'green' : 'red';
+                el.textContent = (ok ? '✓' : '✗') + ' ' + _pwLabels[id];
+            }
+        }
+    </script>
 </body>
 
 </html>

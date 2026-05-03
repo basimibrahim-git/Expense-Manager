@@ -7,7 +7,10 @@
       "Bash(composer update *)",
       "Bash(composer.phar update *)",
       "Bash(php composer.phar update)",
-      "Bash(where composer *)"
+      "Bash(where composer *)",
+      "Bash(grep -r '\\\\$_GET\\\\|\\\\$_POST' '/c/Users/BasimIbrahim/Downloads/ExpenseManager/ExpenseManager/*.php')",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 fix_export.py)"
     ]
   }
 }

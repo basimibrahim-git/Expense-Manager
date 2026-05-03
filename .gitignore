@@ -1,9 +1,53 @@
+# Environment & secrets
 .env
-.claude
+.env.*
+!.env.example
+
+# IDE & editor
 .vscode/
-.agent/
-error.log
+.idea/
+*.swp
+*.swo
+*.swn
 codecheck.bat
-logs/cronlog.txt
-debug_budget.php
+
+# Claude & agent tools
+.claude/
+.agent/
+
+# Logs
+*.log
 .error.log
+logs/
+error.log
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# PHP artifacts
+*.cache
+*.bak
+*.tmp
+*.orig
+
+# Composer (if ever added)
+vendor/
+
+# npm (if ever added)
+node_modules/
+package-lock.json
+
+# Uploads (user files — never commit)
+uploads/
+storage/
+
+# Install marker
+install/.installed
+
+# Debug / scratch files
+debug_budget.php
+debug_*.php
+test_*.php
+scratch_*.php

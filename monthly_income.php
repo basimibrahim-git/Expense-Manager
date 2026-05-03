@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $page_title = "Monthly Income";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 }
 
 // Fetch Records
-$stmt = $pdo->prepare("SELECT * FROM income WHERE tenant_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ? ORDER BY income_date DESC");
+$stmt = $pdo->prepare("SELECT id, source, category, amount, created_at FROM income WHERE tenant_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ? ORDER BY income_date DESC");
 $stmt->execute([$_SESSION['tenant_id'], $month, $year]);
 $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -205,7 +205,7 @@ $total_income = array_sum(array_column($records, 'amount'));
     </div>
 <?php endif; ?>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     const selectAll = document.getElementById('selectAll');
     const checkboxes = document.querySelectorAll('.row-checkbox');
     const bulkActionBar = document.getElementById('bulkActionBar');

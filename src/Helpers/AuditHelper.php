@@ -34,6 +34,13 @@ class AuditHelper
             // Convert context to string if array/object
             $contextStr = is_string($context) ? $context : json_encode($context);
 
+            // Append HTTP request context when running in a web environment
+            if (PHP_SAPI !== 'cli') {
+                $contextStr .= ' | IP:' . ($_SERVER['REMOTE_ADDR'] ?? 'cli')
+                    . ' | ' . ($_SERVER['REQUEST_METHOD'] ?? '')
+                    . ' ' . ($_SERVER['REQUEST_URI'] ?? '');
+            }
+
             $stmt = $pdo->prepare("INSERT INTO audit_logs (tenant_id, user_id, action, context, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)");
             return $stmt->execute([$tenantId, $userId, $action, $contextStr, $ip, $ua]);
         } catch (Exception $e) {
@@ -41,6 +48,27 @@ class AuditHelper
             // but log to error_log if configured.
             error_log("Audit Logging Failed: " . $e->getMessage());
             return false;
+        }
+    }
+
+    /**
+     * Deletes audit log entries older than $days days.
+     *
+     * @param PDO $pdo
+     * @param int $days Retention window in days (default 90)
+     * @return int Number of rows deleted
+     */
+    public static function purgeOldLogs(PDO $pdo, int $days = 90): int
+    {
+        try {
+            $stmt = $pdo->prepare(
+                "DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL ? DAY"
+            );
+            $stmt->execute([$days]);
+            return $stmt->rowCount();
+        } catch (Exception $e) {
+            error_log("AuditHelper::purgeOldLogs failed: " . $e->getMessage());
+            return 0;
         }
     }
 }

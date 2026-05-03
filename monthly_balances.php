@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $page_title = "Monthly Balances";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -248,7 +248,7 @@ $difference = $actual_balance - $expected_balance;
     </form>
 <?php endif; ?>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     document.addEventListener('DOMContentLoaded', function () {
         const selectAll = document.getElementById('selectAll');
         const rowCheckboxes = document.querySelectorAll('.row-checkbox');

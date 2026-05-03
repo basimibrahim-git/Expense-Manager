@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // manage_budgets.php
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -27,6 +27,8 @@ $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?: date('Y');
 $copy_month = filter_input(INPUT_GET, 'copy_month', FILTER_VALIDATE_INT);
 $copy_year  = filter_input(INPUT_GET, 'copy_year',  FILTER_VALIDATE_INT);
 
+$auto_carried = false;
+
 if ($copy_month && $copy_year) {
     $stmt = $pdo->prepare("SELECT category, amount, currency FROM budgets WHERE tenant_id = ? AND month = ? AND year = ?");
     $stmt->execute([$tenant_id, $copy_month, $copy_year]);
@@ -35,6 +37,19 @@ if ($copy_month && $copy_year) {
     $stmt = $pdo->prepare("SELECT category, amount, currency FROM budgets WHERE tenant_id = ? AND month = ? AND year = ?");
     $stmt->execute([$tenant_id, $month, $year]);
     $existing_budgets = $stmt->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
+
+    // Auto-carry forward: if no budgets set for this month, pre-fill from previous month
+    if (empty($existing_budgets)) {
+        $prev_month = $month == 1 ? 12 : $month - 1;
+        $prev_year  = $month == 1 ? $year - 1 : $year;
+        $stmt = $pdo->prepare("SELECT category, amount, currency FROM budgets WHERE tenant_id = ? AND month = ? AND year = ?");
+        $stmt->execute([$tenant_id, $prev_month, $prev_year]);
+        $carried = $stmt->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
+        if (!empty($carried)) {
+            $existing_budgets = $carried;
+            $auto_carried = true;
+        }
+    }
 }
 
 // predefined categories for easy setup
@@ -85,6 +100,12 @@ Layout::sidebar();
     <div class="row justify-content-center">
         <div class="col-lg-8">
             <div class="glass-card shadow-sm border-0 rounded-4 overflow-hidden">
+                <?php if ($auto_carried): ?>
+                    <div class="alert alert-info mb-0 rounded-0 border-0 py-2 px-4 small">
+                        <i class="fa-solid fa-circle-info me-1"></i>
+                        No budgets set for <?php echo date('F Y', mktime(0, 0, 0, $month, 1, $year)); ?> — pre-filled from last month. Save to confirm.
+                    </div>
+                <?php endif; ?>
                 <div class="p-4 bg-light border-bottom d-flex justify-content-between align-items-center">
                     <h5 class="mb-0 fw-bold">Budget Configuration:
                         <?php echo date('F Y', mktime(0, 0, 0, $month, 1, $year)); ?>
@@ -182,7 +203,7 @@ Layout::sidebar();
     }
 </style>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     function copyLastMonth() {
         if (confirm('This will pre-fill values from the previous month. The form will still save to <?php echo date('F Y', mktime(0,0,0,$month,1,$year)); ?>. Continue?')) {
             const copyMonth = <?php echo $month == 1 ? 12 : $month - 1; ?>;

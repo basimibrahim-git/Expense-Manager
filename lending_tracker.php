@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $page_title = "Lending Tracker";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -425,7 +425,7 @@ $summary = $stmt->fetch();
     <div id="bulkActionIds"></div>
 </form>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     document.addEventListener('DOMContentLoaded', function () {
         const rowCheckboxes = document.querySelectorAll('.row-checkbox');
         const bulkBar = document.getElementById('bulkActionBar');

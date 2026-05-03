@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $page_title = "My Reminders";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -35,16 +35,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $recur_type = $_POST['recurrence_type'] ?? 'none';
 
         if ($id) {
-            $stmt = $pdo->prepare("UPDATE reminders SET title=?, alert_date=?, recurrence_type=? WHERE id=? AND tenant_id=?");
-            $stmt->execute([$title, $date, $recur_type, $id, $_SESSION['tenant_id']]);
+            $stmt = $pdo->prepare("UPDATE reminders SET title=?, alert_date=?, recurrence_type=? WHERE id=? AND tenant_id=? AND user_id=?");
+            $stmt->execute([$title, $date, $recur_type, $id, $_SESSION['tenant_id'], $_SESSION['user_id']]);
         }
         header("Location: reminders.php?success=Reminder Updated");
         exit;
     } elseif ($_POST['action'] == 'delete_reminder') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
         if ($id) {
-            $stmt = $pdo->prepare("DELETE FROM reminders WHERE id = ? AND tenant_id = ?");
-            $stmt->execute([$id, $_SESSION['tenant_id']]);
+            $stmt = $pdo->prepare("DELETE FROM reminders WHERE id = ? AND tenant_id = ? AND user_id = ?");
+            $stmt->execute([$id, $_SESSION['tenant_id'], $_SESSION['user_id']]);
         }
         header("Location: reminders.php?deleted=1");
         exit;
@@ -55,7 +55,7 @@ Layout::header();
 Layout::sidebar();
 
 // Fetch Reminders
-$stmt = $pdo->prepare("SELECT * FROM reminders WHERE tenant_id = ? ORDER BY alert_date ASC");
+$stmt = $pdo->prepare("SELECT id, title, alert_date, recurrence_type, color FROM reminders WHERE tenant_id = ? ORDER BY alert_date ASC");
 $stmt->execute([$_SESSION['tenant_id']]);
 $reminders = $stmt->fetchAll();
 ?>
@@ -85,11 +85,16 @@ $reminders = $stmt->fetchAll();
     </div>
 <?php else: ?>
     <div class="row g-4">
-        <?php foreach ($reminders as $rem):
-            $target = strtotime($rem['alert_date']);
-            $now = time();
-            $diff = $target - $now;
-            $days_left = floor($diff / (60 * 60 * 24));
+        <?php
+        $uae_tz = new DateTimeZone('Asia/Dubai');
+        $utc_tz = new DateTimeZone('UTC');
+        foreach ($reminders as $rem):
+            // Parse alert_date as UAE time → get UTC unix timestamp
+            $target_dt = new DateTimeImmutable($rem['alert_date'], $uae_tz);
+            $target     = $target_dt->getTimestamp();
+            $now        = (new DateTimeImmutable('now', $utc_tz))->getTimestamp();
+            $diff       = $target - $now;
+            $days_left  = floor($diff / (60 * 60 * 24));
 
             // Urgency Colors
             $bg_gradient = "linear-gradient(45deg, #0dcaf0, #0aa2c0)"; // Default Info/Blue
@@ -125,14 +130,14 @@ $reminders = $stmt->fetchAll();
                                     <?php echo htmlspecialchars($rem['title']); ?>
                                 </h5>
                                 <small class="opacity-75">
-                                    <?php echo htmlspecialchars(date('d M Y, h:i A', $target)); ?>
+                                    <?php echo htmlspecialchars($target_dt->setTimezone($uae_tz)->format('d M Y, h:i A')); ?>
                                 </small>
                             </div>
                             <div class="d-flex gap-2">
                                 <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
                                     <button type="button"
                                         class="btn btn-sm btn-link <?php echo htmlspecialchars($text_color); ?> p-0 opacity-50 hover-100"
-                                        onclick='editReminder(<?php echo intval($rem['id']); ?>, <?php echo json_encode($rem['title']); ?>, "<?php echo htmlspecialchars(date('Y-m-d', $target)); ?>", "<?php echo htmlspecialchars(date('H:i', $target)); ?>", "<?php echo htmlspecialchars($rem['recurrence_type']); ?>")'>
+                                        onclick="editReminder(<?php echo intval($rem['id']); ?>, <?php echo json_encode($rem['title']); ?>, <?php echo json_encode($target_dt->setTimezone($uae_tz)->format('Y-m-d')); ?>, <?php echo json_encode($target_dt->setTimezone($uae_tz)->format('H:i')); ?>, <?php echo json_encode($rem['recurrence_type']); ?>)">
                                         <i class="fa-solid fa-pen"></i>
                                     </button>
                                     <form method="POST" onsubmit="return confirm('Delete this reminder?');">
@@ -239,12 +244,12 @@ $reminders = $stmt->fetchAll();
     </div>
 </div>
 
-<script>
-    // Live Countdown Logic
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
+    // Live Countdown Logic — target is UTC ms (parsed as Asia/Dubai on server), Date.now() is always UTC
     setInterval(function () {
         document.querySelectorAll('.countdown-timer').forEach(function (el) {
             const target = parseInt(el.getAttribute('data-target'));
-            const now = new Date().getTime();
+            const now = Date.now();
             const diff = target - now;
 
             if (diff > 0) {

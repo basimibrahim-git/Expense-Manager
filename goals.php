@@ -31,25 +31,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $name, $target, $saved, $date, $category]);
 
         AuditHelper::log($pdo, 'add_goal', "Created Goal: $name (Target: $target AED)");
-        echo "<script>window.location.href='goals.php?success=Goal created';</script>";
+        header("Location: goals.php?success=Goal+created");
         exit;
     } elseif ($_POST['action'] == 'add_funds') {
         $id = $_POST['goal_id'];
         $amount = $_POST['amount'];
 
-        $stmt = $pdo->prepare("UPDATE sinking_funds SET current_saved = current_saved + ? WHERE id = ? AND tenant_id = ?");
-        $stmt->execute([$amount, $id, $_SESSION['tenant_id']]);
+        $stmt = $pdo->prepare("UPDATE sinking_funds SET current_saved = current_saved + ? WHERE id = ? AND tenant_id = ? AND user_id = ?");
+        $stmt->execute([$amount, $id, $_SESSION['tenant_id'], $_SESSION['user_id']]);
 
         AuditHelper::log($pdo, 'add_goal_funds', "Added $amount AED to Goal ID: $id");
-        echo "<script>window.location.href='goals.php?success=Funds added';</script>";
+        header("Location: goals.php?success=Funds+added");
         exit;
     } elseif ($_POST['action'] == 'delete_goal') {
         $id = $_POST['goal_id'];
-        $stmt = $pdo->prepare("DELETE FROM sinking_funds WHERE id = ? AND tenant_id = ?");
-        $stmt->execute([$id, $_SESSION['tenant_id']]);
+        $stmt = $pdo->prepare("DELETE FROM sinking_funds WHERE id = ? AND tenant_id = ? AND user_id = ?");
+        $stmt->execute([$id, $_SESSION['tenant_id'], $_SESSION['user_id']]);
 
         AuditHelper::log($pdo, 'delete_goal', "Deleted Goal ID: $id");
-        echo "<script>window.location.href='goals.php?success=Goal deleted';</script>";
+        header("Location: goals.php?success=Goal+deleted");
         exit;
     }
 }

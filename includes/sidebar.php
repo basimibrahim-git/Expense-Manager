@@ -1,4 +1,4 @@
-<!-- Sidebar -->
+﻿<!-- Sidebar -->
 <nav class="sidebar">
     <div class="brand-logo">
         <i class="fa-solid fa-wallet"></i> ExpenseMngr
@@ -37,6 +37,10 @@
         <a href="<?php echo BASE_URL; ?>goals.php"
             class="nav-link <?php echo $current_page == 'goals.php' ? 'active' : ''; ?>">
             <i class="fa-solid fa-bullseye"></i> Goals
+        </a>
+        <a href="<?php echo BASE_URL; ?>net_worth.php"
+            class="nav-link <?php echo $current_page == 'net_worth.php' ? 'active' : ''; ?>">
+            <i class="fa-solid fa-scale-balanced"></i> Net Worth
         </a>
         <a href="<?php echo BASE_URL; ?>calendar.php"
             class="nav-link <?php echo $current_page == 'calendar.php' ? 'active' : ''; ?>">
@@ -118,6 +122,13 @@
             </div>
         </div>
 
+        <!-- Activity Log -->
+        <a href="<?php echo BASE_URL; ?>audit_log.php"
+            class="nav-link <?php echo $current_page == 'audit_log.php' ? 'active' : ''; ?>">
+            <i class="fa-solid fa-clipboard-list"></i>
+            <?php echo in_array($_SESSION['role'] ?? '', ['admin', 'family_admin', 'root_admin']) ? 'Activity Log' : 'My Activity'; ?>
+        </a>
+
         <!-- Management Group -->
         <?php
         $mgmt_pages = ['family_management.php', 'admin/index.php', 'admin/manage_tenants.php', 'security_audit.php'];
@@ -189,10 +200,12 @@
             </button>
         </div>
 
-        <a href="<?php echo BASE_URL; ?>logout.php"
-            class="btn btn-outline-danger w-100 border-0 text-start bg-light hover-shadow mt-2">
-            <i class="fa-solid fa-right-from-bracket me-2"></i> Logout
-        </a>
+        <form method="POST" action="<?php echo BASE_URL; ?>logout.php" class="mt-2">
+            <input type="hidden" name="csrf_token" value="<?php echo App\Helpers\SecurityHelper::generateCsrfToken(); ?>">
+            <button type="submit" class="btn btn-outline-danger w-100 border-0 text-start bg-light hover-shadow">
+                <i class="fa-solid fa-right-from-bracket me-2"></i> Logout
+            </button>
+        </form>
     </div>
 </nav>
 
@@ -213,7 +226,7 @@
         </div>
     </div>
 
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         function updateLiveClock() {
             const now = new Date();
             const options = {
@@ -231,7 +244,7 @@
         updateLiveClock();
     </script>
 
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         function toggleSidebar() {
             document.querySelector('.sidebar').classList.toggle('show');
             document.querySelector('.sidebar-overlay').classList.toggle('show');

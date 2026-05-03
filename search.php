@@ -17,7 +17,7 @@ $min_amount = filter_input(INPUT_GET, 'min', FILTER_VALIDATE_FLOAT);
 $max_amount = filter_input(INPUT_GET, 'max', FILTER_VALIDATE_FLOAT);
 
 // Build Query
-$query = "SELECT * FROM expenses WHERE tenant_id = :tenant_id";
+$query = "SELECT id, expense_date, description, payment_method, category, amount FROM expenses WHERE tenant_id = :tenant_id";
 $params = ['tenant_id' => $_SESSION['tenant_id']];
 
 if ($keyword) {

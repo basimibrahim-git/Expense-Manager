@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $page_title = "Add Income";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -116,7 +116,7 @@ $user_banks = $banks_stmt->fetchAll();
                     </div>
                 </div>
 
-                <script>
+                <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
                     function toggleRecurrence() {
                         const isChecked = document.getElementById('isRecurring').checked;
                         document.getElementById('recurrenceDiv').style.display = isChecked ? 'block' : 'none';
@@ -146,7 +146,7 @@ $user_banks = $banks_stmt->fetchAll();
                         </div>
                     </div>
 
-                    <script>
+                    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
                         function toggleBankSelect() {
                             const isChecked = document.getElementById('addToBalance').checked;
                             document.getElementById('bankSelectDiv').style.display = isChecked ? 'block' : 'none';

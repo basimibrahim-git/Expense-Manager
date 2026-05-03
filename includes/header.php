@@ -1,12 +1,14 @@
-<?php
-$current_page = basename($_SERVER['PHP_SELF']);
+﻿<?php
+$current_page  = basename($_SERVER['PHP_SELF']);
+$asset_version = $_ENV['APP_VERSION'] ?? '1.0.0';
 
-// Security Headers - Prevent clickjacking with strictest X-Frame-Options
-$xFrameOptionsValue = 'DENY';
-header('X-Frame-Options: ' . $xFrameOptionsValue);
+$csp_nonce = base64_encode(random_bytes(16));
+$GLOBALS['csp_nonce'] = $csp_nonce;
+
+header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
 header('X-XSS-Protection: 1; mode=block');
-header("Content-Security-Policy: frame-ancestors 'none';");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' cdn.jsdelivr.net 'nonce-{$csp_nonce}'; style-src 'self' cdn.jsdelivr.net 'unsafe-inline'; font-src 'self' cdn.jsdelivr.net; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self';");
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Permissions-Policy: geolocation=(), camera=(), microphone=()');
 ?>
@@ -26,14 +28,12 @@ header('Permissions-Policy: geolocation=(), camera=(), microphone=()');
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
     <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
-    <!-- Custom CSS -->
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="assets/css/style.css?v=<?php echo time(); ?>">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" integrity="sha384-iw3OoTErCYJJB9mCa8LNS2hbsQ7M3C0EpIsO/H5+EGAkPGc6rk+V8i04oW/K5xq0" crossorigin="anonymous">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?php echo htmlspecialchars($asset_version); ?>">
 
-    <script>
+    <script nonce="<?php echo $csp_nonce; ?>">
         // Dynamic Theme Logic
         function applyTheme() {
             const savedTheme = localStorage.getItem('userTheme') || 'theme-afternoon';

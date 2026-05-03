@@ -23,9 +23,21 @@ try {
     // Recent Tenants
     $recentTenants = $pdo->query("SELECT * FROM tenants ORDER BY created_at DESC LIMIT 5")->fetchAll();
 
+    // Recent Activity (all tenants)
+    $recentActivity = $pdo->query("
+        SELECT al.action, al.context, al.created_at,
+               u.name  AS user_name,
+               t.family_name AS tenant_name
+        FROM audit_logs al
+        LEFT JOIN users   u ON al.user_id   = u.id
+        LEFT JOIN tenants t ON al.tenant_id = t.id
+        ORDER BY al.created_at DESC
+        LIMIT 20
+    ")->fetchAll();
+
 } catch (PDOException $e) {
     $error = "System Error: Unable to fetch system metrics.";
-
+    $recentActivity = [];
 }
 
 // Custom header for admin with adjusted paths
@@ -148,7 +160,77 @@ try {
                 </div>
             </div>
         </div>
-    </div>
+
+        <!-- Recent Activity -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="glass-panel p-4 shadow-sm rounded-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold mb-0">
+                            <i class="fa-solid fa-clipboard-list me-2 text-primary"></i>Recent Activity
+                        </h5>
+                        <a href="<?php echo BASE_URL; ?>audit_log.php"
+                           class="btn btn-sm btn-outline-primary rounded-pill">View Full Log</a>
+                    </div>
+                    <?php if (empty($recentActivity)): ?>
+                        <p class="text-center text-muted py-4 mb-0">No activity recorded yet.</p>
+                    <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>Date / Time</th>
+                                    <th>Family</th>
+                                    <th>User</th>
+                                    <th>Action</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($recentActivity as $entry): ?>
+                                    <?php
+                                        $action_label = ucfirst(str_replace('_', ' ', $entry['action']));
+                                        $badge_class  = 'bg-secondary';
+                                        if (str_contains($entry['action'], 'delete'))                                       $badge_class = 'bg-danger';
+                                        elseif (str_contains($entry['action'], 'add') || str_contains($entry['action'], 'create')) $badge_class = 'bg-success';
+                                        elseif (str_contains($entry['action'], 'login'))                                    $badge_class = 'bg-primary';
+                                        elseif (str_contains($entry['action'], 'update') || str_contains($entry['action'], 'edit')) $badge_class = 'bg-warning text-dark';
+                                        $context_short = mb_strlen($entry['context'] ?? '') > 80
+                                            ? mb_substr($entry['context'], 0, 80) . '…'
+                                            : ($entry['context'] ?? '—');
+                                    ?>
+                                    <tr>
+                                        <td class="text-nowrap">
+                                            <small class="text-muted">
+                                                <?php echo htmlspecialchars(date('d M Y, H:i', strtotime($entry['created_at']))); ?>
+                                            </small>
+                                        </td>
+                                        <td>
+                                            <small class="fw-bold">
+                                                <?php echo htmlspecialchars($entry['tenant_name'] ?? '—'); ?>
+                                            </small>
+                                        </td>
+                                        <td>
+                                            <small><?php echo htmlspecialchars($entry['user_name'] ?? 'Unknown'); ?></small>
+                                        </td>
+                                        <td>
+                                            <span class="badge <?php echo $badge_class; ?> rounded-pill px-2">
+                                                <?php echo htmlspecialchars($action_label); ?>
+                                            </span>
+                                        </td>
+                                        <td class="text-muted small">
+                                            <?php echo htmlspecialchars($context_short); ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div><!-- /.container-fluid -->
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <?php Layout::footer(); ?>

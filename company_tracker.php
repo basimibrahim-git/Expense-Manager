@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $page_title = "Incentive Tracker";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -136,7 +136,7 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
         </form>
     </div>
 
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         function showAddYear() {
             document.getElementById('addYearDiv').classList.toggle('d-none');
         }
@@ -305,7 +305,7 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
         </div>
     </div>
 
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         // Pass PHP data to JS
         const monthlyData = <?php echo json_encode($monthly_data); ?>;
         const csrfToken = '<?php echo SecurityHelper::generateCsrfToken(); ?>';

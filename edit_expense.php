@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $page_title = "Edit Expense";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -18,7 +18,7 @@ if (!$expense_id) {
 }
 
 // Fetch expense
-$stmt = $pdo->prepare("SELECT * FROM expenses WHERE id = ? AND tenant_id = ?");
+$stmt = $pdo->prepare("SELECT id, expense_date, currency, original_amount, amount, description, category, tags, payment_method, card_id, cashback_earned, is_fixed, is_subscription FROM expenses WHERE id = ? AND tenant_id = ?");
 $stmt->execute([$expense_id, $_SESSION['tenant_id']]);
 $expense = $stmt->fetch();
 
@@ -183,7 +183,7 @@ $categories = ['Grocery', 'Food', 'Transport', 'Shopping', 'Utilities', 'Travel'
     </div>
 </div>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
 function toggleCardSelect() {
     const method = document.getElementById('paymentMethod').value;
     document.getElementById('cardSelectDiv').style.display = method === 'Card' ? 'block' : 'none';

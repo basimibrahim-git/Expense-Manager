@@ -30,7 +30,7 @@ class SecurityHelper
      * @param mixed $token
      * @return bool
      */
-    public static function verifyCsrfToken($token): bool
+    public static function verifyCsrfToken($token): void
     {
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
@@ -38,9 +38,10 @@ class SecurityHelper
 
         if (!isset($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], (string) $token)) {
             error_log("CSRF Mismatch for session id: " . session_id() . " (token not logged)");
-            return false;
+            http_response_code(403);
+            header("Location: dashboard.php?error=Invalid+request+token.+Please+try+again.");
+            exit();
         }
-        return true;
     }
 
     /**

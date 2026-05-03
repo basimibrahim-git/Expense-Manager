@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $page_title = "Advanced Reports";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
@@ -205,7 +205,7 @@ foreach ($heatmap_month_dow as $row) {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     const yoyCtx = document.getElementById('yoyChart').getContext('2d');
     new Chart(yoyCtx, {
         type: 'bar',

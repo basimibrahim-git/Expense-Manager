@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin/manage_tenants.php
 $current_page = 'admin/manage_tenants.php';
 require_once __DIR__ . '/../autoload.php';
@@ -20,11 +20,7 @@ $success = "";
 
 // Handle Actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    if (!SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '')) {
-        $_SESSION['error_msg'] = "Invalid security token. Please try again.";
-        header("Location: manage_tenants.php");
-        exit();
-    }
+    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     if ($_POST['action'] === 'rename_tenant') {
         $tenantId = intval($_POST['tenant_id']);
@@ -319,8 +315,8 @@ try {
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>"></script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         function openEditModal(id, name) {
             document.getElementById('editTenantId').value = id;
             document.getElementById('editFamilyName').value = name;
