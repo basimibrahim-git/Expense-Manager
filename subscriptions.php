@@ -4,6 +4,7 @@ require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
+use App\Helpers\Html;
 
 Bootstrap::init();
 Layout::header();
@@ -164,7 +165,7 @@ $yearly_burn = $monthly_burn * 12;
                                                 <input type="hidden" name="csrf_token"
                                                     value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                                                 <input type="hidden" name="action" value="log_subscription">
-                                                <input type="hidden" name="template_id" value="<?php echo $sub['id']; ?>">
+                                                <input type="hidden" name="template_id" value="<?php echo (int) $sub['id']; ?>">
                                                 <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 fw-bold">
                                                     Log & Pay
                                                 </button>
@@ -172,11 +173,11 @@ $yearly_burn = $monthly_burn * 12;
                                         <?php endif; ?>
 
                                         <form action="expense_actions.php" method="POST"
-                                            onsubmit="return confirmSubmit(this, 'Stop tracking <?php echo addslashes(htmlspecialchars($sub['description'])); ?>?');">
+                                            data-confirm="<?php echo Html::e('Stop tracking ' . $sub['description'] . '?'); ?>" data-confirm-btn="Stop Tracking">
                                             <input type="hidden" name="csrf_token"
                                                 value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                                             <input type="hidden" name="action" value="delete_auto_expense">
-                                            <input type="hidden" name="id" value="<?php echo $sub['id']; ?>">
+                                            <input type="hidden" name="id" value="<?php echo (int) $sub['id']; ?>">
                                             <button type="submit" class="btn btn-sm text-muted border-0 p-0" title="Stop Tracking">
                                                 <i class="fa-solid fa-ban"></i>
                                             </button>

@@ -1,0 +1,14 @@
+# Expense Manager — never serve files that are not pages or public assets.
+# (Works whether the app is served from a domain root or from a sub-folder.)
+
+# Database dumps, logs, docs, lock/config/backup files and leftover debug scripts
+<FilesMatch "\.(sql|log|md|lock|bak|orig|tmp|sh|bat|ini|example)$|^(\.env.*|\.gitignore|composer\.json|(debug|test|scratch)_.*\.php)$">
+    Require all denied
+</FilesMatch>
+
+# Internal folders: PHP classes, templates, migrations, logs, tests, git metadata.
+# (install/ stays reachable for first-time setup; it refuses to run once .env exists.)
+# (cron/reminder_emails.php stays reachable: its HTTP trigger is protected by CRON_SECRET;
+#  the job files it runs live in cron/jobs/ and are denied.)
+RedirectMatch 403 "(^|/)(src|includes|migrations|logs|tests|\.git|\.github)(/|$)"
+RedirectMatch 403 "(^|/)cron/jobs(/|$)"

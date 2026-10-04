@@ -1,9 +1,11 @@
-﻿<?php
+<?php
 $page_title = "Add Card";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
+use App\Helpers\Html;
+use App\Helpers\Categories;
 
 Bootstrap::init();
 
@@ -16,280 +18,203 @@ $banks_stmt->execute([$_SESSION['tenant_id']]);
 $all_banks = $banks_stmt->fetchAll();
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="h3 fw-bold mb-0">Add New Card</h1>
-    <a href="my_cards.php" class="btn btn-light">
-        <i class="fa-solid fa-arrow-left me-2"></i> Back
-    </a>
-</div>
-
-<div class="row">
-    <div class="col-md-8 col-lg-6">
-        <div class="glass-panel p-4">
-            <form action="card_actions.php" method="POST" id="addCardForm">
-                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
-                <input type="hidden" name="action" value="add_card">
-                <input type="hidden" name="card_image" id="cardImageInput">
-
-                <h5 class="mb-3 text-muted">Card Source</h5>
-
-                <!-- Moved Bank URL to Top -->
-                <div class="mb-4">
-                    <label class="form-label" for="bankUrlInput">Bank Login URL <span
-                            class="badge bg-info text-dark rounded-pill ms-2">Auto-Detect</span></label>
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fa-solid fa-link"></i></span>
-                        <input type="url" name="bank_url" id="bankUrlInput" class="form-control"
-                            placeholder="Paste bank URL here (e.g., https://online.adcb.com...)" required>
-                        <button class="btn btn-outline-primary" type="button" onclick="detectBankDetails()">
-                            <i class="fa-solid fa-magic-wand-sparkles"></i> Auto-Fill
-                        </button>
-                    </div>
-                    <div class="form-text">Paste the URL to automatically detect the bank.</div>
-                </div>
-
-                <hr class="my-4 text-muted">
-
-                <h5 class="mb-3 text-muted">Card Details</h5>
-
-                <div class="mb-3">
-                    <label class="form-label" for="bankSelect">Associated Bank <span
-                            class="text-secondary small">(Optional)</span></label>
-                    <select name="bank_id" id="bankSelect" class="form-select">
-                        <option value="">-- No Bank Linked --</option>
-                        <?php foreach ($all_banks as $b): ?>
-                            <option value="<?php echo $b['id']; ?>">
-                                <?php echo htmlspecialchars($b['bank_name']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <div class="form-text x-small">Link this card to a managed bank account</div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label" for="bankNameInput">Bank Name <span class="text-danger">*</span></label>
-                    <input type="text" name="bank_name" id="bankNameInput" class="form-control"
-                        placeholder="e.g. ADCB, ENBD, FAB" required>
-                    <div class="form-text x-small">Display name for the card</div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label" for="cardNameInput">Card Name / Nickname <span
-                            class="text-danger">*</span></label>
-                    <input type="text" name="card_name" id="cardNameInput" class="form-control"
-                        placeholder="e.g. 365 Cashback, Traveler" required>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label" for="cardTypeInput">Card Type <span
-                                class="text-danger">*</span></label>
-                        <select name="card_type" id="cardTypeInput" class="form-select" required>
-                            <option value="Credit">Credit Card</option>
-                            <option value="Debit">Debit Card</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label" for="networkInput">Network <span class="text-danger">*</span></label>
-                        <select name="network" id="networkInput" class="form-select" required>
-                            <option value="Visa">Visa</option>
-                            <option value="Mastercard">Mastercard</option>
-                            <option value="Amex">American Express</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label" for="feeTypeInput">Fee Type</label>
-                        <select name="fee_type" id="feeTypeInput" class="form-select">
-                            <option value="LTF">LTF (Lifetime Free)</option>
-                            <option value="Paid">Paid</option>
-                            <option value="Spend Based">Spend Based</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label" for="tierInput">Category / Tier</label>
-                        <input type="text" name="tier" id="tierInput" class="form-control" placeholder="e.g. Platinum">
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label" for="limitInput">Credit / Monthly Limit (AED)</label>
-                        <input type="number" name="limit_amount" id="limitInput" class="form-control" placeholder="0.00"
-                            step="0.01">
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-6 mb-3">
-                        <label class="form-label" for="firstFourInput">First 4 Digits</label>
-                        <input type="text" name="first_four" id="firstFourInput" class="form-control" placeholder="1234"
-                            maxlength="4">
-                    </div>
-                    <div class="col-6 mb-3">
-                        <label class="form-label" for="lastFourInput">Last 4 Digits</label>
-                        <input type="text" name="last_four" id="lastFourInput" class="form-control" placeholder="5678"
-                            maxlength="4">
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label" for="billDayInput">Bill Generation Day</label>
-                        <input type="number" name="bill_day" id="billDayInput" class="form-control"
-                            placeholder="e.g. 15" min="1" max="31">
-                        <div class="form-text x-small">Day of month bill is issued</div>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label" for="statementDayInput">Statement Closing Day</label>
-                        <input type="number" name="statement_day" id="statementDayInput" class="form-control"
-                            placeholder="e.g. 14" min="1" max="31">
-                        <div class="form-text x-small">Day of month statement closes</div>
-                    </div>
-                </div>
-
-                <!-- Cashback Categories -->
-                <div class="mb-4">
-                    <label class="form-label fw-bold" for="cbGrocery"><i
-                            class="fa-solid fa-percent text-primary me-2"></i> Category
-                        Cashback %</label>
-                    <div class="bg-light p-3 rounded shadow-sm border">
-                        <div class="row g-2 mb-2">
-                            <div class="col-6 col-md-3">
-                                <label class="x-small text-muted" for="cbGrocery">Grocery</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Grocery" id="cbGrocery" class="form-control"
-                                        step="0.1" value="0">
-                                    <span class="input-group-text">%</span>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <label class="x-small text-muted" for="cbFood">Dining/Food</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Food" id="cbFood" class="form-control" step="0.1"
-                                        value="0">
-                                    <span class="input-group-text">%</span>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <label class="x-small text-muted" for="cbTransport">Transport</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Transport" id="cbTransport" class="form-control"
-                                        step="0.1" value="0">
-                                    <span class="input-group-text">%</span>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <label class="x-small text-muted" for="cbShopping">Shopping</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Shopping" id="cbShopping" class="form-control"
-                                        step="0.1" value="0">
-                                    <span class="input-group-text">%</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row g-2 mb-2">
-                            <div class="col-6 col-md-3">
-                                <label class="x-small text-muted" for="cbUtilities">Utilities</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Utilities" id="cbUtilities" class="form-control"
-                                        step="0.1" value="0">
-                                    <span class="input-group-text">%</span>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <label class="x-small text-muted" for="cbTravel">Travel</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Travel" id="cbTravel" class="form-control" step="0.1"
-                                        value="0">
-                                    <span class="input-group-text">%</span>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <label class="x-small text-muted" for="cbMedical">Medical</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Medical" id="cbMedical" class="form-control"
-                                        step="0.1" value="0">
-                                    <span class="input-group-text">%</span>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <label class="x-small text-muted" for="cbEntertainment">Entmt.</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Entertainment" id="cbEntertainment"
-                                        class="form-control" step="0.1" value="0">
-                                    <span class="input-group-text">%</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row g-2">
-                            <div class="col-6 col-md-3">
-                                <label class="x-small text-muted" for="cbEducation">Education</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Education" id="cbEducation" class="form-control"
-                                        step="0.1" value="0">
-                                    <span class="input-group-text">%</span>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <label class="x-small text-muted" for="cbOther">Other/Gen.</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" name="cb_Other" id="cbOther" class="form-control" step="0.1"
-                                        value="0">
-                                    <span class="input-group-text">%</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-text x-small">Used for auto-calculating rewards in expenses.</div>
-                </div>
-
-                <!-- New Features Field -->
-                <div class="mb-3">
-                    <label class="form-label" for="featuresInput">
-                        Card Offers & Features
-                        <span class="badge bg-success text-white rounded-pill ms-2" id="smartBadge"
-                            style="display:none;">Smart-Filled</span>
-                        <span class="badge bg-primary text-white rounded-pill ms-2" id="liveBadge"
-                            style="display:none;"><i class="fa-solid fa-globe me-1"></i> Live Data</span>
-                    </label>
-                    <textarea name="features" id="featuresInput" class="form-control" rows="4"
-                        placeholder="Offers and features will appear here automatically when detected..."></textarea>
-                    <div class="form-text">We verify these details against our database or the bank's website.</div>
-                </div>
-
-                <div class="d-grid mt-4">
-                    <button type="submit" class="btn btn-primary py-3 fw-bold">
-                        <i class="fa-solid fa-check-circle me-2"></i> Confirm & Add Card
-                    </button>
-                </div>
-            </form>
+<div class="container-fluid py-4">
+    <!-- Back and Header -->
+    <div class="mb-4 d-flex justify-content-between align-items-center">
+        <div>
+            <a href="my_cards.php" class="btn btn-sm btn-light rounded-pill px-3 mb-2 hover-lift">
+                <i class="fa-solid fa-arrow-left me-1"></i> Back to Cards
+            </a>
+            <h1 class="h3 fw-bold mb-0 text-dark">Add New Card</h1>
         </div>
     </div>
 
-    <!-- Preview Section -->
-    <div class="col-md-4 d-none d-md-block">
-        <div class="card border-0 shadow-sm text-white sticky-top"
-            style="top: 20px; background: linear-gradient(45deg, #1e1e1e, #3a3a3a); border-radius: 16px; min-height: 200px;">
-            <div class="card-body p-4 d-flex flex-column justify-content-between h-100">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <h5 class="mb-0 fw-bold" id="previewBank">Bank Name</h5>
-                        <small class="text-white-50" id="previewName">Card Name</small>
-                    </div>
-                    <i class="fa-solid fa-credit-card fa-2x text-white-50" id="previewIcon"></i>
-                </div>
+    <div class="row g-4">
+        <!-- Form Section -->
+        <div class="col-lg-8 col-md-7">
+            <div class="glass-panel-premium p-4 shadow-sm">
+                <form action="card_actions.php" method="POST" id="addCardForm">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
+                    <input type="hidden" name="action" value="add_card">
+                    <input type="hidden" name="card_image" id="cardImageInput">
 
-                <div class="mt-4">
-                    <div class="h5 mb-1" style="letter-spacing: 2px;" id="previewDigits">**** **** **** ****</div>
-                    <small class="text-white-50" id="previewTier">Tier Name</small>
-                </div>
-
-                <div class="d-flex justify-content-between align-items-end mt-3">
-                    <div>
-                        <small class="text-white-50 d-block">Limit</small>
-                        <span class="fw-bold">AED 0.00</span>
+                    <h5 class="fw-bold mb-3 text-primary"><i class="fa-solid fa-cloud-arrow-down me-2"></i>Bank Integration</h5>
+                    
+                    <!-- Bank URL Auto-Detect -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold text-muted small" for="bankUrlInput">Bank Login URL <span class="text-secondary small">(Optional)</span> <span class="badge bg-info text-dark rounded-pill ms-2">Smart Auto-Detect</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fa-solid fa-link"></i></span>
+                            <input type="url" name="bank_url" id="bankUrlInput" class="form-control"
+                                placeholder="Paste bank URL here (e.g. https://online.adcb.com...)">
+                            <button class="btn btn-primary" type="button" id="detectBankBtn" data-onclick="detectBankDetails">
+                                <i class="fa-solid fa-magic-wand-sparkles"></i> Auto-Fill
+                            </button>
+                        </div>
+                        <div class="form-text text-muted x-small ps-1 mt-1">Paste the URL to automatically populate details and active rewards.</div>
                     </div>
-                    <span class="badge bg-white text-dark" id="previewType">Type</span>
+
+                    <hr class="my-4 text-muted opacity-10">
+
+                    <h5 class="fw-bold mb-3 text-primary"><i class="fa-solid fa-credit-card me-2"></i>Card Details</h5>
+
+                    <div class="row g-3">
+                        <div class="col-md-6 mb-2">
+                            <label class="form-label fw-bold text-muted small" for="bankSelect">Associated Balance Account <span class="text-secondary small">(Optional)</span></label>
+                            <select name="bank_id" id="bankSelect" class="form-select rounded-pill px-3">
+                                <option value="">-- No Bank Linked --</option>
+                                <?php foreach ($all_banks as $b): ?>
+                                    <option value="<?php echo (int) $b['id']; ?>">
+                                        <?php echo Html::e($b['bank_name']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text text-muted x-small ps-1 mt-1">Links to a managed cash account for payments.</div>
+                        </div>
+
+                        <div class="col-md-6 mb-2">
+                            <label class="form-label fw-bold text-muted small" for="bankNameInput">Bank Name <span class="text-danger">*</span></label>
+                            <input type="text" name="bank_name" id="bankNameInput" class="form-control rounded-pill px-3"
+                                placeholder="e.g. ADCB, ENBD, FAB" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3 mt-2">
+                        <label class="form-label fw-bold text-muted small" for="cardNameInput">Card Name / Nickname <span class="text-danger">*</span></label>
+                        <input type="text" name="card_name" id="cardNameInput" class="form-control rounded-pill px-3"
+                            placeholder="e.g. 365 Cashback, Traveler Infinite" required>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-muted small" for="cardTypeInput">Card Type <span class="text-danger">*</span></label>
+                            <select name="card_type" id="cardTypeInput" class="form-select rounded-pill px-3" required>
+                                <option value="Credit">Credit Card</option>
+                                <option value="Debit">Debit Card</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-muted small" for="networkInput">Network <span class="text-danger">*</span></label>
+                            <select name="network" id="networkInput" class="form-select rounded-pill px-3" required>
+                                <option value="Visa">Visa</option>
+                                <option value="Mastercard">Mastercard</option>
+                                <option value="Amex">American Express</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-muted small" for="feeTypeInput">Fee Structure</label>
+                            <select name="fee_type" id="feeTypeInput" class="form-select rounded-pill px-3">
+                                <option value="LTF">LTF (Lifetime Free)</option>
+                                <option value="Paid">Paid</option>
+                                <option value="Spend Based">Spend Based</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-muted small" for="tierInput">Category / Tier</label>
+                            <input type="text" name="tier" id="tierInput" class="form-control rounded-pill px-3" placeholder="e.g. Platinum, Infinite">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-muted small" for="limitInput">Credit Limit (AED)</label>
+                            <input type="number" name="limit_amount" id="limitInput" class="form-control rounded-pill px-3" placeholder="0.00" step="0.01">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-bold text-muted small" for="firstFourInput">First 4 Digits</label>
+                            <input type="text" name="first_four" id="firstFourInput" class="form-control rounded-pill px-3" placeholder="1234" maxlength="4">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-bold text-muted small" for="lastFourInput">Last 4 Digits</label>
+                            <input type="text" name="last_four" id="lastFourInput" class="form-control rounded-pill px-3" placeholder="5678" maxlength="4">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-muted small" for="statementDayInput">Statement Day</label>
+                            <input type="number" name="statement_day" id="statementDayInput" class="form-control rounded-pill px-3" placeholder="e.g. 14" min="1" max="31">
+                            <div class="form-text text-muted x-small ps-1 mt-1">Day of the month the statement closes (31 = last day of the month). Credit cards only.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-muted small" for="billDayInput">Payment Due Day</label>
+                            <input type="number" name="bill_day" id="billDayInput" class="form-control rounded-pill px-3" placeholder="e.g. 8" min="1" max="31">
+                            <div class="form-text text-muted x-small ps-1 mt-1">Day the payment is due. If it is on or before the statement day, it falls in the following month.</div>
+                        </div>
+                    </div>
+
+                    <!-- Cashback Category Matrix -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold text-muted small"><i class="fa-solid fa-percent text-primary me-2"></i>Cashback Category Matrix %</label>
+                        <div class="p-3 bg-light rounded-4 border border-light">
+                            <div class="row g-2">
+                                <?php foreach (Categories::EXPENSE as $cbKey => $cbLabel): ?>
+                                    <div class="col-6 col-md-3">
+                                        <label class="x-small text-muted fw-bold mb-1 text-truncate d-block" for="cb<?php echo Html::e($cbKey); ?>" title="<?php echo Html::e($cbLabel); ?>"><?php echo Html::e($cbLabel); ?></label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="number" name="cb_<?php echo Html::e($cbKey); ?>" id="cb<?php echo Html::e($cbKey); ?>" class="form-control" step="0.1" min="0" max="100" value="0">
+                                            <span class="input-group-text">%</span>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <div class="form-text text-muted x-small ps-1 mt-1">Rates are applied to new card expenses by category ("Other" is used for categories without a rate).</div>
+                    </div>
+
+                    <!-- Offers & Features -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold text-muted small" for="featuresInput">
+                            Card Offers & Features
+                            <span class="badge bg-success text-white rounded-pill ms-2" id="smartBadge" style="display:none;">Smart-Filled</span>
+                            <span class="badge bg-primary text-white rounded-pill ms-2" id="liveBadge" style="display:none;"><i class="fa-solid fa-globe me-1"></i> Live Data</span>
+                        </label>
+                        <textarea name="features" id="featuresInput" class="form-control rounded-4" rows="4"
+                            placeholder="Offers and features will appear here automatically when detected..."></textarea>
+                    </div>
+
+                    <!-- Confirm Button -->
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg fw-bold rounded-pill shadow-sm hover-lift py-2.5">
+                            <i class="fa-solid fa-check-circle me-1"></i> Confirm & Add Card
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Preview Column -->
+        <div class="col-lg-4 col-md-5">
+            <div class="sticky-top" style="top: 24px; z-index: 10;">
+                <h5 class="fw-bold text-muted small mb-3">Live Card Preview</h5>
+                
+                <div class="credit-card-mockup" id="previewCardMockup" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+                    <div class="credit-card-brand" id="previewBrandIcon">
+                        <i class="fa-brands fa-cc-visa"></i>
+                    </div>
+                    <div class="credit-card-chip"></div>
+                    <div class="credit-card-number" id="previewDigits">
+                        **** **** **** ****
+                    </div>
+                    <div class="d-flex justify-content-between align-items-end mt-2">
+                        <div>
+                            <div class="credit-card-holder mb-0" id="previewName" style="font-size: 0.85rem; font-weight: 600; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
+                                Card Name
+                            </div>
+                            <small id="previewBank" style="font-size: 0.65rem; opacity: 0.7; letter-spacing: 0.5px; text-transform: uppercase;">
+                                Bank Name
+                            </small>
+                        </div>
+                        <div class="text-end">
+                            <span style="font-size: 0.6rem; opacity: 0.7; display: block;">TIER</span>
+                            <span class="fw-bold" id="previewTier" style="font-size: 0.75rem; letter-spacing: 0.5px; opacity: 0.9; text-transform: uppercase;">
+                                Standard
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -297,7 +222,6 @@ $all_banks = $banks_stmt->fetchAll();
 </div>
 
 <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
-    // Validation & Utils
     function isValidUrl(string) {
         try {
             new URL(string);
@@ -307,7 +231,6 @@ $all_banks = $banks_stmt->fetchAll();
         }
     }
 
-    // Auto-detect bank from URL
     async function detectBankDetails() {
         const urlInput = document.getElementById('bankUrlInput');
         const bankNameInput = document.getElementById('bankNameInput');
@@ -315,29 +238,27 @@ $all_banks = $banks_stmt->fetchAll();
         const featuresInput = document.getElementById('featuresInput');
         const smartBadge = document.getElementById('smartBadge');
         const liveBadge = document.getElementById('liveBadge');
-        const btn = document.querySelector('button[onclick="detectBankDetails()"]');
+        const btn = document.getElementById('detectBankBtn');
 
         const rawUrl = urlInput.value.trim();
 
         if (!rawUrl) {
-            showGlobalModal("Please enter a URL first.", "Input Required");
+            alert("Please enter a URL first.");
             return;
         }
 
-        // Validate URL format
         let url = rawUrl.toLowerCase();
         if (!url.startsWith('http')) {
             url = 'https://' + url;
         }
 
         if (!isValidUrl(url)) {
-            showGlobalModal("Please enter a valid URL (e.g., https://www.bank.com/...)", "Invalid URL");
+            alert("Please enter a valid URL (e.g. https://www.bank.com/...)");
             return;
         }
 
-        // UI Loading State
         const originalBtnText = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analyzing...';
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
         btn.disabled = true;
         smartBadge.style.display = 'none';
         liveBadge.style.display = 'none';
@@ -348,61 +269,28 @@ $all_banks = $banks_stmt->fetchAll();
         let features = "";
         let isLive = false;
 
-        // 1. Feature Library (Fallback)
         const featureAnalysis = {
-            'cashback': `• 3% Cashback on non-AED spend
-• 2% Cashback on Grocery & Supermarkets
-• 1% Cashback on all other retail spends
-• No Annual Fee for the first year`,
-            'infinite': `• Unlimited complimentary access to 1000+ airport lounges (LoungeKey)
-• Multi-trip travel insurance
-• Golf privileges at various clubs across UAE
-• Concierge Service 24/7`,
-            'platinum': `• Buy 1 Get 1 Free movie tickets at Vox Cinemas
-• 20% off on Careem rides
-• Purchase Protection & Extended Warranty
-• 2 free airport transfers per year`,
-            'rewards': `• Earn 2.5 Reward Points for every AED 1 spent
-• Redeem points for flights, hotels, or electronics
-• Access to exclusive 'Buy 1, Get 1' offers
-• Dining discounts up to 30%`,
-            'miles': `• Earn 2 Miles per USD spend
-• Redeem on any airline, any time
-• Free travel insurance for you and family
-• Priority pass lounge access`,
-            'touchpoints': `• Earn 1.5 TouchPoints for every AED 1 spent
-• 20% off on talabat orders twice a month
-• Buy 1 Get 1 Free coffee at Costa
-• Complimentary golf access`,
-            'skywards': `• Up to 2.5 Skywards Miles per USD spent
-• Silver Tier membership status
-• 25% discount on dining at 2000+ restaurants
-• Valet parking at selected malls`,
-            'neo': `• 1% Cashback on all spends
-• Free international transfers
-• No minimum balance required
-• Instant digital card issuance`,
-            'standard': `• Standard shopping protection
-• SMS alerts for transactions
-• Online banking access
-• 24/7 Customer Support`,
-            'islamic': `• Sharia-compliant card
-• No annual fee for life
-• Roadside assistance
-• Travel desk services`
+            'cashback': `• 3% Cashback on non-AED spend\n• 2% Cashback on Grocery & Supermarkets\n• 1% Cashback on all other retail spends\n• No Annual Fee for the first year`,
+            'infinite': `• Complimentary access to 1000+ airport lounges\n• Multi-trip travel insurance\n• Golf privileges at various clubs across UAE\n• Concierge Service 24/7`,
+            'platinum': `• Buy 1 Get 1 Free movie tickets at Vox Cinemas\n• 20% off on Careem rides\n• Purchase Protection & Extended Warranty\n• 2 free airport transfers per year`,
+            'rewards': `• Earn Reward Points for every AED 1 spent\n• Redeem points for flights, hotels, or electronics\n• Access to exclusive 'Buy 1, Get 1' offers`,
+            'miles': `• Earn Miles per USD spend\n• Redeem on airlines globally\n• Free travel insurance`,
+            'touchpoints': `• Earn TouchPoints for every AED 1 spent\n• 20% off on talabat orders twice a month\n• Buy 1 Get 1 Free coffee at Costa`,
+            'standard': `• Standard shopping protection\n• SMS alerts for transactions\n• Online banking access`
         };
 
-        // 2. Try Live Fetch (The Real Data)
         try {
             const response = await fetch('fetch_url_data.php', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': <?php echo Html::json(SecurityHelper::generateCsrfToken()); ?>
+                },
                 body: JSON.stringify({ url: url })
             });
             const data = await response.json();
 
             if (data.success && data.data.description && data.data.description.length > 20) {
-                // Formatting the live content nicely
                 features = "✅ VERIFIED LIVE DATA FROM BANK WEBSITE:\n" + data.data.description;
                 if (data.data.title) {
                     features = "Card: " + data.data.title + "\n" + features;
@@ -413,29 +301,6 @@ $all_banks = $banks_stmt->fetchAll();
             console.log("Live fetch failed, falling back to library.");
         }
 
-        // 3. Name & Bank Detection (Pattern Matching is usually better for Names)
-        function inferCardDetails(urlStr, defaultName) {
-            let name = defaultName;
-            let beneficialFeatures = featureAnalysis['standard'];
-
-            const k = urlStr;
-            if (k.includes('cashback')) { name = 'Cashback Credit Card'; beneficialFeatures = featureAnalysis['cashback']; }
-            else if (k.includes('infinite')) { name = 'Infinite Credit Card'; beneficialFeatures = featureAnalysis['infinite']; }
-            else if (k.includes('platinum')) { name = 'Platinum Credit Card'; beneficialFeatures = featureAnalysis['platinum']; }
-            else if (k.includes('signature')) { name = 'Signature Credit Card'; beneficialFeatures = featureAnalysis['infinite']; }
-            else if (k.includes('rewards')) { name = 'Rewards Credit Card'; beneficialFeatures = featureAnalysis['rewards']; }
-            else if (k.includes('miles') || k.includes('etihad')) {
-                name = 'Miles/Travel Card'; beneficialFeatures =
-                    featureAnalysis['miles'];
-            }
-            else if (k.includes('neo')) { name = 'Mashreq Neo Card'; beneficialFeatures = featureAnalysis['neo']; }
-            else if (k.includes('touchpoints')) { name = 'TouchPoints Card'; beneficialFeatures = featureAnalysis['touchpoints']; }
-            else if (k.includes('skywards')) { name = 'Skywards Miles Card'; beneficialFeatures = featureAnalysis['skywards']; }
-
-            return { name, features: beneficialFeatures };
-        }
-
-        // Bank Detection Rules
         if (url.includes('citibank') || url.includes('citi.com')) { bankName = 'Citibank'; detected = true; }
         else if (url.includes('adcb')) { bankName = 'ADCB'; detected = true; }
         else if (url.includes('emiratesnbd') || url.includes('enbd')) { bankName = 'Emirates NBD'; detected = true; }
@@ -444,43 +309,22 @@ $all_banks = $banks_stmt->fetchAll();
         else if (url.includes('rakbank')) { bankName = 'RAKBANK'; detected = true; }
         else if (url.includes('hsbc')) { bankName = 'HSBC'; detected = true; }
         else if (url.includes('adib')) { bankName = 'ADIB'; detected = true; }
-        else if (url.includes('dib') || url.includes('dubaiislamicbank')) { bankName = 'Dubai Islamic Bank'; detected = true; }
+        else if (url.includes('dib') || url.includes('dubaiislamicbank')) { bankName = 'DIB'; detected = true; }
         else if (url.includes('cbd')) { bankName = 'CBD'; detected = true; }
-        else if (url.includes('sc.com') || url.includes('standardchartered')) {
-            bankName = 'Standard Chartered'; detected =
-                true;
-        }
 
         if (detected) {
-            const details = inferCardDetails(url, bankName + ' Credit Card');
-            cardName = details.name;
-            // Only overwrite features with library if live fetch failed
+            let typeKey = 'standard';
+            if (url.includes('cashback')) typeKey = 'cashback';
+            else if (url.includes('infinite') || url.includes('signature')) typeKey = 'infinite';
+            else if (url.includes('platinum')) typeKey = 'platinum';
+            else if (url.includes('rewards')) typeKey = 'rewards';
+            else if (url.includes('miles')) typeKey = 'miles';
+
+            cardName = bankName + ' ' + typeKey.charAt(0).toUpperCase() + typeKey.slice(1);
             if (!isLive) {
-                features = details.features;
+                features = featureAnalysis[typeKey];
             }
-        }
-        // Fallback for names
-        else {
-            try {
-                const domain = new URL(url).hostname;
-                const parts = domain.replace('www.', '').split('.');
-                if (parts.length > 0) {
-                    const name = parts[0];
-                    if (name.length > 2) {
-                        bankName = name.charAt(0).toUpperCase() + name.slice(1);
-                        cardName = 'Credit Card';
-                        detected = true;
-                        if (!isLive) features = featureAnalysis['standard'];
-                    }
-                }
-            } catch (e) { }
-        }
-
-        // 4. Update UI
-        btn.innerHTML = originalBtnText;
-        btn.disabled = false;
-
-        if (detected) {
+            
             bankNameInput.value = bankName;
             cardNameInput.value = cardName;
             featuresInput.value = features;
@@ -490,36 +334,16 @@ $all_banks = $banks_stmt->fetchAll();
             } else {
                 smartBadge.style.display = 'inline-block';
             }
-
-            // Flash effect
-            bankNameInput.style.backgroundColor = '#e8f0fe';
-            cardNameInput.style.backgroundColor = '#e8f0fe';
-            featuresInput.style.backgroundColor = '#e8f0fe';
-            setTimeout(() => {
-                bankNameInput.style.backgroundColor = '';
-                cardNameInput.style.backgroundColor = '';
-                featuresInput.style.backgroundColor = '';
-            }, 500);
             updatePreview();
         } else {
-            showGlobalModal('Could not auto-detect details. Please enter manually.', 'Detection Failed');
+            alert("Auto-fill couldn't resolve details, please key them in manually.");
         }
 
-        // Handle Image
-        if (data.data && data.data.image) {
-            document.getElementById('cardImageInput').value = data.data.image;
-            // Update Preview Background
-            const cardPreview = document.querySelector('.sticky-top');
-            if (cardPreview) {
-                cardPreview.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('${data.data.image}')`;
-                cardPreview.style.backgroundSize = 'cover';
-                cardPreview.style.backgroundPosition = 'center';
-            }
-        }
+        btn.innerHTML = originalBtnText;
+        btn.disabled = false;
     }
 
-    // Live Preview Update
-    const previewInputs = ['bankNameInput', 'cardNameInput', 'tierInput', 'cardTypeInput', 'firstFourInput', 'lastFourInput'];
+    const previewInputs = ['bankNameInput', 'cardNameInput', 'tierInput', 'cardTypeInput', 'networkInput', 'firstFourInput', 'lastFourInput'];
     previewInputs.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', updatePreview);
@@ -528,26 +352,41 @@ $all_banks = $banks_stmt->fetchAll();
     function updatePreview() {
         const bank = document.getElementById('bankNameInput').value || 'Bank Name';
         const name = document.getElementById('cardNameInput').value || 'Card Name';
-        const tier = document.getElementById('tierInput').value || 'Tier Name';
-        const type = document.getElementById('cardTypeInput').value || 'Type';
+        const tier = document.getElementById('tierInput').value || 'Tier';
+        const net = document.getElementById('networkInput').value;
         const f4 = document.getElementById('firstFourInput').value || '****';
         const l4 = document.getElementById('lastFourInput').value || '****';
 
         document.getElementById('previewBank').textContent = bank;
         document.getElementById('previewName').textContent = name;
         document.getElementById('previewTier').textContent = tier;
-        document.getElementById('previewType').textContent = type;
         document.getElementById('previewDigits').textContent = `${f4} **** **** ${l4}`;
+
+        const brandIcon = document.getElementById('previewBrandIcon');
+        if (brandIcon) {
+            if (net === 'Visa') brandIcon.innerHTML = '<i class="fa-brands fa-cc-visa"></i>';
+            else if (net === 'Mastercard') brandIcon.innerHTML = '<i class="fa-brands fa-cc-mastercard"></i>';
+            else brandIcon.innerHTML = '<i class="fa-brands fa-cc-amex"></i>';
+        }
+
+        // Live color updating logic
+        const mockup = document.getElementById('previewCardMockup');
+        if (mockup) {
+            let cardBg = "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)";
+            if (tier.toLowerCase().includes('infinite') || tier.toLowerCase().includes('signature') || tier.toLowerCase().includes('world')) {
+                cardBg = "linear-gradient(135deg, #1e1b4b 0%, #311042 100%)";
+            } else if (tier.toLowerCase().includes('platinum')) {
+                cardBg = "linear-gradient(135deg, #334155 0%, #475569 100%)";
+            }
+            mockup.style.background = cardBg;
+        }
     }
 
-    // Initial preview
     updatePreview();
 
-    // Auto-trigger on paste
     document.getElementById('bankUrlInput').addEventListener('paste', (event) => {
         setTimeout(detectBankDetails, 100);
     });
 </script>
 
 <?php Layout::footer(); ?>
-// Structural Audit Complete

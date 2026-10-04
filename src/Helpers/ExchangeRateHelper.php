@@ -7,15 +7,21 @@ use Exception;
 
 class ExchangeRateHelper
 {
-    /** Hardcoded fallback rates when no cached rate exists and API is unreachable */
+    /** Hardcoded fallback rates when no cached rate exists and API is unreachable (Oct 2026) */
     private const FALLBACK_RATES = [
-        'AED' => ['INR' => 22.5],
-        'INR' => ['AED' => 0.044],
+        'AED' => ['INR' => 26.2],
+        'INR' => ['AED' => 0.0381],
     ];
+
+    /** AED is pegged to the US dollar: 1 USD = 3.6725 AED. */
+    private const AED_PER_USD = 3.6725;
+
+    /** Rates already resolved during this request. */
+    private static array $memo = [];
 
     /**
      * Returns the exchange rate from $from currency to $to currency.
-     * Checks a DB cache first (6-hour TTL), then fetches from frankfurter.app.
+     * Checks a DB cache first (6-hour TTL), then fetches from the Frankfurter API.
      * Falls back to last known cached rate, then to hardcoded constants.
      */
     public static function getRate(string $from, string $to, PDO $pdo): float
@@ -23,10 +29,20 @@ class ExchangeRateHelper
         if ($from === $to) {
             return 1.0;
         }
+        $key = $from . '>' . $to;
+        if (!isset(self::$memo[$key])) {
+            self::$memo[$key] = self::resolveRate($from, $to, $pdo);
+        }
+        return self::$memo[$key];
+    }
 
-        // Ensure the cache table exists
-        self::ensureTable($pdo);
-
+    /**
+     * Note: no DDL here. CREATE TABLE causes an implicit COMMIT in MySQL/MariaDB,
+     * which silently broke callers running inside a transaction. The
+     * exchange_rate_cache table is created by install/install.php.
+     */
+    private static function resolveRate(string $from, string $to, PDO $pdo): float
+    {
         // 1. Check cache (fresh within 6 hours)
         $cached = self::fetchCached($pdo, $from, $to, true);
         if ($cached !== null) {
@@ -54,18 +70,18 @@ class ExchangeRateHelper
         return self::FALLBACK_RATES[$from][$to] ?? 1.0;
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
-
-    private static function ensureTable(PDO $pdo): void
+    /**
+     * SQL expression converting an amount column to AED (INR rows use today's rate),
+     * e.g. "SELECT SUM(" . ExchangeRateHelper::aedSql($pdo) . ") FROM income ...".
+     * Column names must be code constants, never user input.
+     */
+    public static function aedSql(PDO $pdo, string $amountCol = 'amount', string $currencyCol = 'currency'): string
     {
-        $pdo->exec("CREATE TABLE IF NOT EXISTS exchange_rate_cache (
-            from_currency CHAR(3)        NOT NULL,
-            to_currency   CHAR(3)        NOT NULL,
-            rate          DECIMAL(15,6)  NOT NULL,
-            fetched_at    DATETIME       NOT NULL,
-            PRIMARY KEY (from_currency, to_currency)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $rate = sprintf('%.6F', self::getRate('INR', 'AED', $pdo));
+        return "CASE WHEN {$currencyCol} = 'INR' THEN {$amountCol} * {$rate} ELSE {$amountCol} END";
     }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
 
     /**
      * Returns a cached rate or null.
@@ -96,19 +112,41 @@ class ExchangeRateHelper
     }
 
     /**
-     * Fetches a live rate from frankfurter.app with a 5-second timeout.
+     * Fetches a live rate from the Frankfurter API (ECB data) with a short timeout.
+     * The ECB does not publish AED, so AED legs go through USD using the fixed peg.
      * Returns null on any failure.
      */
     private static function fetchFromApi(string $from, string $to): ?float
     {
-        $url = "https://api.frankfurter.app/latest?base={$from}&symbols={$to}";
+        $apiFrom = $from === 'AED' ? 'USD' : $from;
+        $apiTo   = $to === 'AED' ? 'USD' : $to;
+
+        $rate = ($apiFrom === $apiTo) ? 1.0 : self::fetchEcbRate($apiFrom, $apiTo);
+        if ($rate === null) {
+            return null;
+        }
+        if ($from === 'AED') {
+            $rate /= self::AED_PER_USD;   // AED -> USD
+        }
+        if ($to === 'AED') {
+            $rate *= self::AED_PER_USD;   // USD -> AED
+        }
+        return $rate;
+    }
+
+    private static function fetchEcbRate(string $from, string $to): ?float
+    {
+        if (!preg_match('/^[A-Z]{3}$/', $from) || !preg_match('/^[A-Z]{3}$/', $to)) {
+            return null;
+        }
+        $url = "https://api.frankfurter.dev/v1/latest?base={$from}&symbols={$to}";
 
         $ch = curl_init();
         curl_setopt_array($ch, [
             CURLOPT_URL            => $url,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 10,
-            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT        => 8,
+            CURLOPT_CONNECTTIMEOUT => 4,
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_PROTOCOLS      => CURLPROTO_HTTPS,
             CURLOPT_USERAGENT      => 'ExpenseManager/1.0',
@@ -125,8 +163,8 @@ class ExchangeRateHelper
         }
 
         $data = json_decode($raw, true);
-        if (!is_array($data) || !isset($data['rates'][$to])) {
-            error_log("ExchangeRateHelper: Unexpected API response: {$raw}");
+        if (!is_array($data) || !isset($data['rates'][$to]) || (float) $data['rates'][$to] <= 0) {
+            error_log("ExchangeRateHelper: Unexpected API response for {$from}->{$to}");
             return null;
         }
 

@@ -2,7 +2,13 @@
 /**
  * Database Configuration
  */
-define('BASE_URL', '/expenses/');
+if (PHP_SAPI === 'cli') {
+    define('BASE_URL', '/expenses/');
+} else {
+    $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+    define('BASE_URL', (strpos($scriptName, '/expenses/') === 0) ? '/expenses/' : '/');
+}
+
 
 // Load .env variables
 $envFile = __DIR__ . '/.env';
@@ -19,7 +25,12 @@ if (file_exists($envFile)) {
         }
         $name = trim($parts[0]);
         $value = trim($parts[1]);
-        $value = trim($value, "\"'");
+        if ($value !== '' && ($value[0] === '"' || $value[0] === "'")) {
+            $value = trim($value, "\"'");
+        } else {
+            // Unquoted values may carry an inline comment: KEY=value   # comment
+            $value = trim(preg_replace('/\s+#.*$/', '', $value));
+        }
         if ($name === '') {
             continue;
         }
@@ -88,13 +99,16 @@ ini_set('display_errors', 0);
 ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
 // Secure Error Logging
-// Attempt to log outside webroot, or fallback to hidden file
-$logDataDir = dirname(__DIR__); // Parent of project root
-$logFile = $logDataDir . '/expense_manager_errors.log';
-
-// If parent is not writable, fallback to project root but hidden
-if (!is_writable($logDataDir) && !is_writable($logFile)) {
-    $logFile = __DIR__ . '/.error.log';
+// The parent folder is NOT safe: on this host it is the main site's public_html, where the
+// log was publicly downloadable. Log into logs/, which is denied by logs/.htaccess and the
+// app's root .htaccess.
+$logDir = __DIR__ . '/logs';
+if (!is_dir($logDir)) {
+    @mkdir($logDir, 0750, true);
+}
+$logFile = $logDir . '/php_errors.log';
+if (!is_writable($logDir) && !is_writable($logFile)) {
+    $logFile = __DIR__ . '/.error.log'; // *.log is denied by the root .htaccess
 }
 
 ini_set('log_errors', 1);
@@ -128,10 +142,11 @@ if (session_status() === PHP_SESSION_NONE) {
 // Server-side session idle timeout (1 hour)
 if (isset($_SESSION['user_id'])) {
     if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > 3600) {
-        session_unset();
-        session_destroy();
+        $_SESSION = [];
         if (PHP_SAPI !== 'cli' && !headers_sent()) {
-            header('Location: index.php?error=' . urlencode('Session expired'));
+            session_regenerate_id(true);
+            $_SESSION['_flash'][] = ['type' => 'warning', 'message' => 'Your session expired. Please sign in again.'];
+            header('Location: ' . BASE_URL . 'index.php');
             exit();
         }
     } else {
@@ -139,6 +154,36 @@ if (isset($_SESSION['user_id'])) {
     }
 }
 
+
+// Keep the session in sync with the account: role/permission changes made by an admin
+// apply immediately, and a password change, reset or revoke elsewhere signs this session out.
+if (isset($_SESSION['user_id'])) {
+    try {
+        $acctStmt = $pdo->prepare("SELECT name, role, permission, tenant_id, password FROM users WHERE id = ?");
+        $acctStmt->execute([$_SESSION['user_id']]);
+        $acct = $acctStmt->fetch();
+        $pwFingerprint = $acct ? hash('sha256', $acct['password']) : '';
+
+        if (!$acct || (isset($_SESSION['pw_fp']) && !hash_equals($_SESSION['pw_fp'], $pwFingerprint))) {
+            $_SESSION = [];
+            if (PHP_SAPI !== 'cli' && !headers_sent()) {
+                session_regenerate_id(true);
+                $_SESSION['_flash'][] = ['type' => 'warning', 'message' => 'Your password was changed. Please sign in again.'];
+                header('Location: ' . BASE_URL . 'index.php');
+                exit();
+            }
+        } else {
+            $_SESSION['pw_fp']      = $pwFingerprint;
+            $_SESSION['user_name']  = $acct['name'];
+            $_SESSION['role']       = $acct['role'];
+            $_SESSION['permission'] = $acct['permission'];
+            $_SESSION['tenant_id']  = $acct['tenant_id'];
+        }
+        unset($acctStmt, $acct, $pwFingerprint);
+    } catch (\PDOException $e) {
+        error_log("Session account check failed: " . $e->getMessage());
+    }
+}
 
 // Load Composer Autoloader
 require_once __DIR__ . '/autoload.php';

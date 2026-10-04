@@ -4,25 +4,25 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
 use App\Helpers\MailHelper;
+use App\Helpers\Flash;
 
 Bootstrap::init();
-const REDIRECT_ERROR = "Location: index.php?error=";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // CSRF Check — verifyCsrfToken() exits with 403 on failure; no return value
     SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
-    $password = $_POST['password'];
+    $password = (string) ($_POST['password'] ?? '');
 
     if (!$email || empty($password)) {
-        header(REDIRECT_ERROR . urlencode("Please fill in all fields correctly"));
+        Flash::redirect('index.php', 'error', "Please fill in all fields correctly");
         exit();
     }
 
     try {
         if (!isset($pdo)) {
-            header(REDIRECT_ERROR . urlencode("Database connection failed"));
+            Flash::redirect('index.php', 'error', "Database connection failed");
             exit();
         }
 
@@ -39,18 +39,31 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 
-        // IP-based rate limiting: count failed attempts in last 15 minutes
-        $rateLimitStmt = $pdo->prepare(
+        // Rate limiting: count failed attempts in last 15 minutes
+        // We limit to 5 failed attempts for the specific email OR 20 failed attempts from the same IP (NAT group safe).
+        $rateLimitEmailStmt = $pdo->prepare(
+            "SELECT COUNT(*) FROM login_attempts
+             WHERE email = ? AND success = 0
+             AND attempted_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)"
+        );
+        $rateLimitEmailStmt->execute([$email]);
+        $failedEmailCount = (int) $rateLimitEmailStmt->fetchColumn();
+
+        $rateLimitIpStmt = $pdo->prepare(
             "SELECT COUNT(*) FROM login_attempts
              WHERE ip = ? AND success = 0
              AND attempted_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)"
         );
-        $rateLimitStmt->execute([$ip]);
-        $failedCount = (int) $rateLimitStmt->fetchColumn();
+        $rateLimitIpStmt->execute([$ip]);
+        $failedIpCount = (int) $rateLimitIpStmt->fetchColumn();
 
-        if ($failedCount >= 5) {
-            AuditHelper::log($pdo, 'login_blocked', "Rate-limited login attempt for $email from $ip");
-            header(REDIRECT_ERROR . urlencode("Too many failed attempts. Try again in 15 minutes."));
+        if ($failedEmailCount >= 5 || $failedIpCount >= 20) {
+            $blockedUser = $pdo->prepare("SELECT id, tenant_id FROM users WHERE email = ?");
+            $blockedUser->execute([$email]);
+            if ($blocked = $blockedUser->fetch()) {
+                AuditHelper::logFor($pdo, (int) $blocked['id'], $blocked['tenant_id'], 'login_blocked', "Rate-limited login attempt for $email from $ip (Email fails: $failedEmailCount, IP fails: $failedIpCount)");
+            }
+            Flash::redirect('index.php', 'error', "Too many failed attempts. Try again in 15 minutes.");
             exit();
         }
 
@@ -74,17 +87,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $priorCount = (int) $priorSuccessStmt->fetchColumn();
 
             if ($priorCount === 0) {
-                $mailRecipients = $_ENV['MAIL_RECIPIENTS'] ?? '';
-                if ($mailRecipients !== '') {
-                    $recipients = array_filter(array_map('trim', explode(',', $mailRecipients)));
-                    if (!empty($recipients)) {
-                        $loginTime = date('Y-m-d H:i:s');
-                        $alertHtml = "<p>Hello,</p>"
-                            . "<p>A new login to your Expense Manager account was detected from IP: <strong>" . htmlspecialchars($ip) . "</strong> at <strong>" . htmlspecialchars($loginTime) . "</strong>.</p>"
-                            . "<p>If this was not you, please contact your administrator immediately.</p>";
-                        MailHelper::send($recipients, 'New Login Detected - Expense Manager', $alertHtml);
-                    }
-                }
+                // Alert the account owner (not a global list) about a sign-in from a new IP.
+                $loginTime = date('Y-m-d H:i:s');
+                $alertHtml = "<p>Hello " . htmlspecialchars($user['name']) . ",</p>"
+                    . "<p>A new login to your Expense Manager account was detected from IP: <strong>" . htmlspecialchars($ip) . "</strong> at <strong>" . htmlspecialchars($loginTime) . "</strong>.</p>"
+                    . "<p>If this was not you, reset your password right away using \"Forgot Password?\" on the sign-in page.</p>";
+                MailHelper::send([$user['email']], 'New Login Detected - Expense Manager', $alertHtml);
             }
 
             session_regenerate_id(true); // Prevent Session Fixation
@@ -93,6 +101,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $_SESSION['tenant_id'] = $user['tenant_id'];
             $_SESSION['role']      = $user['role'];
             $_SESSION['permission'] = $user['permission'];
+            $_SESSION['pw_fp']     = hash('sha256', $user['password']);
+            $_SESSION['last_activity'] = time();
             AuditHelper::log($pdo, 'login_success', "Login: $email from $ip");
             header("Location: dashboard.php");
             exit();
@@ -101,14 +111,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $pdo->prepare("INSERT INTO login_attempts (ip, email, attempted_at, success) VALUES (?, ?, NOW(), 0)")
                 ->execute([$ip, $email]);
 
-            AuditHelper::log($pdo, 'login_failed', "Failed login: $email from $ip");
-            header(REDIRECT_ERROR . urlencode("Invalid credentials"));
+            // No session yet, so attribute the failure to the targeted account when it exists.
+            if ($user) {
+                AuditHelper::logFor($pdo, (int) $user['id'], $user['tenant_id'], 'login_failed', "Failed login: $email from $ip");
+            }
+            Flash::redirect('index.php', 'error', "Invalid credentials");
             exit();
         }
     } catch (Exception $e) {
         // Log the actual error internally
         error_log("Auth Error: " . $e->getMessage());
-        header(REDIRECT_ERROR . urlencode("An error occurred"));
+        Flash::redirect('index.php', 'error', "An error occurred");
         exit();
     }
 } else {

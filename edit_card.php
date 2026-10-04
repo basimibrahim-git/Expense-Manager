@@ -1,14 +1,13 @@
-﻿<?php
+<?php
 $page_title = "Edit Card";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
+use App\Helpers\Html;
+use App\Helpers\Categories;
 
 Bootstrap::init();
-
-Layout::header();
-Layout::sidebar();
 
 // Get Card ID
 $card_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
@@ -24,266 +23,240 @@ $stmt = $pdo->prepare("SELECT * FROM cards WHERE id = :id AND tenant_id = :tenan
 $stmt->execute(['id' => $card_id, 'tenant_id' => $_SESSION['tenant_id']]);
 $card = $stmt->fetch();
 
+if (!$card) {
+    header('Location: my_cards.php');
+    exit;
+}
+
 // Fetch all banks for the dropdown
 $banks_stmt = $pdo->prepare("SELECT id, bank_name FROM banks WHERE tenant_id = ? ORDER BY is_default DESC, bank_name ASC");
 $banks_stmt->execute([$_SESSION['tenant_id']]);
 $all_banks = $banks_stmt->fetchAll();
+
+Layout::header();
+Layout::sidebar();
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="h3 fw-bold mb-0">Edit Card</h1>
-    <a href="my_cards.php" class="btn btn-light">
-        <i class="fa-solid fa-arrow-left me-2"></i> Back
-    </a>
-</div>
-
-<?php if (isset($_GET['success'])): ?>
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="fa-solid fa-check-circle me-2"></i> <?php echo htmlspecialchars($_GET['success']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+<div class="container-fluid py-4">
+    <!-- Back and Header -->
+    <div class="mb-4">
+        <a href="my_cards.php" class="btn btn-sm btn-light rounded-pill px-3 mb-2 hover-lift">
+            <i class="fa-solid fa-arrow-left me-1"></i> Back to Cards
+        </a>
+        <h1 class="h3 fw-bold mb-1 text-dark">Edit Card Details</h1>
+        <p class="text-muted mb-0">Modify configuration, payment schedules, and rewards for this account</p>
     </div>
-<?php endif; ?>
 
-<?php if (isset($_GET['error'])): ?>
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="fa-solid fa-exclamation-circle me-2"></i> <?php echo htmlspecialchars($_GET['error']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-<?php endif; ?>
+    <div class="row g-4">
+        <!-- Form Section -->
+        <div class="col-lg-8 col-md-7">
+            <div class="glass-panel-premium p-4 shadow-sm">
+                <form action="card_actions.php" method="POST" id="editCardForm">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
+                    <input type="hidden" name="action" value="update_card">
+                    <input type="hidden" name="card_id" value="<?php echo (int) $card['id']; ?>">
+                    <input type="hidden" name="card_image" id="cardImageInput" value="<?php echo htmlspecialchars($card['card_image'] ?? ''); ?>">
 
-<div class="row">
-    <div class="col-md-8 col-lg-6">
-        <div class="glass-panel p-4">
-            <form action="card_actions.php" method="POST" id="editCardForm">
-                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
-                <input type="hidden" name="action" value="update_card">
-                <input type="hidden" name="card_id" value="<?php echo $card['id']; ?>">
-
-                <h5 class="mb-3 text-muted">Card Source</h5>
-
-                <div class="mb-4">
-                    <label class="form-label" for="bankUrlInput">Bank Login URL</label>
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fa-solid fa-link"></i></span>
-                        <input type="url" name="bank_url" id="bankUrlInput" class="form-control"
-                            value="<?php echo htmlspecialchars($card['bank_url'] ?? ''); ?>" placeholder="https://...">
-                        <button class="btn btn-outline-primary" type="button" onclick="detectBankDetails()">
-                            <i class="fa-solid fa-sync"></i> Sync
-                        </button>
-                    </div>
-                </div>
-                <input type="hidden" name="card_image" id="cardImageInput" value="<?php echo htmlspecialchars($card['card_image'] ?? ''); ?>">
-
-                <hr class="my-4 text-muted">
-
-                <h5 class="mb-3 text-muted">Card Details</h5>
-
-                <div class="mb-3">
-                    <label class="form-label" for="bank_id">Associated Bank <span class="text-secondary small">(Optional)</span></label>
-                    <select name="bank_id" id="bank_id" class="form-select">
-                        <option value="">-- No Bank Linked --</option>
-                        <?php foreach($all_banks as $b): ?>
-                            <option value="<?php echo $b['id']; ?>" <?php echo $card['bank_id'] == $b['id'] ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($b['bank_name']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <div class="form-text x-small">Used for balance tracking and automation</div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label" for="bankNameInput">Bank Name <span class="text-danger">*</span></label>
-                    <input type="text" name="bank_name" id="bankNameInput" class="form-control"
-                        value="<?php echo htmlspecialchars($card['bank_name']); ?>" required>
-                    <div class="form-text x-small">Display name for the card</div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label" for="cardNameInput">Card Name / Nickname <span class="text-danger">*</span></label>
-                    <input type="text" name="card_name" id="cardNameInput" class="form-control"
-                        value="<?php echo htmlspecialchars($card['card_name']); ?>" required>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label" for="cardTypeInput">Card Type <span class="text-danger">*</span></label>
-                        <select name="card_type" id="cardTypeInput" class="form-select" required>
-                            <option value="Credit" <?php echo ($card['card_type'] == 'Credit') ? 'selected' : ''; ?>>
-                                Credit Card</option>
-                            <option value="Debit" <?php echo ($card['card_type'] == 'Debit') ? 'selected' : ''; ?>>Debit
-                                Card</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label" for="networkInput">Network <span class="text-danger">*</span></label>
-                        <select name="network" id="networkInput" class="form-select" required>
-                            <option value="Visa" <?php echo ($card['network'] == 'Visa') ? 'selected' : ''; ?>>Visa
-                            </option>
-                            <option value="Mastercard" <?php echo ($card['network'] == 'Mastercard') ? 'selected' : ''; ?>>Mastercard</option>
-                            <option value="Amex" <?php echo ($card['network'] == 'Amex') ? 'selected' : ''; ?>>American
-                                Express</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label" for="fee_type">Fee Type</label>
-                        <select name="fee_type" id="fee_type" class="form-select">
-                            <option value="LTF" <?php echo (($card['fee_type'] ?? '') == 'LTF') ? 'selected' : ''; ?>>LTF (Lifetime Free)</option>
-                            <option value="Paid" <?php echo (($card['fee_type'] ?? '') == 'Paid') ? 'selected' : ''; ?>>Paid</option>
-                            <option value="Spend Based" <?php echo (($card['fee_type'] ?? '') == 'Spend Based') ? 'selected' : ''; ?>>Spend Based</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label" for="tierInput">Category / Tier</label>
-                        <input type="text" name="tier" id="tierInput" class="form-control"
-                            value="<?php echo htmlspecialchars($card['tier']); ?>">
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label" for="limit_amount">Credit / Monthly Limit (AED)</label>
-                        <input type="number" name="limit_amount" id="limit_amount" class="form-control" step="0.01"
-                            value="<?php echo htmlspecialchars($card['limit_amount']); ?>">
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-6 mb-3">
-                        <label class="form-label" for="firstFourInput">First 4 Digits</label>
-                        <input type="text" name="first_four" id="firstFourInput" class="form-control"
-                            value="<?php echo htmlspecialchars($card['first_four'] ?? ''); ?>" maxlength="4">
-                    </div>
-                    <div class="col-6 mb-3">
-                        <label class="form-label" for="lastFourInput">Last 4 Digits</label>
-                        <input type="text" name="last_four" id="lastFourInput" class="form-control"
-                            value="<?php echo htmlspecialchars($card['last_four'] ?? ''); ?>" maxlength="4">
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label" for="bill_day">Bill Generation Day</label>
-                        <input type="number" name="bill_day" id="bill_day" class="form-control" placeholder="e.g. 15" min="1" max="31"
-                            value="<?php echo htmlspecialchars($card['bill_day'] ?? ''); ?>">
-                        <div class="form-text x-small">Day of month bill is issued</div>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label" for="statement_day">Statement Closing Day</label>
-                        <input type="number" name="statement_day" id="statement_day" class="form-control" placeholder="e.g. 14" min="1"
-                            max="31" value="<?php echo htmlspecialchars($card['statement_day'] ?? ''); ?>">
-                        <div class="form-text x-small">Day of month statement closes</div>
-                    </div>
-                </div>
-
-                <!-- Default Card Toggle -->
-                <div class="mb-4 p-3 bg-primary bg-opacity-10 rounded border border-primary">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="is_default" id="isDefault" value="1"
-                            <?php echo !empty($card['is_default']) ? 'checked' : ''; ?>>
-                        <label class="form-check-label fw-bold text-primary" for="isDefault">
-                            <i class="fa-solid fa-star me-1"></i> Set as Default Card
-                        </label>
-                        <div class="form-text x-small">Pre-selected when adding expenses</div>
-                    </div>
-                </div>
-
-                <?php
-                $cb_struct = json_decode($card['cashback_struct'] ?? '{}', true);
-                if (!is_array($cb_struct)) {
-                    $cb_struct = [];
-                }
-                ?>
-                <!-- Cashback Categories -->
-                <div class="mb-4">
-                    <div class="form-label fw-bold d-block"><i class="fa-solid fa-percent text-primary me-2"></i> Category
-                        Cashback %</div>
-                    <div class="bg-light p-3 rounded shadow-sm border">
-                        <div class="row g-2 mb-2">
-                            <?php
-                            $cats = [
-                                'Grocery' => 'Grocery',
-                                'Food' => 'Dining/Food',
-                                'Transport' => 'Transport',
-                                'Shopping' => 'Shopping',
-                                'Utilities' => 'Utilities',
-                                'Travel' => 'Travel',
-                                'Medical' => 'Medical',
-                                'Entertainment' => 'Entmt.',
-                                'Education' => 'Education',
-                                'Other' => 'Other/Gen.'
-                            ];
-                            $count = 0;
-                            foreach ($cats as $key => $label):
-                                if ($count % 4 == 0 && $count != 0) {
-                                    echo '</div><div class="row g-2 mb-2">';
-                                }
-                                ?>
-                                <div class="col-6 col-md-3">
-                                    <label for="cb_<?php echo $key; ?>" class="x-small text-muted"><?php echo $label; ?></label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="number" id="cb_<?php echo $key; ?>" name="cb_<?php echo $key; ?>" class="form-control" step="0.1"
-                                            value="<?php echo $cb_struct[$key] ?? 0; ?>">
-                                        <span class="input-group-text">%</span>
-                                    </div>
-                                </div>
-                                <?php $count++; endforeach; ?>
+                    <h5 class="fw-bold mb-3 text-primary"><i class="fa-solid fa-cloud-arrow-down me-2"></i>Bank Integration</h5>
+                    
+                    <!-- Bank URL Auto-Detect -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold text-muted small" for="bankUrlInput">Bank Login URL</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fa-solid fa-link"></i></span>
+                            <input type="url" name="bank_url" id="bankUrlInput" class="form-control"
+                                value="<?php echo htmlspecialchars($card['bank_url'] ?? ''); ?>" placeholder="https://...">
+                            <button class="btn btn-primary" type="button" id="detectBankBtn" data-onclick="detectBankDetails">
+                                <i class="fa-solid fa-sync"></i> Sync
+                            </button>
                         </div>
                     </div>
-                    <div class="form-text x-small">Used for auto-calculating rewards in expenses.</div>
-                </div>
 
-                <!-- New Features Field -->
-                <div class="mb-3">
-                    <label class="form-label" for="featuresInput">Card Offers & Features</label>
-                    <textarea name="features" id="featuresInput" class="form-control" rows="4"
-                        placeholder="Paste offers, cashback details, or benefits here..."><?php echo htmlspecialchars($card['features'] ?? ''); ?></textarea>
-                    <div class="form-text">Note down validation dates or specific cashback categories here.</div>
-                </div>
+                    <hr class="my-4 text-muted opacity-10">
 
-                <div class="d-grid gap-2 mb-3">
-                    <button type="submit" class="btn btn-primary btn-lg fw-bold">
-                        <i class="fa-solid fa-save me-2"></i> Update Card Details
+                    <h5 class="fw-bold mb-3 text-primary"><i class="fa-solid fa-credit-card me-2"></i>Card Details</h5>
+
+                    <div class="row g-3">
+                        <div class="col-md-6 mb-2">
+                            <label class="form-label fw-bold text-muted small" for="bankSelect">Associated Balance Account <span class="text-secondary small">(Optional)</span></label>
+                            <select name="bank_id" id="bankSelect" class="form-select rounded-pill px-3">
+                                <option value="">-- No Bank Linked --</option>
+                                <?php foreach ($all_banks as $b): ?>
+                                    <option value="<?php echo (int) $b['id']; ?>" <?php echo $card['bank_id'] == $b['id'] ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($b['bank_name']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6 mb-2">
+                            <label class="form-label fw-bold text-muted small" for="bankNameInput">Bank Name <span class="text-danger">*</span></label>
+                            <input type="text" name="bank_name" id="bankNameInput" class="form-control rounded-pill px-3"
+                                value="<?php echo htmlspecialchars($card['bank_name']); ?>" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3 mt-2">
+                        <label class="form-label fw-bold text-muted small" for="cardNameInput">Card Nickname <span class="text-danger">*</span></label>
+                        <input type="text" name="card_name" id="cardNameInput" class="form-control rounded-pill px-3"
+                            value="<?php echo htmlspecialchars($card['card_name']); ?>" required>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-muted small" for="cardTypeInput">Card Type <span class="text-danger">*</span></label>
+                            <select name="card_type" id="cardTypeInput" class="form-select rounded-pill px-3" required>
+                                <option value="Credit" <?php echo ($card['card_type'] == 'Credit') ? 'selected' : ''; ?>>Credit Card</option>
+                                <option value="Debit" <?php echo ($card['card_type'] == 'Debit') ? 'selected' : ''; ?>>Debit Card</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-muted small" for="networkInput">Network <span class="text-danger">*</span></label>
+                            <select name="network" id="networkInput" class="form-select rounded-pill px-3" required>
+                                <option value="Visa" <?php echo ($card['network'] == 'Visa') ? 'selected' : ''; ?>>Visa</option>
+                                <option value="Mastercard" <?php echo ($card['network'] == 'Mastercard') ? 'selected' : ''; ?>>Mastercard</option>
+                                <option value="Amex" <?php echo ($card['network'] == 'Amex') ? 'selected' : ''; ?>>American Express</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-muted small" for="feeTypeInput">Fee Structure</label>
+                            <select name="fee_type" id="feeTypeInput" class="form-select rounded-pill px-3">
+                                <option value="LTF" <?php echo (($card['fee_type'] ?? '') == 'LTF') ? 'selected' : ''; ?>>LTF (Lifetime Free)</option>
+                                <option value="Paid" <?php echo (($card['fee_type'] ?? '') == 'Paid') ? 'selected' : ''; ?>>Paid</option>
+                                <option value="Spend Based" <?php echo (($card['fee_type'] ?? '') == 'Spend Based') ? 'selected' : ''; ?>>Spend Based</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-muted small" for="tierInput">Category / Tier</label>
+                            <input type="text" name="tier" id="tierInput" class="form-control rounded-pill px-3" value="<?php echo htmlspecialchars($card['tier']); ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-muted small" for="limitInput">Credit Limit (AED)</label>
+                            <input type="number" name="limit_amount" id="limitInput" class="form-control rounded-pill px-3" step="0.01" value="<?php echo htmlspecialchars($card['limit_amount']); ?>">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-bold text-muted small" for="firstFourInput">First 4 Digits</label>
+                            <input type="text" name="first_four" id="firstFourInput" class="form-control rounded-pill px-3" value="<?php echo htmlspecialchars($card['first_four'] ?? ''); ?>" maxlength="4">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-bold text-muted small" for="lastFourInput">Last 4 Digits</label>
+                            <input type="text" name="last_four" id="lastFourInput" class="form-control rounded-pill px-3" value="<?php echo htmlspecialchars($card['last_four'] ?? ''); ?>" maxlength="4">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-muted small" for="statementDayInput">Statement Day</label>
+                            <input type="number" name="statement_day" id="statementDayInput" class="form-control rounded-pill px-3" min="1" max="31" value="<?php echo Html::e($card['statement_day'] ?? ''); ?>">
+                            <div class="form-text text-muted x-small ps-1 mt-1">Day of the month the statement closes (31 = last day of the month). Credit cards only.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-muted small" for="billDayInput">Payment Due Day</label>
+                            <input type="number" name="bill_day" id="billDayInput" class="form-control rounded-pill px-3" min="1" max="31" value="<?php echo Html::e($card['bill_day'] ?? ''); ?>">
+                            <div class="form-text text-muted x-small ps-1 mt-1">If it is on or before the statement day, it falls in the following month.</div>
+                        </div>
+                    </div>
+
+                    <!-- Default Toggle -->
+                    <div class="mb-4 p-3 bg-light rounded-4 border border-light d-flex align-items-center">
+                        <div class="form-check mb-0">
+                            <input class="form-check-input" type="checkbox" name="is_default" id="isDefault" value="1" <?php echo !empty($card['is_default']) ? 'checked' : ''; ?>>
+                            <label class="form-check-label fw-bold text-primary mb-0" for="isDefault">
+                                <i class="fa-solid fa-star me-1"></i> Set as Default Card
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Cashback Category Matrix -->
+                    <?php
+                    $cb_struct = json_decode($card['cashback_struct'] ?? '{}', true);
+                    if (!is_array($cb_struct)) {
+                        $cb_struct = [];
+                    }
+                    ?>
+                    <div class="mb-4">
+                        <label class="form-label fw-bold text-muted small"><i class="fa-solid fa-percent text-primary me-2"></i>Cashback Category Matrix %</label>
+                        <div class="p-3 bg-light rounded-4 border border-light">
+                            <div class="row g-2 mb-2">
+                                <?php
+                                foreach (Categories::EXPENSE as $key => $label):
+                                    $cbRate = $cb_struct[$key] ?? 0;
+                                    ?>
+                                    <div class="col-6 col-md-3">
+                                        <label for="cb_<?php echo Html::e($key); ?>" class="x-small text-muted fw-bold mb-1 text-truncate d-block" title="<?php echo Html::e($label); ?>"><?php echo Html::e($label); ?></label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="number" id="cb_<?php echo Html::e($key); ?>" name="cb_<?php echo Html::e($key); ?>" class="form-control" step="0.1" min="0" max="100"
+                                                value="<?php echo is_numeric($cbRate) ? (float) $cbRate : 0; ?>">
+                                            <span class="input-group-text">%</span>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Offers & Features -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold text-muted small" for="featuresInput">Card Offers & Features</label>
+                        <textarea name="features" id="featuresInput" class="form-control rounded-4" rows="4"
+                            placeholder="Offers and features..."><?php echo htmlspecialchars($card['features'] ?? ''); ?></textarea>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-grid gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg fw-bold rounded-pill shadow-sm hover-lift py-2.5">
+                            <i class="fa-solid fa-save me-1"></i> Update Card Details
+                        </button>
+                    </div>
+                </form>
+
+                <form action="card_actions.php" method="POST" class="d-grid mt-3">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
+                    <input type="hidden" name="action" value="delete_card">
+                    <input type="hidden" name="id" value="<?php echo (int) $card['id']; ?>">
+                    <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill py-2"
+                        data-confirm="<?php echo Html::e('Delete ' . $card['bank_name'] . ' ' . $card['card_name'] . '? This action is permanent.'); ?>">
+                        <i class="fa-solid fa-trash me-1"></i> Delete Card Account
                     </button>
-                </div>
-            </form>
-            <form action="card_actions.php" method="POST" class="d-grid">
-                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
-                <input type="hidden" name="action" value="delete_card">
-                <input type="hidden" name="id" value="<?php echo $card['id']; ?>">
-                <button type="submit" class="btn btn-outline-danger py-2"
-                    onclick="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($card['bank_name'] . ' ' . $card['card_name'])); ?>? This action CANNOT be undone.');">
-                    <i class="fa-solid fa-trash me-2"></i> Delete Card
-                </button>
-            </form>
+                </form>
+            </div>
         </div>
-    </div>
 
-    <!-- Preview Section -->
-    <div class="col-md-4 d-none d-md-block">
-        <div class="card border-0 shadow-sm text-white sticky-top"
-            style="top: 20px; background: <?php echo !empty($card['card_image']) ? "linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('" . htmlspecialchars($card['card_image']) . "')" : "linear-gradient(45deg, #1e1e1e, #3a3a3a)"; ?>; background-size: cover; background-position: center; border-radius: 16px; min-height: 200px;">
-            <div class="card-body p-4 d-flex flex-column justify-content-between h-100">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <h5 class="mb-0 fw-bold" id="previewBank"><?php echo htmlspecialchars($card['bank_name']); ?></h5>
-                        <small class="text-white-50" id="previewName"><?php echo htmlspecialchars($card['card_name']); ?></small>
+        <!-- Preview Column -->
+        <div class="col-lg-4 col-md-5">
+            <div class="sticky-top" style="top: 24px; z-index: 10;">
+                <h5 class="fw-bold text-muted small mb-3">Live Card Preview</h5>
+                
+                <div class="credit-card-mockup" id="previewCardMockup" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+                    <div class="credit-card-brand" id="previewBrandIcon">
+                        <i class="fa-brands fa-cc-visa"></i>
                     </div>
-                    <i class="fa-solid fa-credit-card fa-2x text-white-50" id="previewIcon"></i>
-                </div>
-
-                <div class="mt-4">
-                    <div class="h5 mb-1" style="letter-spacing: 2px;" id="previewDigits">
-                        <?php echo htmlspecialchars($card['first_four'] ?? '****'); ?> **** **** <?php echo htmlspecialchars($card['last_four'] ?? '****'); ?>
+                    <div class="credit-card-chip"></div>
+                    <div class="credit-card-number" id="previewDigits">
+                        **** **** **** ****
                     </div>
-                    <small class="text-white-50" id="previewTier"><?php echo htmlspecialchars($card['tier'] ?? 'Tier Name'); ?></small>
-                </div>
-
-                <div class="d-flex justify-content-between align-items-end mt-3">
-                    <div>
-                        <small class="text-white-50 d-block">Limit</small>
-                        <span class="fw-bold">AED <?php echo number_format($card['limit_amount'], 2); ?></span>
+                    <div class="d-flex justify-content-between align-items-end mt-2">
+                        <div>
+                            <div class="credit-card-holder mb-0" id="previewName" style="font-size: 0.85rem; font-weight: 600; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
+                                Card Name
+                            </div>
+                            <small id="previewBank" style="font-size: 0.65rem; opacity: 0.7; letter-spacing: 0.5px; text-transform: uppercase;">
+                                Bank Name
+                            </small>
+                        </div>
+                        <div class="text-end">
+                            <span style="font-size: 0.6rem; opacity: 0.7; display: block;">TIER</span>
+                            <span class="fw-bold" id="previewTier" style="font-size: 0.75rem; letter-spacing: 0.5px; opacity: 0.9; text-transform: uppercase;">
+                                Standard
+                            </span>
+                        </div>
                     </div>
-                    <span class="badge bg-white text-dark" id="previewType"><?php echo htmlspecialchars($card['card_type']); ?></span>
                 </div>
             </div>
         </div>
@@ -291,69 +264,53 @@ $all_banks = $banks_stmt->fetchAll();
 </div>
 
 <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
-    function isValidUrl(string) {
-        try { new URL(string); return true; } catch (_) { return false; }
-    }
-
     async function detectBankDetails() {
         const urlInput = document.getElementById('bankUrlInput');
-        const bankNameInput = document.getElementById('bankNameInput');
-        const cardNameInput = document.getElementById('cardNameInput');
-        const featuresInput = document.getElementById('featuresInput'); // Note: edit_card uses name="features" but no ID originally, I need to add ID or select by name
-        // Wait, edit_card has textarea name="features" but NO ID in my previous view (Line 218). I must fix that or use querySelector.
-        // I will assume I add ID="featuresInput" in this chunk or use querySelector.
-        
-        const btn = document.querySelector('button[onclick="detectBankDetails()"]');
+        const btn = document.getElementById('detectBankBtn');
         const rawUrl = urlInput.value.trim();
 
-        if (!rawUrl) { showGlobalModal("Please enter a URL first.", "Input Required"); return; }
+        if (!rawUrl) { alert("Please enter a URL first."); return; }
         
         let url = rawUrl.toLowerCase();
         if (!url.startsWith('http')) { url = 'https://' + url; }
 
         const originalBtnText = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Syncing...';
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
         btn.disabled = true;
 
         try {
             const response = await fetch('fetch_url_data.php', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': <?php echo Html::json(SecurityHelper::generateCsrfToken()); ?>
+                },
                 body: JSON.stringify({ url: url })
             });
             const data = await response.json();
 
             if (data.success && data.data) {
-                // Update Fields
-                if(data.data.description) document.querySelector('textarea[name="features"]').value = "✅ VERIFIED LIVE DATA:\n" + data.data.description;
-                // We don't overwrite Name/Bank in Edit mode unless completely empty or user confirms?
-                // Creating a simplified flow: Update Features & Image primarily.
-                
+                if (data.data.description) {
+                    document.getElementById('featuresInput').value = "✅ VERIFIED LIVE DATA:\n" + data.data.description;
+                }
                 if (data.data.image) {
                     document.getElementById('cardImageInput').value = data.data.image;
-                    const cardPreview = document.querySelector('.sticky-top');
-                    if(cardPreview) {
-                        cardPreview.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('${data.data.image}')`;
-                        cardPreview.style.backgroundSize = 'cover';
-                        cardPreview.style.backgroundPosition = 'center';
-                    }
                 }
-                
-                showGlobalModal("Card features and image have been updated from the live URL. Click 'Update Card' to save.", "Sync Complete");
+                alert("Offers and features successfully updated from live URL.");
+                updatePreview();
             } else {
-                showGlobalModal("Could not fetch data from this URL.", "Sync Failed");
+                alert("Failed to synchronize features.");
             }
         } catch (e) {
             console.error(e);
-            showGlobalModal("Error connecting to server.", "Sync Error");
+            alert("Network connection error.");
         }
         
         btn.innerHTML = originalBtnText;
         btn.disabled = false;
     }
 
-    // Live Preview Update
-    const previewInputs = ['bankNameInput', 'cardNameInput', 'tierInput', 'cardTypeInput', 'firstFourInput', 'lastFourInput'];
+    const previewInputs = ['bankNameInput', 'cardNameInput', 'tierInput', 'cardTypeInput', 'networkInput', 'firstFourInput', 'lastFourInput'];
     previewInputs.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', updatePreview);
@@ -362,17 +319,36 @@ $all_banks = $banks_stmt->fetchAll();
     function updatePreview() {
         const bank = document.getElementById('bankNameInput').value || 'Bank Name';
         const name = document.getElementById('cardNameInput').value || 'Card Name';
-        const tier = document.getElementById('tierInput').value || 'Tier Name';
-        const type = document.getElementById('cardTypeInput').value || 'Type';
+        const tier = document.getElementById('tierInput').value || 'Tier';
+        const net = document.getElementById('networkInput').value;
         const f4 = document.getElementById('firstFourInput').value || '****';
         const l4 = document.getElementById('lastFourInput').value || '****';
 
         document.getElementById('previewBank').textContent = bank;
         document.getElementById('previewName').textContent = name;
         document.getElementById('previewTier').textContent = tier;
-        document.getElementById('previewType').textContent = type;
         document.getElementById('previewDigits').textContent = `${f4} **** **** ${l4}`;
+
+        const brandIcon = document.getElementById('previewBrandIcon');
+        if (brandIcon) {
+            if (net === 'Visa') brandIcon.innerHTML = '<i class="fa-brands fa-cc-visa"></i>';
+            else if (net === 'Mastercard') brandIcon.innerHTML = '<i class="fa-brands fa-cc-mastercard"></i>';
+            else brandIcon.innerHTML = '<i class="fa-brands fa-cc-amex"></i>';
+        }
+
+        const mockup = document.getElementById('previewCardMockup');
+        if (mockup) {
+            let cardBg = "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)";
+            if (tier.toLowerCase().includes('infinite') || tier.toLowerCase().includes('signature') || tier.toLowerCase().includes('world')) {
+                cardBg = "linear-gradient(135deg, #1e1b4b 0%, #311042 100%)";
+            } else if (tier.toLowerCase().includes('platinum')) {
+                cardBg = "linear-gradient(135deg, #334155 0%, #475569 100%)";
+            }
+            mockup.style.background = cardBg;
+        }
     }
+
+    updatePreview();
 </script>
 
 <?php Layout::footer(); ?>

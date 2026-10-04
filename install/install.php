@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // install/install.php
 // Automated Installer for Expense Manager
 
@@ -170,6 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         category VARCHAR(100) NOT NULL,
                         payment_method VARCHAR(50) DEFAULT 'Cash',
                         card_id INT,
+                        balance_bank_id INT DEFAULT NULL,
                         expense_date DATE NOT NULL,
                         is_subscription TINYINT(1) DEFAULT 0,
                         currency VARCHAR(3) DEFAULT 'AED',
@@ -193,6 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         is_recurring TINYINT(1) DEFAULT 0,
                         recurrence_day INT,
                         currency VARCHAR(3) DEFAULT 'AED',
+                        balance_bank_id INT DEFAULT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                         FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
@@ -207,6 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         bank_id INT NULL,
                         currency VARCHAR(3) DEFAULT 'AED',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        INDEX idx_bank_balances_bank_date (bank_id, balance_date, id),
                         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                         FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
                     )",
@@ -227,7 +230,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         user_id INT NOT NULL,
                         tenant_id INT,
                         title VARCHAR(255) NOT NULL,
-                        alert_date DATE NOT NULL,
+                        alert_date DATETIME NOT NULL,
+                        is_recurring TINYINT(1) DEFAULT 0,
                         recurrence_type VARCHAR(20) DEFAULT 'none',
                         color VARCHAR(20) DEFAULT 'primary',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -270,6 +274,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         tenant_id INT,
                         title VARCHAR(255) NOT NULL,
                         amount DECIMAL(10,2) NOT NULL,
+                        category VARCHAR(50) NOT NULL DEFAULT 'General',
                         sadaqa_date DATE NOT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -355,12 +360,114 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                     )",
+                    "CREATE TABLE IF NOT EXISTS password_resets (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT NOT NULL,
+                        token_hash CHAR(64) NOT NULL UNIQUE,
+                        expires_at DATETIME NOT NULL,
+                        used_at DATETIME DEFAULT NULL,
+                        request_ip VARCHAR(45) DEFAULT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        INDEX (user_id),
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                    )",
+                    "CREATE TABLE IF NOT EXISTS login_attempts (
+                        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                        ip VARCHAR(45) NOT NULL,
+                        email VARCHAR(255) NOT NULL DEFAULT '',
+                        attempted_at DATETIME NOT NULL,
+                        success TINYINT(1) NOT NULL DEFAULT 0,
+                        INDEX idx_ip_attempted (ip, attempted_at)
+                    )",
+                    "CREATE TABLE IF NOT EXISTS exchange_rate_cache (
+                        from_currency CHAR(3) NOT NULL,
+                        to_currency CHAR(3) NOT NULL,
+                        rate DECIMAL(15,6) NOT NULL,
+                        fetched_at DATETIME NOT NULL,
+                        PRIMARY KEY (from_currency, to_currency)
+                    )",
+                    "CREATE TABLE IF NOT EXISTS reminder_email_log (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        reminder_id INT NOT NULL,
+                        offset_days INT NOT NULL,
+                        sent_date DATE NOT NULL,
+                        sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE KEY unique_send (reminder_id, offset_days, sent_date),
+                        FOREIGN KEY (reminder_id) REFERENCES reminders(id) ON DELETE CASCADE
+                    )",
+                    "CREATE TABLE IF NOT EXISTS net_worth_items (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        tenant_id INT NOT NULL,
+                        name VARCHAR(150) NOT NULL,
+                        type ENUM('asset','liability') NOT NULL,
+                        category VARCHAR(80) NOT NULL DEFAULT 'Other',
+                        amount DECIMAL(15,2) NOT NULL DEFAULT 0,
+                        notes VARCHAR(255),
+                        sort_order INT DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        INDEX idx_tenant (tenant_id)
+                    )",
+                    "CREATE TABLE IF NOT EXISTS net_worth_snapshots (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        tenant_id INT NOT NULL,
+                        snap_year SMALLINT NOT NULL,
+                        snap_month TINYINT NOT NULL,
+                        total_assets DECIMAL(15,2) NOT NULL DEFAULT 0,
+                        total_liabilities DECIMAL(15,2) NOT NULL DEFAULT 0,
+                        net_worth DECIMAL(15,2) NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE KEY unique_snap (tenant_id, snap_year, snap_month)
+                    )",
+                    "CREATE TABLE IF NOT EXISTS trips (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT NOT NULL,
+                        tenant_id INT NOT NULL,
+                        location VARCHAR(255) NOT NULL,
+                        start_date DATE NOT NULL,
+                        end_date DATE NOT NULL,
+                        outbound_flight_number VARCHAR(100) DEFAULT NULL,
+                        return_flight_number VARCHAR(100) DEFAULT NULL,
+                        outbound_flight_status VARCHAR(50) DEFAULT 'Scheduled',
+                        outbound_flight_time VARCHAR(50) DEFAULT NULL,
+                        outbound_dep_airport VARCHAR(10) DEFAULT NULL,
+                        outbound_arr_airport VARCHAR(10) DEFAULT NULL,
+                        return_flight_status VARCHAR(50) DEFAULT 'Scheduled',
+                        return_flight_time VARCHAR(50) DEFAULT NULL,
+                        return_dep_airport VARCHAR(10) DEFAULT NULL,
+                        return_arr_airport VARCHAR(10) DEFAULT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+                    )",
+                    "CREATE TABLE IF NOT EXISTS trip_expenses (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        trip_id INT NOT NULL,
+                        tenant_id INT NOT NULL,
+                        description VARCHAR(255) NOT NULL,
+                        amount DECIMAL(15,2) NOT NULL,
+                        expense_date DATE NOT NULL,
+                        tag VARCHAR(100) NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+                    )",
                     "CREATE TABLE IF NOT EXISTS expenses_archive LIKE expenses",
                     "CREATE TABLE IF NOT EXISTS income_archive LIKE income"
                 ];
 
                 foreach ($queries as $sql) {
                     $pdo->exec($sql);
+                }
+
+                // Bring the base schema up to date with every release migration, oldest first
+                // (they are idempotent: IF NOT EXISTS everywhere). Keeps fresh installs identical
+                // to upgraded ones without copying each table definition here.
+                foreach (glob($rootDir . '/migrations/20*.sql') ?: [] as $migration) {
+                    $migrationSql = preg_replace('/^\s*--.*$/m', '', (string) file_get_contents($migration));
+                    foreach (array_filter(array_map('trim', explode(';', $migrationSql))) as $statement) {
+                        $pdo->exec($statement);
+                    }
                 }
 
                 $step = 4; // Move to Account Creation

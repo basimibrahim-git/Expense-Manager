@@ -1,52 +1,76 @@
 <?php
+/**
+ * Reconciliation "Auto-Fix" (posted from monthly_balances.php).
+ *
+ * Recorded bank balances (BalanceHelper) are the truth. When they differ from
+ * opening + income - expenses for a month, this records a balancing Income or
+ * Expense entry dated at month end. The entry does NOT move any bank balance
+ * (balance_bank_id stays NULL), it only explains the gap.
+ */
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
+use App\Helpers\SecurityHelper;
+use App\Helpers\AuditHelper;
+use App\Helpers\Flash;
 
 Bootstrap::init();
-use App\Helpers\SecurityHelper;
-if (!isset($_SESSION['user_id'])) {
-    header("Location: index.php");
+
+$back = BASE_URL . 'monthly_balances.php';
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header("Location: $back");
     exit();
 }
 
+SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
-    $action = $_POST['action'] ?? 'auto_fix';
-    $diff = floatval($_POST['difference']);
-    $desc = $_POST['desc'];
-    $date = $_POST['date']; // Current month end
-    $user_id = $_SESSION['user_id'];
-
-    if ($action == 'update_opening') {
-        // Option 2: Update Opening Balance (Backdate correction)
-        // New Opening = Old Opening + Diff.
-        // Since Opening is SUM(prev_month), adding an entry with amount=Diff effectively updates the sum.
-
-        $prev_month_end = date('Y-m-t', strtotime("$date -1 month"));
-
-        // Insert a balance adjustment for the previous month
-        $stmt = $pdo->prepare("INSERT INTO bank_balances (user_id, bank_name, amount, balance_date) VALUES (?, 'Opening Balance Adjustment', ?, ?)");
-        $stmt->execute([$user_id, $diff, $prev_month_end]);
-
-    } else {
-        // Option 1: Auto-Fix (Current Month Adj)
-        if ($diff > 0) {
-            // Surplus -> Income
-            $stmt = $pdo->prepare("INSERT INTO income (user_id, amount, source, income_date, description) VALUES (?, ?, 'Adjustment', ?, ?)");
-            $stmt->execute([$user_id, $diff, $date, $desc]);
-        } elseif ($diff < 0) {
-            // Missing -> Expense
-            $amount = abs($diff);
-            $stmt = $pdo->prepare("INSERT INTO expenses (user_id, amount, category, expense_date, description, payment_method) VALUES (?, ?, 'Adjustment', ?, ?, 'Cash')");
-            $stmt->execute([$user_id, $amount, $date, $desc]);
-        }
-    }
-
-    // Redirect back
-    $m = date('n', strtotime($date));
-    $y = date('Y', strtotime($date));
-    header("Location: monthly_balances.php?month=$m&year=$y");
-    exit;
+if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+    Flash::redirect($back, 'error', 'Unauthorized: Read-only access');
 }
 
+$tenant_id = (int) $_SESSION['tenant_id'];
+$user_id   = (int) $_SESSION['user_id'];
+$action    = $_POST['action'] ?? '';
+
+$dateRaw = $_POST['date'] ?? '';
+$dt = DateTime::createFromFormat('!Y-m-d', $dateRaw);
+if (!$dt || $dt->format('Y-m-d') !== $dateRaw) {
+    Flash::redirect($back, 'error', 'Invalid date');
+}
+$date = $dateRaw;
+$back .= '?month=' . (int) $dt->format('n') . '&year=' . (int) $dt->format('Y');
+
+$diffRaw = $_POST['difference'] ?? '';
+if (!is_numeric($diffRaw) || !is_finite((float) $diffRaw) || abs((float) $diffRaw) >= 1e12) {
+    Flash::redirect($back, 'error', 'Invalid difference');
+}
+$diff = round((float) $diffRaw, 2);
+
+if ($action !== 'auto_fix') {
+    Flash::redirect($back, 'error', 'Unknown action');
+}
+
+if (abs($diff) < 0.01) {
+    header("Location: $back");
+    exit();
+}
+
+$desc = 'Reconciliation Adjustment (' . $dt->format('F Y') . ')';
+
+try {
+    if ($diff > 0) {
+        // Surplus -> Income
+        $stmt = $pdo->prepare("INSERT INTO income (user_id, tenant_id, amount, description, category, income_date, currency) VALUES (?, ?, ?, ?, 'Adjustment', ?, 'AED')");
+        $stmt->execute([$user_id, $tenant_id, $diff, $desc, $date]);
+    } else {
+        // Missing -> Expense
+        $stmt = $pdo->prepare("INSERT INTO expenses (user_id, tenant_id, spent_by_user_id, amount, description, category, payment_method, expense_date, currency) VALUES (?, ?, ?, ?, ?, 'Adjustment', 'Cash', ?, 'AED')");
+        $stmt->execute([$user_id, $tenant_id, $user_id, abs($diff), $desc, $date]);
+    }
+    AuditHelper::log($pdo, 'reconcile_auto_fix', "$desc: $diff AED");
+} catch (PDOException $e) {
+    error_log("Reconcile Fix Error: " . $e->getMessage());
+    Flash::redirect($back, 'error', 'Failed to record the adjustment.');
+}
+
+Flash::redirect($back, 'success', 'Adjustment recorded');

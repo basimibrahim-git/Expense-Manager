@@ -1,8 +1,9 @@
-﻿<?php
+<?php
 $page_title = "Advanced Reports";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\Layout;
+use App\Helpers\Html;
 
 Bootstrap::init();
 
@@ -10,7 +11,7 @@ Layout::header();
 Layout::sidebar();
 
 $user_id = $_SESSION['user_id'];
-$year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
+$year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]) ?: (int) date('Y');
 $prev_year = $year - 1;
 
 // 1. Fetch YoY Category Data
@@ -27,26 +28,7 @@ $stmt = $pdo->prepare("
 $stmt->execute([$year, $prev_year, $_SESSION['tenant_id'], $year, $prev_year]);
 $yoy_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// 2. Fetch Heatmap Data (Spending by Day of Week vs Week of Month)
-// This is for the current year
-$stmt = $pdo->prepare("
-    SELECT DAYOFWEEK(expense_date) as dow,
-           DAY(expense_date) as dom,
-           SUM(amount) as total
-    FROM expenses
-    WHERE tenant_id = ? AND YEAR(expense_date) = ?
-    GROUP BY dow, dom
-");
-$stmt->execute([$_SESSION['tenant_id'], $year]);
-$heatmap_raw = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-$heatmap = array_fill(1, 31, array_fill(1, 7, 0)); // Initialize 31 days x 7 days-of-week
-foreach ($heatmap_raw as $row) {
-    // We just need a simple Intensity map for the whole year by day of month
-    // Actually a better heatmap is Day of Week vs Month
-    // Let's do Day of Week (1-7) vs Month (1-12)
-}
-
+// 2. Heatmap Data: spending by Day of Week (1-7) vs Month (1-12) for the selected year
 $stmt = $pdo->prepare("
     SELECT DAYOFWEEK(expense_date) as dow,
            MONTH(expense_date) as month,
@@ -204,23 +186,23 @@ foreach ($heatmap_month_dow as $row) {
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
 <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     const yoyCtx = document.getElementById('yoyChart').getContext('2d');
     new Chart(yoyCtx, {
         type: 'bar',
         data: {
-            labels: <?php echo json_encode(array_column($yoy_data, 'category')); ?>,
+            labels: <?php echo Html::json(array_column($yoy_data, 'category')); ?>,
             datasets: [
                 {
-                    label: '<?php echo $prev_year; ?>',
-                    data: <?php echo json_encode(array_column($yoy_data, 'previous_year')); ?>,
+                    label: '<?php echo (int) $prev_year; ?>',
+                    data: <?php echo Html::json(array_column($yoy_data, 'previous_year')); ?>,
                     backgroundColor: 'rgba(108, 117, 125, 0.5)',
                     borderRadius: 4
                 },
                 {
-                    label: '<?php echo $year; ?>',
-                    data: <?php echo json_encode(array_column($yoy_data, 'current_year')); ?>,
+                    label: '<?php echo (int) $year; ?>',
+                    data: <?php echo Html::json(array_column($yoy_data, 'current_year')); ?>,
                     backgroundColor: 'rgba(13, 110, 253, 0.8)',
                     borderRadius: 4
                 }

@@ -3,16 +3,18 @@ $page_title = "Advanced Search";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\Layout;
+use App\Helpers\Html;
+use App\Helpers\Categories;
 
 Bootstrap::init();
 
 Layout::header();
 Layout::sidebar();
 
-// Params
-$keyword = filter_input(INPUT_GET, 'q', FILTER_SANITIZE_SPECIAL_CHARS);
-$category = filter_input(INPUT_GET, 'category', FILTER_SANITIZE_SPECIAL_CHARS);
-$method = filter_input(INPUT_GET, 'method', FILTER_SANITIZE_SPECIAL_CHARS);
+// Params: raw values go to prepared statements; they are escaped on output
+$keyword = trim((string) filter_input(INPUT_GET, 'q'));
+$category = (string) filter_input(INPUT_GET, 'category');
+$method = (string) filter_input(INPUT_GET, 'method');
 $min_amount = filter_input(INPUT_GET, 'min', FILTER_VALIDATE_FLOAT);
 $max_amount = filter_input(INPUT_GET, 'max', FILTER_VALIDATE_FLOAT);
 
@@ -20,15 +22,18 @@ $max_amount = filter_input(INPUT_GET, 'max', FILTER_VALIDATE_FLOAT);
 $query = "SELECT id, expense_date, description, payment_method, category, amount FROM expenses WHERE tenant_id = :tenant_id";
 $params = ['tenant_id' => $_SESSION['tenant_id']];
 
-if ($keyword) {
-    $query .= " AND (description LIKE :q OR category LIKE :q)";
-    $params['q'] = "%$keyword%";
+if ($keyword !== '') {
+    // Native prepares (EMULATE_PREPARES off) cannot reuse a named placeholder
+    $like = '%' . addcslashes($keyword, '%_\\') . '%';
+    $query .= " AND (description LIKE :q1 OR category LIKE :q2)";
+    $params['q1'] = $like;
+    $params['q2'] = $like;
 }
-if ($category) {
+if ($category !== '') {
     $query .= " AND category = :cat";
     $params['cat'] = $category;
 }
-if ($method) {
+if ($method !== '') {
     $query .= " AND payment_method = :method";
     $params['method'] = $method;
 }
@@ -49,7 +54,14 @@ $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 // Get counts for filters
 $stmt_cats = $pdo->prepare("SELECT DISTINCT category FROM expenses WHERE tenant_id = ?");
 $stmt_cats->execute([$_SESSION['tenant_id']]);
-$all_cats = $stmt_cats->fetchAll(PDO::FETCH_COLUMN);
+// Standard categories (with labels) first, then any other category found in this family's data
+$category_options = Categories::EXPENSE;
+foreach ($stmt_cats->fetchAll(PDO::FETCH_COLUMN) as $cat) {
+    $cat = (string) $cat;
+    if ($cat !== '' && !isset($category_options[$cat])) {
+        $category_options[$cat] = $cat;
+    }
+}
 
 $stmt_methods = $pdo->prepare("SELECT DISTINCT payment_method FROM expenses WHERE tenant_id = ?");
 $stmt_methods->execute([$_SESSION['tenant_id']]);
@@ -72,16 +84,16 @@ $all_methods = $stmt_methods->fetchAll(PDO::FETCH_COLUMN);
                 <div class="mb-3">
                     <label for="searchQuery" class="form-label small fw-bold">Keyword</label>
                     <input type="text" name="q" id="searchQuery" class="form-control form-control-sm"
-                        placeholder="Search..." value="<?php echo htmlspecialchars($keyword ?? ''); ?>">
+                        placeholder="Search..." value="<?php echo Html::e($keyword); ?>">
                 </div>
 
                 <div class="mb-3">
                     <label for="searchCategory" class="form-label small fw-bold">Category</label>
                     <select name="category" id="searchCategory" class="form-select form-select-sm">
                         <option value="">All Categories</option>
-                        <?php foreach ($all_cats as $cat): ?>
-                            <option value="<?php echo $cat; ?>" <?php echo $category == $cat ? 'selected' : ''; ?>>
-                                <?php echo $cat; ?>
+                        <?php foreach ($category_options as $cat => $cat_label): ?>
+                            <option value="<?php echo Html::e($cat); ?>" <?php echo $category === (string) $cat ? 'selected' : ''; ?>>
+                                <?php echo Html::e($cat_label); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -92,8 +104,8 @@ $all_methods = $stmt_methods->fetchAll(PDO::FETCH_COLUMN);
                     <select name="method" id="searchMethod" class="form-select form-select-sm">
                         <option value="">All Methods</option>
                         <?php foreach ($all_methods as $m): ?>
-                            <option value="<?php echo $m; ?>" <?php echo $method == $m ? 'selected' : ''; ?>>
-                                <?php echo $m; ?>
+                            <option value="<?php echo Html::e($m); ?>" <?php echo $method === (string) $m ? 'selected' : ''; ?>>
+                                <?php echo Html::e($m); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -103,9 +115,9 @@ $all_methods = $stmt_methods->fetchAll(PDO::FETCH_COLUMN);
                     <label for="minAmount" class="form-label small fw-bold">Amount Range</label>
                     <div class="d-flex gap-2">
                         <input type="number" name="min" id="minAmount" class="form-control form-control-sm"
-                            placeholder="Min" value="<?php echo $min_amount; ?>">
+                            placeholder="Min" value="<?php echo Html::e($min_amount === false ? '' : $min_amount); ?>">
                         <input type="number" name="max" id="maxAmount" class="form-control form-control-sm"
-                            placeholder="Max" value="<?php echo $max_amount; ?>">
+                            placeholder="Max" value="<?php echo Html::e($max_amount === false ? '' : $max_amount); ?>">
                     </div>
                 </div>
 
@@ -125,7 +137,7 @@ $all_methods = $stmt_methods->fetchAll(PDO::FETCH_COLUMN);
                     <?php echo count($results); ?> results
                 </span>
                 <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-secondary" onclick="window.print()"><i
+                    <button type="button" class="btn btn-outline-secondary" data-print><i
                             class="fa-solid fa-print"></i></button>
                     <button class="btn btn-outline-secondary"><i class="fa-solid fa-file-export"></i></button>
                 </div>
@@ -166,7 +178,7 @@ $all_methods = $stmt_methods->fetchAll(PDO::FETCH_COLUMN);
                                             <?php echo htmlspecialchars($res['description']); ?>
                                         </div>
                                         <div class="smaller text-muted">via
-                                            <?php echo $res['payment_method']; ?>
+                                            <?php echo Html::e($res['payment_method']); ?>
                                         </div>
                                     </td>
                                     <td>
@@ -180,7 +192,7 @@ $all_methods = $stmt_methods->fetchAll(PDO::FETCH_COLUMN);
                                         </span>
                                     </td>
                                     <td class="text-end pe-4">
-                                        <a href="edit_expense.php?id=<?php echo $res['id']; ?>"
+                                        <a href="edit_expense.php?id=<?php echo (int) $res['id']; ?>"
                                             class="btn btn-sm btn-outline-primary border-0"><i class="fa-solid fa-pen"></i></a>
                                     </td>
                                 </tr>

@@ -2,6 +2,7 @@
 $current_page = 'audit_log.php';
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
+use App\Helpers\Html;
 use App\Helpers\Layout;
 use App\Helpers\SecurityHelper;
 
@@ -13,12 +14,14 @@ $role      = $_SESSION['role'] ?? 'member';
 $is_admin  = in_array($role, ['admin', 'family_admin', 'root_admin']);
 
 // ── Filters ────────────────────────────────────────────────────────────────
-$filter_action  = trim($_GET['action_filter'] ?? '');
-$filter_from    = trim($_GET['date_from'] ?? '');
-$filter_to      = trim($_GET['date_to'] ?? '');
-$filter_keyword = trim($_GET['keyword'] ?? '');
+$get_str        = fn(string $k): string => is_string($_GET[$k] ?? null) ? trim($_GET[$k]) : '';
+$valid_date     = fn(string $d): string => preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) ? $d : '';
+$filter_action  = $get_str('action_filter');
+$filter_from    = $valid_date($get_str('date_from'));
+$filter_to      = $valid_date($get_str('date_to'));
+$filter_keyword = $get_str('keyword');
 $export_csv     = $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['export'] ?? '') === 'csv';
-$page           = max(1, intval($_GET['page'] ?? 1));
+$page           = max(1, (int) $get_str('page'));
 $per_page       = 25;
 $offset         = ($page - 1) * $per_page;
 
@@ -86,13 +89,15 @@ if ($export_csv) {
     header('Content-Type: text/csv; charset=UTF-8');
     header('Content-Disposition: attachment; filename="activity_log_' . date('Y-m-d') . '.csv"');
     $out = fopen('php://output', 'w');
+    // Neutralise spreadsheet formulas in user-controlled cells (CSV injection)
+    $cell = fn($v) => (is_string($v) && $v !== '' && strpbrk($v[0], "=+-@\t\r") !== false) ? "'" . $v : $v;
     fputcsv($out, ['Date/Time', 'Action', 'Details', 'User']);
     foreach ($rows as $row) {
         fputcsv($out, [
             $row['created_at'],
-            ucfirst(str_replace('_', ' ', $row['action'])),
-            $row['context'],
-            $row['user_name'] ?? 'Unknown',
+            $cell(ucfirst(str_replace('_', ' ', $row['action']))),
+            $cell($row['context']),
+            $cell($row['user_name'] ?? 'Unknown'),
         ]);
     }
     fclose($out);
@@ -133,11 +138,11 @@ $csrf = SecurityHelper::generateCsrfToken();
 // ── Build query string helper (preserves filters) ─────────────────────────
 function build_qs(array $overrides = []): string {
     $base = [
-        'action_filter' => $_GET['action_filter'] ?? '',
-        'date_from'     => $_GET['date_from'] ?? '',
-        'date_to'       => $_GET['date_to'] ?? '',
-        'keyword'       => $_GET['keyword'] ?? '',
-        'page'          => $_GET['page'] ?? 1,
+        'action_filter' => $GLOBALS['filter_action'],
+        'date_from'     => $GLOBALS['filter_from'],
+        'date_to'       => $GLOBALS['filter_to'],
+        'keyword'       => $GLOBALS['filter_keyword'],
+        'page'          => $GLOBALS['page'],
     ];
     $merged = array_merge($base, $overrides);
     return http_build_query(array_filter($merged, fn($v) => $v !== '' && $v !== null));
@@ -159,7 +164,7 @@ Layout::sidebar();
                 <?php echo $is_admin ? 'All tenant activity' : 'Your personal activity history'; ?>
             </p>
         </div>
-        <form method="POST" action="audit_log.php?<?php echo build_qs(['page' => '']); ?>" class="d-inline">
+        <form method="POST" action="audit_log.php?<?php echo Html::e(build_qs(['page' => ''])); ?>" class="d-inline">
             <input type="hidden" name="export" value="csv">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf); ?>">
             <button type="submit" class="btn btn-outline-success btn-sm rounded-pill shadow-sm">
@@ -292,7 +297,7 @@ Layout::sidebar();
         <ul class="pagination pagination-sm justify-content-center flex-wrap gap-1">
             <!-- Previous -->
             <li class="page-item <?php echo $page <= 1 ? 'disabled' : ''; ?>">
-                <a class="page-link rounded-pill" href="?<?php echo build_qs(['page' => $page - 1]); ?>">
+                <a class="page-link rounded-pill" href="?<?php echo Html::e(build_qs(['page' => $page - 1])); ?>">
                     <i class="fa-solid fa-chevron-left"></i>
                 </a>
             </li>
@@ -302,7 +307,7 @@ Layout::sidebar();
             $end   = min($total_pages, $page + 2);
             if ($start > 1): ?>
                 <li class="page-item">
-                    <a class="page-link rounded-pill" href="?<?php echo build_qs(['page' => 1]); ?>">1</a>
+                    <a class="page-link rounded-pill" href="?<?php echo Html::e(build_qs(['page' => 1])); ?>">1</a>
                 </li>
                 <?php if ($start > 2): ?>
                     <li class="page-item disabled"><span class="page-link">…</span></li>
@@ -311,7 +316,7 @@ Layout::sidebar();
 
             <?php for ($p = $start; $p <= $end; $p++): ?>
                 <li class="page-item <?php echo $p === $page ? 'active' : ''; ?>">
-                    <a class="page-link rounded-pill" href="?<?php echo build_qs(['page' => $p]); ?>"><?php echo $p; ?></a>
+                    <a class="page-link rounded-pill" href="?<?php echo Html::e(build_qs(['page' => $p])); ?>"><?php echo $p; ?></a>
                 </li>
             <?php endfor; ?>
 
@@ -320,7 +325,7 @@ Layout::sidebar();
                     <li class="page-item disabled"><span class="page-link">…</span></li>
                 <?php endif; ?>
                 <li class="page-item">
-                    <a class="page-link rounded-pill" href="?<?php echo build_qs(['page' => $total_pages]); ?>">
+                    <a class="page-link rounded-pill" href="?<?php echo Html::e(build_qs(['page' => $total_pages])); ?>">
                         <?php echo $total_pages; ?>
                     </a>
                 </li>
@@ -328,7 +333,7 @@ Layout::sidebar();
 
             <!-- Next -->
             <li class="page-item <?php echo $page >= $total_pages ? 'disabled' : ''; ?>">
-                <a class="page-link rounded-pill" href="?<?php echo build_qs(['page' => $page + 1]); ?>">
+                <a class="page-link rounded-pill" href="?<?php echo Html::e(build_qs(['page' => $page + 1])); ?>">
                     <i class="fa-solid fa-chevron-right"></i>
                 </a>
             </li>

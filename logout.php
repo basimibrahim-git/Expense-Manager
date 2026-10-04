@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($token); ?>">
                     <button type="submit" class="btn btn-danger w-100 py-2 mb-3">Yes, Log Me Out</button>
                 </form>
-                <a href="javascript:history.back()" class="text-decoration-none small">Cancel</a>
+                <a href="dashboard.php" class="text-decoration-none small">Cancel</a>
             </div>
         </div>
     </div>

@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
+use App\Helpers\Html;
+use App\Helpers\ExchangeRateHelper;
 
 Bootstrap::init();
 
@@ -8,15 +10,24 @@ if (!isset($_SESSION['user_id'])) {
     die("Unauthorized");
 }
 
+// Standalone page (no Layout::header), so send the same CSP as the rest of the app
+$csp_nonce = base64_encode(random_bytes(16));
+header('X-Content-Type-Options: nosniff');
+header("Content-Security-Policy: default-src 'self'; script-src 'self' cdn.jsdelivr.net 'nonce-{$csp_nonce}'; style-src 'self' cdn.jsdelivr.net 'unsafe-inline'; font-src 'self' cdn.jsdelivr.net; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self';");
+
 $tenant_id = $_SESSION['tenant_id'];
-$month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
-$year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
+$month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]) ?: (int) date('n');
+$year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]) ?: (int) date('Y');
 $month_name = date("F", mktime(0, 0, 0, $month, 10));
 
-// Fetch Data
-$stmt = $pdo->prepare("SELECT SUM(amount) FROM income WHERE tenant_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ?");
+// Fetch Data (income is stored in its entered currency; total it in AED)
+$stmt = $pdo->prepare("SELECT COALESCE(currency, 'AED') AS currency, SUM(amount) AS total FROM income WHERE tenant_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ? GROUP BY COALESCE(currency, 'AED')");
 $stmt->execute([$tenant_id, $month, $year]);
-$total_income = $stmt->fetchColumn() ?: 0;
+$total_income = 0;
+foreach ($stmt->fetchAll(PDO::FETCH_KEY_PAIR) as $cur => $sum) {
+    $cur = strtoupper((string) $cur);
+    $total_income += (float) $sum * ($cur === 'AED' ? 1.0 : ExchangeRateHelper::getRate($cur, 'AED', $pdo));
+}
 
 $stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
 $stmt->execute([$tenant_id, $month, $year]);
@@ -73,11 +84,11 @@ $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </style>
 </head>
 
-<body onload="window.print()">
+<body>
     <div class="container my-5">
         <div class="no-print mb-4">
-            <button onclick="window.print()" class="btn btn-primary">Print to PDF</button>
-            <a href="monthly_expenses.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>"
+            <button type="button" data-print class="btn btn-primary">Print to PDF</button>
+            <a href="monthly_expenses.php?month=<?php echo (int) $month; ?>&year=<?php echo (int) $year; ?>"
                 class="btn btn-outline-secondary">Back</a>
         </div>
 
@@ -86,7 +97,7 @@ $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <h1 class="fw-bold text-primary mb-1">Monthly Statement</h1>
                 <p class="text-muted mb-0">
                     <?php echo $month_name . ' ' . $year; ?> | User:
-                    <?php echo htmlspecialchars($_SESSION['user_name']); ?>
+                    <?php echo Html::e($_SESSION['user_name'] ?? ''); ?>
                 </p>
             </div>
             <div class="text-end text-muted small">
@@ -178,7 +189,7 @@ $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <?php echo htmlspecialchars($e['category']); ?>
                         </td>
                         <td>
-                            <?php echo $e['payment_method']; ?>
+                            <?php echo Html::e($e['payment_method']); ?>
                         </td>
                         <td class="text-end fw-bold">
                             <?php echo number_format($e['amount'], 2); ?>
@@ -192,6 +203,11 @@ $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
             This is a computer-generated report from Antigravity Expense Manager.
         </div>
     </div>
+
+    <script src="<?php echo Html::e(BASE_URL . 'assets/js/app.js?v=' . ($_ENV['APP_VERSION'] ?? '1.0.0')); ?>" nonce="<?php echo $csp_nonce; ?>"></script>
+    <script nonce="<?php echo $csp_nonce; ?>">
+        window.addEventListener('load', function () { window.print(); });
+    </script>
 </body>
 
 </html>

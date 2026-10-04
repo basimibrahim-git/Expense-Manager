@@ -18,7 +18,8 @@ codecheck.bat
 # Logs
 *.log
 .error.log
-logs/
+logs/*
+!logs/.htaccess
 error.log
 
 # OS artifacts
@@ -51,3 +52,8 @@ debug_budget.php
 debug_*.php
 test_*.php
 scratch_*.php
+# Database dumps (contain real user data) — never commit
+/*.sql
+
+# Local deploy packages
+deploy/

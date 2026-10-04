@@ -1,8 +1,10 @@
-﻿<?php
+<?php
 // admin/manage_tenants.php
 $current_page = 'admin/manage_tenants.php';
 require_once __DIR__ . '/../autoload.php';
 use App\Core\Bootstrap;
+use App\Helpers\Html;
+use App\Helpers\Flash;
 use App\Helpers\Layout;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
@@ -10,10 +12,7 @@ use App\Helpers\AuditHelper;
 Bootstrap::init();
 
 // Root Admin Authorization
-if (($_SESSION['role'] ?? '') !== 'root_admin') {
-    header("Location: ../dashboard.php");
-    exit();
-}
+SecurityHelper::requireRole(['root_admin']);
 
 $error = "";
 $success = "";
@@ -23,10 +22,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     if ($_POST['action'] === 'rename_tenant') {
-        $tenantId = intval($_POST['tenant_id']);
-        $newName = trim($_POST['family_name']);
+        $tenantId = intval($_POST['tenant_id'] ?? 0);
+        $newName = trim((string) ($_POST['family_name'] ?? ''));
 
-        if ($tenantId > 0 && !empty($newName)) {
+        if ($tenantId > 0 && !empty($newName) && mb_strlen($newName) <= 100) {
             try {
                 $stmt = $pdo->prepare("UPDATE tenants SET family_name = ? WHERE id = ?");
                 $stmt->execute([$newName, $tenantId]);
@@ -38,24 +37,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
         }
     } elseif ($_POST['action'] === 'add_member') {
-        $tenantId = intval($_POST['tenant_id']);
-        $name = trim($_POST['name']);
+        $tenantId = intval($_POST['tenant_id'] ?? 0);
+        $name = trim((string) ($_POST['name'] ?? ''));
         $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
-        $pass = $_POST['password'];
-        $role = $_POST['role'] ?? 'user';
+        $pass = (string) ($_POST['password'] ?? '');
+        // Only tenant-level roles can be granted here (never root_admin)
+        $role = in_array($_POST['role'] ?? 'user', ['family_admin', 'user'], true) ? $_POST['role'] : 'user';
 
-        if ($tenantId > 0 && !empty($name) && $email !== false && $email !== null && !empty($pass)) {
+        $tenantExists = false;
+        if ($tenantId > 0) {
+            $chk = $pdo->prepare("SELECT id FROM tenants WHERE id = ?");
+            $chk->execute([$tenantId]);
+            $tenantExists = (bool) $chk->fetchColumn();
+        }
+        $emailTaken = false;
+        if ($email) {
+            $chk = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+            $chk->execute([$email]);
+            $emailTaken = (bool) $chk->fetchColumn();
+        }
+        $passwordError = $pass !== '' ? SecurityHelper::validatePassword($pass) : null;
+
+        if (!$tenantExists) {
+            $error = "That family account does not exist.";
+        } elseif ($emailTaken) {
+            $error = "A user with that email address already exists.";
+        } elseif ($passwordError !== null) {
+            $error = $passwordError;
+        } elseif (!empty($name) && mb_strlen($name) <= 100 && $email !== false && $email !== null && $pass !== '') {
             try {
                 $hashed = password_hash($pass, PASSWORD_DEFAULT);
                 $stmt = $pdo->prepare("INSERT INTO users (tenant_id, name, email, password, role, permission) VALUES (?, ?, ?, ?, ?, 'edit')");
                 $stmt->execute([$tenantId, $name, $email, $hashed, $role]);
-                $success = "User '" . htmlspecialchars($name) . "' added to the family!";
+                $success = "User '" . $name . "' added to the family!"; // escaped when displayed
                 AuditHelper::log($pdo, 'add_member_admin', "Added User $email to Tenant ID $tenantId");
 
-                // Set session message and redirect to prevent resubmission + clear URL
-                $_SESSION['success_msg'] = $success;
-                header("Location: manage_tenants.php");
-                exit();
+                // Flash the message and redirect to prevent resubmission
+                Flash::redirect('manage_tenants.php', 'success', $success);
             } catch (PDOException $e) {
                 error_log("Add user admin failed: " . $e->getMessage());
                 $error = "Failed to add user: A system error occurred.";
@@ -70,21 +88,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 }
 
-// Handle Rename Success Redirect
+// Handle Rename Success Redirect (the layout shows the flashed message)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'rename_tenant' && $success) {
-    $_SESSION['success_msg'] = $success;
-    header("Location: manage_tenants.php");
-    exit();
-}
-
-// Read and Clear Session Messages
-if (isset($_SESSION['success_msg'])) {
-    $success = $_SESSION['success_msg'];
-    unset($_SESSION['success_msg']);
-}
-if (isset($_SESSION['error_msg'])) {
-    $error = $_SESSION['error_msg'];
-    unset($_SESSION['error_msg']);
+    Flash::redirect('manage_tenants.php', 'success', $success);
 }
 
 // Fetch users for specific tenant if requested
@@ -143,12 +149,6 @@ try {
             </div>
         <?php endif; ?>
 
-        <?php if ($success): ?>
-            <div class="alert alert-success shadow-sm border-0 rounded-pill px-4 animate__animated animate__fadeIn">
-                <i class="fa-solid fa-circle-check me-2"></i><?php echo htmlspecialchars($success); ?>
-            </div>
-        <?php endif; ?>
-
         <div class="glass-panel p-4 shadow-sm border-0 rounded-4">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
@@ -191,11 +191,11 @@ try {
                                 <td class="text-end pe-4">
                                     <div class="d-flex justify-content-end align-items-center gap-2">
                                         <button class="btn btn-sm btn-outline-success border-0" title="Add Member"
-                                            onclick="openAddMemberModal(<?php echo htmlspecialchars($tenant['id']); ?>, '<?php echo addslashes(htmlspecialchars($tenant['family_name'])); ?>')">
+                                            data-onclick="openAddMemberModal" data-args="<?php echo Html::args((int) $tenant['id'], $tenant['family_name']); ?>">
                                             <i class="fa-solid fa-user-plus"></i>
                                         </button>
                                         <button class="btn btn-sm btn-outline-primary border-0" title="Rename Family"
-                                            onclick="openEditModal(<?php echo htmlspecialchars($tenant['id']); ?>, '<?php echo addslashes(htmlspecialchars($tenant['family_name'])); ?>')">
+                                            data-onclick="openEditModal" data-args="<?php echo Html::args((int) $tenant['id'], $tenant['family_name']); ?>">
                                             <i class="fa-solid fa-pen-to-square"></i>
                                         </button>
                                         <span class="badge bg-success">Active</span>
@@ -315,25 +315,24 @@ try {
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>"></script>
     <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         function openEditModal(id, name) {
             document.getElementById('editTenantId').value = id;
             document.getElementById('editFamilyName').value = name;
-            new bootstrap.Modal(document.getElementById('editTenantModal')).show();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('editTenantModal')).show();
         }
 
         function openAddMemberModal(id, name) {
             document.getElementById('addMemberTenantId').value = id;
             document.getElementById('addMemberFamilyName').innerText = name;
-            new bootstrap.Modal(document.getElementById('addMemberModal')).show();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('addMemberModal')).show();
         }
 
         // Auto-open members modal if directed
         <?php if (isset($_GET['view_members'])): ?>
-            window.onload = function () {
-                new bootstrap.Modal(document.getElementById('viewMembersModal')).show();
-            }
+            window.addEventListener('load', function () {
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('viewMembersModal')).show();
+            });
         <?php endif; ?>
     </script>
     <?php Layout::footer(); ?>

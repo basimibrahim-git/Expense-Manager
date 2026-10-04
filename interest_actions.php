@@ -3,6 +3,7 @@ require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
+use App\Helpers\Flash;
 
 Bootstrap::init();
 
@@ -11,42 +12,49 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        header("Location: interest_tracker.php?error=Unauthorized: Read-only access");
-        exit();
+        Flash::redirect('interest_tracker.php', 'error', 'Unauthorized: Read-only access');
     }
 
     $action = $_POST['action'] ?? '';
 
     if ($action == 'add_payment') {
-        // Handle Payment (Negative Interest)
-        $title = trim($_POST['title']);
-        $amount = floatval($_POST['amount']);
-        $date = $_POST['payment_date'];
-        $target_month_year = $_POST['target_month_year']; // Format YYYY-MM
+        // Handle Payment (stored as a negative interest_tracker amount)
+        $title  = trim((string) ($_POST['title'] ?? ''));
+        $amount = filter_var($_POST['amount'] ?? null, FILTER_VALIDATE_FLOAT);
+        $date   = (string) ($_POST['payment_date'] ?? '');
+        $target_month_year = (string) ($_POST['target_month_year'] ?? ''); // Format YYYY-MM
 
-        if (!empty($target_month_year)) {
-            $parts = explode('-', $target_month_year);
-            $year = $parts[0];
-            $month = $parts[1];
-
-            // We'll use the 28th of the month to ensure it sits at the end or just current day if valid
-            $day = min(date('d'), 28);
-            $interest_date = "$year-$month-$day";
-        } else {
-            $interest_date = $date;
+        $pay = DateTime::createFromFormat('!Y-m-d', $date);
+        if (!$pay || $pay->format('Y-m-d') !== $date || (int) $pay->format('Y') < 2000 || (int) $pay->format('Y') > 2100) {
+            Flash::redirect('interest_tracker.php', 'error', 'Please enter a valid payment date.');
         }
 
-        if ($amount > 0 && !empty($title) && !empty($interest_date)) {
-            // Store as NEGATIVE amount for payment
+        // The payment is booked in the month it pays for, so it offsets that month's interest.
+        // Use the actual payment date when it falls in that month, otherwise the payment day
+        // clamped to the target month's last day.
+        $interest_date = $date;
+        if ($target_month_year !== '') {
+            $target = DateTime::createFromFormat('!Y-m', $target_month_year);
+            if (!$target || $target->format('Y-m') !== $target_month_year || (int) $target->format('Y') < 2000 || (int) $target->format('Y') > 2100) {
+                Flash::redirect('interest_tracker.php', 'error', 'Please choose a valid month to pay for.');
+            }
+            if ($pay->format('Y-m') !== $target_month_year) {
+                $day = min((int) $pay->format('j'), (int) $target->format('t'));
+                $interest_date = $target->format('Y-m-') . sprintf('%02d', $day);
+            }
+        }
+
+        if ($amount !== false && $amount > 0 && $amount <= 99999999.99 && $title !== '' && mb_strlen($title) <= 255) {
             $final_amount = -1 * abs($amount);
 
             $stmt = $pdo->prepare("INSERT INTO interest_tracker (user_id, tenant_id, title, amount, interest_date) VALUES (?, ?, ?, ?, ?)");
             $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $title, $final_amount, $interest_date]);
 
-            AuditHelper::log($pdo, 'interest_payment', "Recorded Interest Payment: " . abs($amount) . " for " . ($target_month_year ?: $interest_date));
-            header("Location: interest_tracker.php?year=" . date('Y', strtotime($interest_date)) . "&success=Payment Recorded");
-            exit;
+            AuditHelper::log($pdo, 'interest_payment', "Recorded Interest Payment: " . abs($amount) . " on $date for " . ($target_month_year ?: $interest_date));
+            Flash::redirect('interest_tracker.php?year=' . (int) substr($interest_date, 0, 4), 'success', 'Payment Recorded');
         }
+
+        Flash::redirect('interest_tracker.php', 'error', 'Please enter a description and an amount greater than zero.');
     }
 }
 

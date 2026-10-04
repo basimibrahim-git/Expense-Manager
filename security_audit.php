@@ -1,25 +1,28 @@
-﻿<?php
+<?php
 // security_audit.php
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
+use App\Helpers\Html;
 use App\Helpers\Layout;
+use App\Helpers\SecurityHelper;
 
 Bootstrap::init();
 
-if (!isset($_SESSION['user_id'])) {
-    header("Location: index.php");
-    exit();
-}
+// Tenant-wide audit trail: family admins (and root admins) only
+SecurityHelper::requireRole(['family_admin', 'root_admin']);
 
 $user_id = $_SESSION['user_id'];
 
 // Pagination
 $limit = 50;
-$page = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT) ?: 1;
+$page = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 1;
 $offset = ($page - 1) * $limit;
 
 // Filters
-$action_filter = $_GET['action_type'] ?? '';
+$action_filter = is_string($_GET['action_type'] ?? null) ? $_GET['action_type'] : '';
+$action_types = [];
+$logs = [];
+$total_pages = 0;
 
 $where = "WHERE a.tenant_id = :tenant_id";
 $params = ['tenant_id' => $_SESSION['tenant_id']];
@@ -77,11 +80,11 @@ Layout::sidebar();
         <div class="col-auto">
             <form class="row g-2 align-items-center" method="GET">
                 <div class="col-auto">
-                    <select name="action_type" class="form-select" onchange="this.form.submit()">
+                    <select name="action_type" class="form-select" data-autosubmit>
                         <option value="">All Actions</option>
                         <?php foreach ($action_types as $type): ?>
-                            <option value="<?php echo $type; ?>" <?php echo $action_filter == $type ? 'selected' : ''; ?>>
-                                <?php echo ucwords(str_replace('_', ' ', $type)); ?>
+                            <option value="<?php echo Html::e($type); ?>" <?php echo $action_filter == $type ? 'selected' : ''; ?>>
+                                <?php echo Html::e(ucwords(str_replace('_', ' ', $type))); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -98,7 +101,7 @@ Layout::sidebar();
     <?php if (isset($error)): ?>
         <div class="alert alert-danger shadow-sm border-0">
             <i class="fa-solid fa-triangle-exclamation me-2"></i>
-            <?php echo $error; ?>
+            <?php echo Html::e($error); ?>
         </div>
     <?php endif; ?>
 
@@ -118,7 +121,7 @@ Layout::sidebar();
                 <tbody>
                     <?php if (empty($logs)): ?>
                         <tr>
-                            <td colspan="5" class="text-center py-5 text-muted">
+                            <td colspan="6" class="text-center py-5 text-muted">
                                 <i class="fa-solid fa-ghost fa-3x mb-3 d-block opacity-10"></i>
                                 No audit logs found matching your criteria.
                             </td>
@@ -153,7 +156,7 @@ Layout::sidebar();
                                     }
                                     ?>
                                     <span class="badge <?php echo $badgeClass; ?> rounded-pill px-3">
-                                        <?php echo ucwords(str_replace('_', ' ', $log['action'])); ?>
+                                        <?php echo Html::e(ucwords(str_replace('_', ' ', $log['action']))); ?>
                                     </span>
                                 </td>
                                 <td class="text-truncate" style="max-width: 300px;">
@@ -163,8 +166,16 @@ Layout::sidebar();
                                     <code><?php echo htmlspecialchars($log['ip_address']); ?></code>
                                 </td>
                                 <td class="text-end pe-4">
-                                    <button class="btn btn-light btn-sm rounded-pill px-3"
-                                        onclick="viewAuditDetails(<?php echo htmlspecialchars(json_encode($log)); ?>)">
+                                    <button type="button" class="btn btn-light btn-sm rounded-pill px-3"
+                                        data-onclick="viewAuditDetails"
+                                        data-args="<?php echo Html::args([
+                                            'user_name'    => $log['user_name'],
+                                            'action'       => $log['action'],
+                                            'display_time' => $log['display_time'],
+                                            'context'      => $log['context'],
+                                            'ip_address'   => $log['ip_address'],
+                                            'user_agent'   => $log['user_agent'],
+                                        ]); ?>">
                                         View
                                     </button>
                                 </td>
@@ -243,14 +254,14 @@ Layout::sidebar();
 
 <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     function viewAuditDetails(log) {
-        const modal = new bootstrap.Modal(document.getElementById('auditDetailModal'));
+        const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('auditDetailModal'));
 
         document.getElementById('modalUserName').textContent = log.user_name || 'System / Unknown';
-        document.getElementById('modalAction').textContent = log.action.replace(/_/g, ' ').toUpperCase();
+        document.getElementById('modalAction').textContent = String(log.action || '').replace(/_/g, ' ').toUpperCase();
         document.getElementById('modalTime').textContent = log.display_time;
-        document.getElementById('modalContextText').textContent = log.context;
-        document.getElementById('modalIP').textContent = log.ip_address;
-        document.getElementById('modalUA').textContent = log.user_agent;
+        document.getElementById('modalContextText').textContent = log.context || '';
+        document.getElementById('modalIP').textContent = log.ip_address || '';
+        document.getElementById('modalUA').textContent = log.user_agent || '';
 
         modal.show();
     }

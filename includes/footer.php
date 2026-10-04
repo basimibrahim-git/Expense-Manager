@@ -9,14 +9,14 @@
         <i class="fa-solid fa-plus fa-xl"></i>
     </button>
     <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 mb-2 rounded-4 p-2">
-        <li><a class="dropdown-item rounded-3 py-2 fw-bold text-danger" href="add_expense.php"><i
+        <li><a class="dropdown-item rounded-3 py-2 fw-bold text-danger" href="<?php echo BASE_URL; ?>add_expense.php"><i
                     class="fa-solid fa-receipt me-2"></i> Add Expense</a></li>
-        <li><a class="dropdown-item rounded-3 py-2 fw-bold text-success" href="add_income.php"><i
+        <li><a class="dropdown-item rounded-3 py-2 fw-bold text-success" href="<?php echo BASE_URL; ?>add_income.php"><i
                     class="fa-solid fa-wallet me-2"></i> Add Income</a></li>
         <li>
             <hr class="dropdown-divider">
         </li>
-        <li><a class="dropdown-item rounded-3 py-2 small" href="add_card.php"><i
+        <li><a class="dropdown-item rounded-3 py-2 small" href="<?php echo BASE_URL; ?>add_card.php"><i
                     class="fa-solid fa-credit-card me-2"></i> Add Card</a></li>
     </ul>
 </div>
@@ -110,6 +110,7 @@
     });
 
     function processCommand(cmd) {
+        const base = <?php echo json_encode(BASE_URL); ?>;
         const parts = cmd.split(' ');
         const action = parts[0].toLowerCase();
 
@@ -119,13 +120,13 @@
             const desc = parts.slice(3).join(' ');
 
             if (type === 'expense') {
-                window.location.href = `add_expense.php?amount=${amount}&description=${encodeURIComponent(desc)}`;
+                window.location.href = `${base}add_expense.php?amount=${encodeURIComponent(amount)}&description=${encodeURIComponent(desc)}`;
             } else if (type === 'income') {
-                window.location.href = `add_income.php?amount=${amount}&description=${encodeURIComponent(desc)}`;
+                window.location.href = `${base}add_income.php?amount=${encodeURIComponent(amount)}&description=${encodeURIComponent(desc)}`;
             }
         }
         else if (action === 'show' || action === 'goto') {
-            const page = parts[1].toLowerCase();
+            const page = (parts[1] || '').toLowerCase();
             const map = {
                 'dashboard': 'dashboard.php',
                 'cards': 'my_cards.php',
@@ -137,7 +138,7 @@
                 'subs': 'subscriptions.php',
                 'subscriptions': 'subscriptions.php'
             };
-            if (map[page]) window.location.href = map[page];
+            if (map[page]) window.location.href = base + map[page];
         }
         else if (action === 'refresh') {
             location.reload();
@@ -151,10 +152,10 @@
         new bootstrap.Modal(document.getElementById('globalInfoModal')).show();
     }
 
-    // Global Confirm Helper (for delete actions)
-    function confirmDelete(url, message = "Are you sure you want to delete this?", buttonText = "Delete") {
-        document.getElementById('globalConfirmModalBody').innerHTML = message;
-        document.getElementById('globalConfirmBtn').innerHTML = `<i class="fa-solid fa-trash me-1"></i> ${buttonText}`;
+    // Global Confirm Helper (for link-based delete actions, e.g. confirmDeleteUrl('page.php?id=1'))
+    function confirmDeleteUrl(url, message = "Are you sure you want to delete this?", buttonText = "Delete") {
+        document.getElementById('globalConfirmModalBody').textContent = message;
+        document.getElementById('globalConfirmBtn').textContent = buttonText;
         const modal = new bootstrap.Modal(document.getElementById('globalConfirmModal'));
 
         // Set up the confirm button action
@@ -168,13 +169,17 @@
     }
 
     // For forms - submit after confirmation
-    function confirmSubmit(formElement, message = "Are you sure?") {
-        document.getElementById('globalConfirmModalBody').innerHTML = message;
+    function confirmSubmit(element, message = "Are you sure?") {
+        document.getElementById('globalConfirmModalBody').textContent = message;
         const modal = new bootstrap.Modal(document.getElementById('globalConfirmModal'));
+
+        const form = element.tagName === 'FORM' ? element : element.form || element.closest('form');
 
         document.getElementById('globalConfirmBtn').onclick = function () {
             modal.hide();
-            formElement.submit();
+            if (form) {
+                form.submit();
+            }
         };
 
         modal.show();
@@ -186,13 +191,14 @@
 <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('sw.js');
+            navigator.serviceWorker.register(<?php echo json_encode(BASE_URL . 'sw.js'); ?>);
         });
     }
 </script>
 
 <!-- Bootstrap JS Bundle -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>"></script>
+<script src="<?php echo BASE_URL; ?>assets/js/app.js?v=<?php echo htmlspecialchars($_ENV['APP_VERSION'] ?? '1.0.0'); ?>" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>"></script>
 </body>
 
 </html>

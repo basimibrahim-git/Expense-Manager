@@ -3,16 +3,15 @@
 $current_page = 'admin/index.php';
 require_once __DIR__ . '/../autoload.php';
 use App\Core\Bootstrap;
+use App\Helpers\Html;
 use App\Helpers\Layout;
+use App\Helpers\SecurityHelper;
 
 Bootstrap::init();
 
 
 // Root Admin Authorization
-if (($_SESSION['role'] ?? '') !== 'root_admin') {
-    header("Location: ../dashboard.php");
-    exit();
-}
+SecurityHelper::requireRole(['root_admin']);
 
 // Fetch System Metrics
 try {
@@ -130,7 +129,7 @@ try {
                                                 <?php echo date('d M Y', strtotime($tenant['created_at'])); ?>
                                             </small></td>
                                         <td class="text-end">
-                                            <a href="manage_tenants.php?id=<?php echo $tenant['id']; ?>"
+                                            <a href="manage_tenants.php?view_members=<?php echo (int) $tenant['id']; ?>"
                                                 class="btn btn-light btn-sm rounded-pill">Manage</a>
                                         </td>
                                     </tr>
@@ -232,9 +231,7 @@ try {
         </div>
     </div><!-- /.container-fluid -->
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <?php Layout::footer(); ?>
+    <?php Layout::footer(); // loads the Bootstrap JS bundle + app.js ?>
 </body>
 
 </html>
-// Structural Audit Complete
