@@ -13,6 +13,7 @@
 
 ### Everyday money
 - **Expenses & income** with multi-row entry, AED/INR/USD/EUR/GBP with live exchange rates, tags, subscriptions and cashback tracking.
+- **Saved spends** — store names you record often (e.g. "Carrefour" → Grocery); typing one on Add/Edit Expense suggests it and fills in the category. Frequent past expenses are suggested for saving.
 - **Bank balances** per account, with debit-card spending, income and card payments moving the right balance automatically (and reversed on edit/delete).
 - **Open banking (Lean)** — link UAE bank accounts, sync balances daily and review bank transactions before importing them as expenses or income.
 - **Budgets** per category with a 50/30/20 needs/wants view and **email alerts** when a category reaches a warning threshold (default 80%) or goes over (default 100%).
@@ -104,7 +105,7 @@ If your host cannot run PHP from cron, call `https://your-domain/cron/reminder_e
 |---|---|
 | `*.php` (root) | Pages and their `*_actions.php` form handlers |
 | `src/Core/Bootstrap.php` | Loads `config.php`, enforces login on every non-public page |
-| `src/Helpers/` | Shared logic: `Html` (escaping), `Flash` (messages), `Categories`, `BalanceHelper`, `ExchangeRateHelper`, `Notifier`, `BudgetAlertHelper`, `CardCycleHelper`, `SplitHelper`, `ZakathHelper`, `LeanClient`/`LeanSync`, `SecurityHelper`, `PasswordResetHelper`, `Layout` |
+| `src/Helpers/` | Shared logic: `Html` (escaping), `Flash` (messages), `Categories`, `ExpensePresets`, `BalanceHelper`, `ExchangeRateHelper`, `Notifier`, `BudgetAlertHelper`, `CardCycleHelper`, `SplitHelper`, `ZakathHelper`, `LeanClient`/`LeanSync`, `SecurityHelper`, `PasswordResetHelper`, `Layout` |
 | `includes/` | Layout templates (header, sidebar, footer, public-page layout) |
 | `assets/js/app.js` | CSP-safe event wiring (`data-onclick`, `data-confirm`, …) — the app uses no inline JavaScript handlers |
 | `cron/` | Daily cron entry point and its jobs (`cron/jobs/`) |

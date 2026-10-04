@@ -7,6 +7,7 @@ use App\Helpers\Layout;
 use App\Helpers\Html;
 use App\Helpers\Flash;
 use App\Helpers\Categories;
+use App\Helpers\ExpensePresets;
 use App\Helpers\SplitHelper;
 
 Bootstrap::init();
@@ -87,6 +88,9 @@ if ($split_on) {
     }
 }
 
+// Saved spends: suggestions for the description, autofilling the category
+$preset_form = ExpensePresets::forForm(ExpensePresets::forTenant($pdo, (int) $_SESSION['tenant_id']));
+
 Layout::header();
 Layout::sidebar();
 ?>
@@ -147,7 +151,9 @@ Layout::sidebar();
                 <div class="mb-3">
                     <label class="form-label" for="description">Description <span class="text-danger">*</span></label>
                     <input type="text" name="description" id="description" class="form-control form-control-lg"
-                           value="<?php echo Html::e($expense['description']); ?>" required>
+                           value="<?php echo Html::e($expense['description']); ?>" required
+                           autocomplete="off" list="expensePresetList" data-oninput="applyPreset">
+                    <?php echo $preset_form['datalist']; ?>
                 </div>
 
                 <!-- Category -->
@@ -283,6 +289,16 @@ Layout::sidebar();
 </div>
 
 <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
+    // Description matches a saved spend → fill in its category
+    const presetCategories = <?php echo Html::json((object) $preset_form['map']); ?>;
+    function applyPreset() {
+        const category = presetCategories[(this.value || '').trim().toLowerCase()];
+        const select = document.getElementById('category');
+        if (category && select) {
+            select.value = category;
+        }
+    }
+
 function toggleCardSelect() {
     const method = document.getElementById('paymentMethod').value;
     document.getElementById('cardSelectDiv').style.display = method === 'Card' ? 'block' : 'none';

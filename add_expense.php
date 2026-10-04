@@ -6,6 +6,7 @@ use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
 use App\Helpers\Html;
 use App\Helpers\Categories;
+use App\Helpers\ExpensePresets;
 
 Bootstrap::init();
 
@@ -67,6 +68,9 @@ if (isset($_GET['date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date'])) 
         $default_date = date('Y-m-d');
     }
 }
+
+// Saved spends: suggestions for the description field, autofilling the category
+$preset_form = ExpensePresets::forForm(ExpensePresets::forTenant($pdo, (int) $_SESSION['tenant_id']));
 
 Layout::header();
 Layout::sidebar();
@@ -244,7 +248,13 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
     <!-- Expense Rows -->
     <div class="glass-panel p-4 mb-3">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h6 class="fw-bold text-muted text-uppercase small mb-0">Expenses</h6>
+            <h6 class="fw-bold text-muted text-uppercase small mb-0">
+                Expenses
+                <a href="expense_presets.php" class="text-decoration-none text-primary text-capitalize fw-normal ms-2 small"
+                    title="Spend names that fill in their category automatically">
+                    <i class="fa-solid fa-bookmark me-1"></i>Saved spends<?php echo $preset_form['map'] ? ' (' . count($preset_form['map']) . ')' : ''; ?>
+                </a>
+            </h6>
             <div class="d-flex align-items-center gap-3">
                 <span class="text-muted small">Total: <strong id="grandTotal" class="text-success">0.00</strong></span>
                 <button type="button" class="btn btn-sm btn-outline-success" data-onclick="addRow">
@@ -254,6 +264,11 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
         </div>
 
         <div id="expenseRows"></div>
+
+        <button type="button" class="btn btn-outline-success w-100 mt-1" style="border-style: dashed;" data-onclick="addRow">
+            <i class="fa-solid fa-plus me-1"></i> Add another row
+        </button>
+        <?php echo $preset_form['datalist']; ?>
     </div>
 
     <div class="d-grid">
@@ -280,8 +295,9 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
             </div>
             <!-- Description -->
             <div class="col-md-3 col-6">
-                <input type="text" name="expenses[IDX][description]" class="form-control form-control-sm"
-                    placeholder="Description *" required autofocus>
+                <input type="text" name="expenses[IDX][description]" class="form-control form-control-sm row-desc"
+                    placeholder="Description *" required autofocus autocomplete="off" list="expensePresetList"
+                    data-oninput="applyPreset" data-args="<?php echo Html::args('$this'); ?>">
             </div>
             <!-- Amount -->
             <div class="col-md-2 col-6">
@@ -337,7 +353,19 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
 
 <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     const myCards = <?php echo Html::json($cards); ?>;
+    const presetCategories = <?php echo Html::json((object) $preset_form['map']); ?>;
     let rowIndex = 0;
+
+    // Description matches a saved spend → fill in its category (and refresh cashback)
+    function applyPreset(descEl) {
+        const category = presetCategories[(descEl.value || '').trim().toLowerCase()];
+        if (!category) return;
+        const select = descEl.closest('.expense-row')?.querySelector('.row-category');
+        if (select && select.value !== category) {
+            select.value = category;
+            calcRowReward(select);
+        }
+    }
 
     // Amount field: refresh the grand total and this row's cashback
     function onRowAmountInput() {
@@ -374,8 +402,12 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
 
         applyMethodToRow(last);
 
-        // Focus the description field of the new row
-        last.querySelector('input[type="text"]')?.focus();
+        // Focus the description field of the new row (and keep it on screen)
+        const desc = last.querySelector('.row-desc');
+        desc?.focus();
+        if (rows.length > 1) {
+            last.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
     }
 
     function removeRow(btn) {
