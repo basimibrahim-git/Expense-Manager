@@ -1,17 +1,15 @@
-﻿<?php
+<?php
 $page_title = "Add Income";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
+use App\Helpers\Html;
 
 Bootstrap::init();
 
-Layout::header();
-Layout::sidebar();
-
-$pre_month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT);
-$pre_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
+$pre_month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]) ?: null;
+$pre_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]) ?: null;
 $default_date = date('Y-m-d');
 
 if ($pre_month && $pre_year) {
@@ -25,6 +23,9 @@ if ($pre_month && $pre_year) {
 $banks_stmt = $pdo->prepare("SELECT id, bank_name FROM banks WHERE tenant_id = ? ORDER BY is_default DESC, bank_name ASC");
 $banks_stmt->execute([$_SESSION['tenant_id']]);
 $user_banks = $banks_stmt->fetchAll();
+
+Layout::header();
+Layout::sidebar();
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -75,7 +76,7 @@ $user_banks = $banks_stmt->fetchAll();
                 <div class="mb-3">
                     <label for="incomeDate" class="form-label">Date <span class="text-danger">*</span></label>
                     <input type="date" name="income_date" id="incomeDate" class="form-control form-control-lg"
-                        value="<?php echo $default_date; ?>" required>
+                        value="<?php echo Html::e($default_date); ?>" required>
                 </div>
 
                 <div class="mb-3">
@@ -103,7 +104,7 @@ $user_banks = $banks_stmt->fetchAll();
                     <div class="col-8">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="is_recurring" id="isRecurring"
-                                value="1" onchange="toggleRecurrence()">
+                                value="1" data-onchange="toggleRecurrence">
                             <label class="form-check-label fw-bold text-primary" for="isRecurring">
                                 Monthly Recurring?
                             </label>
@@ -127,7 +128,7 @@ $user_banks = $banks_stmt->fetchAll();
                     <div class="mb-3 p-3 bg-success bg-opacity-10 rounded border border-success">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="add_to_balance" id="addToBalance"
-                                value="1" onchange="toggleBankSelect()">
+                                value="1" data-onchange="toggleBankSelect">
                             <label class="form-check-label fw-bold text-success" for="addToBalance">
                                 <i class="fa-solid fa-plus-circle me-1"></i> Add to Bank Balance?
                             </label>
@@ -138,7 +139,7 @@ $user_banks = $banks_stmt->fetchAll();
                             <label for="bankSelect" class="form-label small fw-bold">Select Bank Account</label>
                             <select name="bank_id" id="bankSelect" class="form-select form-select-sm">
                                 <?php foreach ($user_banks as $bank): ?>
-                                    <option value="<?php echo $bank['id']; ?>">
+                                    <option value="<?php echo (int) $bank['id']; ?>">
                                         <?php echo htmlspecialchars($bank['bank_name']); ?>
                                     </option>
                                 <?php endforeach; ?>

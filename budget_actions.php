@@ -29,28 +29,40 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
 $tenant_id = $_SESSION['tenant_id'];
 
+// Budget categories = the expense categories offered in add_expense.php / manage_budgets.php
+const BUDGET_CATEGORIES = ['Grocery', 'Food', 'Medical', 'Shopping', 'Utilities', 'Transport', 'Travel', 'Entertainment', 'Education', 'Other'];
+
 if ($action == 'save_budgets' && $_SERVER['REQUEST_METHOD'] == 'POST') {
-    $month = intval($_POST['month']);
-    $year = intval($_POST['year']);
+    $month = filter_input(INPUT_POST, 'month', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]);
+    $year = filter_input(INPUT_POST, 'year', FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]);
+    if (!$month || !$year) {
+        header("Location: manage_budgets.php?error=Invalid month or year");
+        exit();
+    }
     $budgets = $_POST['budgets'] ?? [];
+    if (!is_array($budgets)) {
+        $budgets = [];
+    }
 
     try {
         $pdo->beginTransaction();
 
-        foreach ($budgets as $category => $amount) {
-            $amount = floatval($amount);
+        // The unique key is per user (user_id, category, month, year), so replace the tenant's row
+        // explicitly instead of ON DUPLICATE KEY UPDATE, which left one row per family member.
+        $delStmt = $pdo->prepare("DELETE FROM budgets WHERE tenant_id = ? AND category = ? AND month = ? AND year = ?");
+        $insStmt = $pdo->prepare("INSERT INTO budgets (user_id, tenant_id, category, amount, month, year) VALUES (?, ?, ?, ?, ?, ?)");
 
-            // If amount is 0/empty, we can either keep it or delete it.
-            // Let's use INSERT ... ON DUPLICATE KEY UPDATE
+        foreach ($budgets as $category => $amount) {
+            $category = (string) $category;
+            if (!in_array($category, BUDGET_CATEGORIES, true)) {
+                continue; // only known categories (they are displayed on the budget pages)
+            }
+            $amount = is_scalar($amount) ? floatval($amount) : 0;
+
+            // Amount 0/empty removes the target
+            $delStmt->execute([$tenant_id, $category, $month, $year]);
             if ($amount > 0) {
-                $stmt = $pdo->prepare("INSERT INTO budgets (user_id, tenant_id, category, amount, month, year)
-                                     VALUES (?, ?, ?, ?, ?, ?)
-                                     ON DUPLICATE KEY UPDATE amount = VALUES(amount)");
-                $stmt->execute([$user_id, $tenant_id, $category, $amount, $month, $year]);
-            } else {
-                // Delete if entry exists and new amount is 0
-                $stmt = $pdo->prepare("DELETE FROM budgets WHERE tenant_id = ? AND category = ? AND month = ? AND year = ?");
-                $stmt->execute([$tenant_id, $category, $month, $year]);
+                $insStmt->execute([$user_id, $tenant_id, $category, $amount, $month, $year]);
             }
         }
 

@@ -1,4 +1,4 @@
-﻿<!-- Sidebar -->
+<!-- Sidebar -->
 <nav class="sidebar">
     <div class="brand-logo">
         <i class="fa-solid fa-wallet"></i> ExpenseMngr
@@ -86,7 +86,8 @@
             'monthly_interest.php',
             'sadaqa_tracker.php',
             'monthly_sadaqa.php',
-            'lending_tracker.php'
+            'lending_tracker.php',
+            'travel_planner.php'
         ];
         $is_tracker_active = in_array($current_page, $tracker_pages);
         ?>
@@ -118,6 +119,10 @@
                 <a href="<?php echo BASE_URL; ?>lending_tracker.php"
                     class="nav-link py-1 <?php echo ($current_page == 'lending_tracker.php') ? $activeClass : 'text-muted'; ?>">
                     Money Lending
+                </a>
+                <a href="<?php echo BASE_URL; ?>travel_planner.php"
+                    class="nav-link py-1 <?php echo ($current_page == 'travel_planner.php') ? $activeClass : 'text-muted'; ?>">
+                    Travel Planner
                 </a>
             </div>
         </div>
@@ -176,6 +181,12 @@
     </div>
 
     <div class="mt-auto px-3 pb-3">
+        <a href="<?php echo BASE_URL; ?>profile.php"
+            class="btn btn-outline-secondary w-100 border-0 text-start bg-light hover-shadow mb-2 <?php echo $current_page == 'profile.php' ? 'fw-bold' : ''; ?>">
+            <i class="fa-solid fa-user-gear me-2"></i>
+            <?php echo htmlspecialchars($_SESSION['user_name'] ?? 'My Profile'); ?>
+        </a>
+
         <form action="<?php echo BASE_URL; ?>settings_actions.php" method="POST" class="mb-2">
             <input type="hidden" name="csrf_token"
                 value="<?php echo App\Helpers\SecurityHelper::generateCsrfToken(); ?>">
@@ -188,12 +199,12 @@
         </form>
 
         <div class="d-flex gap-2 mb-2">
-            <button id="themeToggleBtn" onclick="toggleTheme()"
+            <button id="themeToggleBtn" data-onclick="toggleTheme"
                 class="btn btn-outline-secondary flex-grow-1 border-0 text-start bg-light hover-shadow px-2"
                 title="Toggle Theme">
                 <i class="fa-solid fa-moon"></i> Dark Mode
             </button>
-            <button id="privacyBtn" onclick="togglePrivacy()"
+            <button id="privacyBtn" data-onclick="togglePrivacy"
                 class="btn btn-outline-secondary flex-grow-1 border-0 text-start bg-light hover-shadow px-2"
                 title="Toggle Privacy">
                 <i class="fa-solid fa-eye"></i> Visible
@@ -209,14 +220,14 @@
     </div>
 </nav>
 
-<button type="button" class="sidebar-overlay" onclick="toggleSidebar()" aria-label="Close Sidebar"
+<button type="button" class="sidebar-overlay" data-onclick="toggleSidebar" aria-label="Close Sidebar"
     style="border:none;background:transparent;"></button>
 
 <!-- Main Content Wrapper -->
 <main class="main-content">
     <!-- Top Bar -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <button class="btn btn-white shadow-sm mobile-toggle-btn border text-primary fw-bold" onclick="toggleSidebar()">
+        <button class="btn btn-white shadow-sm mobile-toggle-btn border text-primary fw-bold" data-onclick="toggleSidebar">
             <i class="fa-solid fa-bars me-2"></i> Menu
         </button>
 

@@ -6,6 +6,7 @@ use App\Core\Bootstrap;
 Bootstrap::init();
 use App\Helpers\AuditHelper;
 use App\Helpers\SecurityHelper;
+use App\Helpers\Html;
 use App\Helpers\Layout;
 
 $user_id = $_SESSION['user_id'];
@@ -21,11 +22,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     }
 
     if ($_POST['action'] == 'add_goal') {
-        $name = $_POST['name'];
-        $target = $_POST['target_amount'];
-        $saved = $_POST['current_saved'];
-        $date = $_POST['target_date'];
-        $category = $_POST['category'] ?? 'General';
+        $name = trim((string) ($_POST['name'] ?? ''));
+        $target = filter_var($_POST['target_amount'] ?? null, FILTER_VALIDATE_FLOAT);
+        $saved = filter_var(($_POST['current_saved'] ?? '') === '' ? 0 : $_POST['current_saved'], FILTER_VALIDATE_FLOAT);
+        $date = (string) ($_POST['target_date'] ?? '');
+        $category = in_array($_POST['category'] ?? '', ['General', 'Travel', 'Automobile', 'Electronics', 'Emergency', 'Investments', 'Other'], true) ? $_POST['category'] : 'General';
+        $d = DateTime::createFromFormat('!Y-m-d', $date);
+
+        if ($name === '' || $target === false || $target <= 0 || $saved === false || $saved < 0 || !$d || $d->format('Y-m-d') !== $date) {
+            header("Location: goals.php?error=" . urlencode('Please enter a name, a target amount and a valid target date.'));
+            exit;
+        }
 
         $stmt = $pdo->prepare("INSERT INTO sinking_funds (user_id, tenant_id, name, target_amount, current_saved, target_date, category) VALUES (?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $name, $target, $saved, $date, $category]);
@@ -34,19 +41,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         header("Location: goals.php?success=Goal+created");
         exit;
     } elseif ($_POST['action'] == 'add_funds') {
-        $id = $_POST['goal_id'];
-        $amount = $_POST['amount'];
+        $id = (int) ($_POST['goal_id'] ?? 0);
+        $amount = filter_var($_POST['amount'] ?? null, FILTER_VALIDATE_FLOAT);
 
-        $stmt = $pdo->prepare("UPDATE sinking_funds SET current_saved = current_saved + ? WHERE id = ? AND tenant_id = ? AND user_id = ?");
-        $stmt->execute([$amount, $id, $_SESSION['tenant_id'], $_SESSION['user_id']]);
+        if ($id <= 0 || $amount === false || $amount == 0) {
+            header("Location: goals.php?error=" . urlencode('Please enter a valid amount.'));
+            exit;
+        }
+
+        // Goals are shared by the family (listed per tenant), so any editor in the tenant may update them
+        $stmt = $pdo->prepare("UPDATE sinking_funds SET current_saved = current_saved + ? WHERE id = ? AND tenant_id = ?");
+        $stmt->execute([$amount, $id, $_SESSION['tenant_id']]);
 
         AuditHelper::log($pdo, 'add_goal_funds', "Added $amount AED to Goal ID: $id");
         header("Location: goals.php?success=Funds+added");
         exit;
     } elseif ($_POST['action'] == 'delete_goal') {
-        $id = $_POST['goal_id'];
-        $stmt = $pdo->prepare("DELETE FROM sinking_funds WHERE id = ? AND tenant_id = ? AND user_id = ?");
-        $stmt->execute([$id, $_SESSION['tenant_id'], $_SESSION['user_id']]);
+        $id = (int) ($_POST['goal_id'] ?? 0);
+        $stmt = $pdo->prepare("DELETE FROM sinking_funds WHERE id = ? AND tenant_id = ?");
+        $stmt->execute([$id, $_SESSION['tenant_id']]);
 
         AuditHelper::log($pdo, 'delete_goal', "Deleted Goal ID: $id");
         header("Location: goals.php?success=Goal+deleted");
@@ -65,6 +78,19 @@ $total_target = array_sum(array_column($goals, 'target_amount'));
 Layout::header();
 Layout::sidebar();
 ?>
+
+<?php if (!empty($_GET['success'])): ?>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <?php echo Html::e($_GET['success']); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+<?php if (!empty($_GET['error'])): ?>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <?php echo Html::e($_GET['error']); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
@@ -157,7 +183,7 @@ Layout::sidebar();
                                 <ul class="dropdown-menu dropdown-menu-end border-0 shadow">
                                     <li>
                                         <form method="POST"
-                                            onsubmit="return confirmSubmit(this, 'Delete goal: <?php echo addslashes(htmlspecialchars($goal['name'])); ?> (Target: AED <?php echo number_format($goal['target_amount'], 2); ?>)?');">
+                                            data-confirm="<?php echo Html::e('Delete goal: ' . $goal['name'] . ' (Target: AED ' . number_format($goal['target_amount'], 2) . ')?'); ?>">
                                             <input type="hidden" name="csrf_token"
                                                 value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                                             <input type="hidden" name="action" value="delete_goal">

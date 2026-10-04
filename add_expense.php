@@ -1,9 +1,10 @@
-﻿<?php
+<?php
 $page_title = "Add Expense";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
+use App\Helpers\Html;
 
 Bootstrap::init();
 
@@ -43,8 +44,8 @@ if ($tenant_id) {
     }
 }
 
-$pre_month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT);
-$pre_year  = filter_input(INPUT_GET, 'year',  FILTER_VALIDATE_INT);
+$pre_month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]) ?: null;
+$pre_year  = filter_input(INPUT_GET, 'year',  FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]) ?: null;
 $default_date = date('Y-m-d');
 if (isset($_GET['date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date'])) {
     $default_date = $_GET['date'];
@@ -69,7 +70,6 @@ Layout::sidebar();
 
 <?php
 $saved_count  = isset($_GET['added']) ? intval($_GET['added']) : 0;
-$saved_date   = (isset($_GET['date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date'])) ? $_GET['date'] : null;
 $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&year=' . ($pre_year ?? date('Y'));
 ?>
 
@@ -88,14 +88,17 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
 
     <!-- Shared Settings Panel -->
     <div class="glass-panel p-4 mb-3">
-        <h6 class="fw-bold text-muted text-uppercase small mb-3">Shared Settings</h6>
+        <h6 class="fw-bold text-muted text-uppercase small mb-1">Shared Settings</h6>
+        <p class="text-muted x-small mb-3">
+            These apply to every row. Date and Card are per-row below — set the defaults here, then override any row individually.
+        </p>
 
         <div class="row g-3">
-            <!-- Date -->
+            <!-- Default Date (seeds new rows) -->
             <div class="col-md-3 col-6">
-                <label class="form-label small fw-bold" for="expenseDate">Date</label>
-                <input type="date" name="expense_date" id="expenseDate" class="form-control"
-                    value="<?php echo htmlspecialchars($default_date); ?>" required>
+                <label class="form-label small fw-bold" for="defaultDate">Default Date</label>
+                <input type="date" id="defaultDate" class="form-control"
+                    value="<?php echo htmlspecialchars($default_date); ?>">
             </div>
 
             <!-- Payment Method -->
@@ -103,12 +106,12 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
                 <label class="form-label small fw-bold d-block">Payment Method</label>
                 <div class="btn-group w-100">
                     <input type="radio" class="btn-check" name="payment_method" id="methodCash" value="Cash"
-                        onclick="toggleCardSelect(false)">
+                        data-onclick="toggleCardSelect" data-args="<?php echo Html::args(false); ?>">
                     <label class="btn btn-outline-primary btn-sm py-2" for="methodCash">
                         <i class="fa-solid fa-coins me-1"></i> Cash
                     </label>
                     <input type="radio" class="btn-check" name="payment_method" id="methodCard" value="Card" checked
-                        onclick="toggleCardSelect(true)">
+                        data-onclick="toggleCardSelect" data-args="<?php echo Html::args(true); ?>">
                     <label class="btn btn-outline-primary btn-sm py-2" for="methodCard">
                         <i class="fa-solid fa-credit-card me-1"></i> Card
                     </label>
@@ -118,7 +121,7 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
             <!-- Currency -->
             <div class="col-md-2 col-6">
                 <label class="form-label small fw-bold" for="currencySelect">Currency</label>
-                <select name="currency" id="currencySelect" class="form-select" onchange="toggleExchangeRate()">
+                <select name="currency" id="currencySelect" class="form-select" data-onchange="toggleExchangeRate">
                     <option value="AED">AED</option>
                     <option value="INR">INR</option>
                 </select>
@@ -129,7 +132,7 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
                 <label class="form-label small fw-bold" for="spentByUser">Spent By</label>
                 <select name="spent_by_user_id" id="spentByUser" class="form-select">
                     <?php foreach ($family_members as $member): ?>
-                        <option value="<?php echo $member['id']; ?>"
+                        <option value="<?php echo (int) $member['id']; ?>"
                             <?php echo $member['id'] == $family_admin_id ? 'selected' : ''; ?>>
                             <?php echo htmlspecialchars($member['name']); ?>
                             <?php echo $member['role'] === 'family_admin' ? '(Admin)' : ''; ?>
@@ -149,18 +152,16 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
                 </div>
             </div>
 
-            <!-- Card Selection -->
+            <!-- Default Card (seeds new rows) + deduct option -->
             <div class="col-12" id="cardSelectionDiv">
-                <label class="form-label small fw-bold" for="cardSelect">Card Used</label>
-                <select name="card_id" id="cardSelect" class="form-select">
+                <label class="form-label small fw-bold" for="defaultCardSelect">Default Card</label>
+                <select id="defaultCardSelect" class="form-select">
                     <option value="" disabled <?php echo !$default_card_id ? 'selected' : ''; ?>>-- Choose Card --</option>
                     <?php foreach ($cards as $card): ?>
-                        <option value="<?php echo $card['id']; ?>"
-                            <?php echo $card['id'] == $default_card_id ? 'selected' : ''; ?>
-                            data-type="<?php echo htmlspecialchars($card['card_type']); ?>"
-                            data-cashback="<?php echo htmlspecialchars($card['cashback_struct']); ?>">
+                        <option value="<?php echo (int) $card['id']; ?>"
+                            <?php echo $card['id'] == $default_card_id ? 'selected' : ''; ?>>
                             <?php echo htmlspecialchars($card['bank_name'] . ' – ' . $card['card_name']); ?>
-                            (<?php echo $card['card_type']; ?>)
+                            (<?php echo Html::e($card['card_type']); ?>)
                             <?php echo !empty($card['is_default']) ? '⭐' : ''; ?>
                         </option>
                     <?php endforeach; ?>
@@ -176,7 +177,7 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
                     <input class="form-check-input" type="checkbox" name="deduct_balance" id="deductBalance" value="1" checked>
                     <label class="form-check-label small text-muted" for="deductBalance">
                         Deduct from linked bank balance
-                        <span class="badge bg-info-subtle text-info x-small ms-1">Debit only</span>
+                        <span class="badge bg-info-subtle text-info x-small ms-1">Debit rows only</span>
                     </label>
                 </div>
             </div>
@@ -189,7 +190,7 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
             <h6 class="fw-bold text-muted text-uppercase small mb-0">Expenses</h6>
             <div class="d-flex align-items-center gap-3">
                 <span class="text-muted small">Total: <strong id="grandTotal" class="text-success">0.00</strong></span>
-                <button type="button" class="btn btn-sm btn-outline-success" onclick="addRow()">
+                <button type="button" class="btn btn-sm btn-outline-success" data-onclick="addRow">
                     <i class="fa-solid fa-plus me-1"></i> Add Row
                 </button>
             </div>
@@ -210,26 +211,34 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
 <template id="rowTemplate">
     <div class="expense-row border rounded-3 p-3 mb-2 position-relative">
         <button type="button" class="btn btn-sm btn-link text-danger remove-row position-absolute top-0 end-0 p-2"
-            onclick="removeRow(this)" title="Remove">
+            data-onclick="removeRow" data-args="<?php echo Html::args('$this'); ?>" title="Remove">
             <i class="fa-solid fa-xmark"></i>
         </button>
 
         <div class="row g-2 align-items-start">
-            <div class="col-md-4 col-12">
-                <input type="text" name="expenses[IDX][description]" class="form-control"
+            <!-- Per-row Date -->
+            <div class="col-md-2 col-6">
+                <input type="date" name="expenses[IDX][date]" class="form-control form-control-sm row-date"
+                    required title="Expense date">
+            </div>
+            <!-- Description -->
+            <div class="col-md-3 col-6">
+                <input type="text" name="expenses[IDX][description]" class="form-control form-control-sm"
                     placeholder="Description *" required autofocus>
             </div>
+            <!-- Amount -->
             <div class="col-md-2 col-6">
-                <div class="input-group">
+                <div class="input-group input-group-sm">
                     <span class="input-group-text text-muted small px-2">AED</span>
                     <input type="number" name="expenses[IDX][amount]" class="form-control row-amount"
                         placeholder="0.00" step="0.01" min="0.01" required
-                        oninput="updateTotal(); calcRowReward(this)">
+                        data-oninput="onRowAmountInput">
                 </div>
             </div>
-            <div class="col-md-3 col-6">
-                <select name="expenses[IDX][category]" class="form-select row-category" required
-                    onchange="calcRowReward(this)">
+            <!-- Category -->
+            <div class="col-md-2 col-6">
+                <select name="expenses[IDX][category]" class="form-select form-select-sm row-category" required
+                    data-onchange="calcRowReward" data-args="<?php echo Html::args('$this'); ?>">
                     <option value="" disabled selected>Category *</option>
                     <option value="Grocery">Grocery & Supermarkets</option>
                     <option value="Medical">Medical & Healthcare</option>
@@ -243,11 +252,24 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
                     <option value="Other">Other</option>
                 </select>
             </div>
-            <div class="col-md-3 col-12">
-                <input type="text" name="expenses[IDX][tags]" class="form-control"
-                    placeholder="Tags (optional)">
+            <!-- Per-row Card -->
+            <div class="col-md-3 col-6 row-card-wrap">
+                <select name="expenses[IDX][card_id]" class="form-select form-select-sm row-card"
+                    data-onchange="calcRowReward" data-args="<?php echo Html::args('$this'); ?>" title="Card used">
+                    <option value="" disabled selected>-- Card --</option>
+                    <?php foreach ($cards as $card): ?>
+                        <option value="<?php echo (int) $card['id']; ?>">
+                            <?php echo htmlspecialchars($card['bank_name'] . ' – ' . $card['card_name']); ?>
+                            (<?php echo Html::e($card['card_type']); ?>)
+                            <?php echo !empty($card['is_default']) ? '⭐' : ''; ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
             </div>
+            <!-- Tags + flags -->
             <div class="col-12 d-flex flex-wrap gap-3 align-items-center mt-1">
+                <input type="text" name="expenses[IDX][tags]" class="form-control form-control-sm"
+                    placeholder="Tags (optional)" style="max-width:220px">
                 <div class="form-check mb-0">
                     <input class="form-check-input" type="checkbox" name="expenses[IDX][is_fixed]" value="1">
                     <label class="form-check-label small">Fixed Cost</label>
@@ -266,8 +288,18 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
 </template>
 
 <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
-    const myCards = <?php echo json_encode($cards); ?>;
+    const myCards = <?php echo Html::json($cards); ?>;
     let rowIndex = 0;
+
+    // Amount field: refresh the grand total and this row's cashback
+    function onRowAmountInput() {
+        updateTotal();
+        calcRowReward(this);
+    }
+
+    function isCardMethod() {
+        return document.getElementById('methodCard')?.checked;
+    }
 
     function addRow() {
         const template = document.getElementById('rowTemplate');
@@ -282,9 +314,19 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
         rowIndex++;
         updateRowCount();
 
-        // Focus first input of new row
         const rows = document.querySelectorAll('.expense-row');
         const last = rows[rows.length - 1];
+
+        // Seed the new row with the shared defaults
+        const dateEl = last.querySelector('.row-date');
+        if (dateEl) dateEl.value = document.getElementById('defaultDate').value;
+
+        const cardEl = last.querySelector('.row-card');
+        if (cardEl) cardEl.value = document.getElementById('defaultCardSelect').value || '';
+
+        applyMethodToRow(last);
+
+        // Focus the description field of the new row
         last.querySelector('input[type="text"]')?.focus();
     }
 
@@ -313,12 +355,12 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
         const row = triggerEl.closest('.expense-row');
         const amountEl = row.querySelector('.row-amount');
         const categoryEl = row.querySelector('.row-category');
+        const cardEl = row.querySelector('.row-card');
         const cashbackBadge = row.querySelector('.row-cashback');
         const cashbackInput = row.querySelector('.row-cashback-input');
         const cashbackValueEl = row.querySelector('.cashback-value');
 
-        const cardSelect = document.getElementById('cardSelect');
-        const cardId = cardSelect ? cardSelect.value : null;
+        const cardId = (isCardMethod() && cardEl) ? cardEl.value : null;
         const amount = parseFloat(amountEl?.value) || 0;
         const category = categoryEl?.value || '';
 
@@ -346,43 +388,43 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
         if (cashbackInput) cashbackInput.value = 0;
     }
 
-    // Recalculate all rows when card changes
-    document.getElementById('cardSelect')?.addEventListener('change', () => {
+    // Show/hide a single row's card selector based on the shared payment method
+    function applyMethodToRow(row) {
+        const wrap = row.querySelector('.row-card-wrap');
+        const cardEl = row.querySelector('.row-card');
+        if (!wrap || !cardEl) return;
+        if (isCardMethod()) {
+            wrap.style.display = '';
+            cardEl.setAttribute('required', 'required');
+        } else {
+            wrap.style.display = 'none';
+            cardEl.removeAttribute('required');
+        }
+        calcRowReward(cardEl);
+    }
+
+    // Changing the default card seeds only rows still left blank
+    document.getElementById('defaultCardSelect')?.addEventListener('change', function () {
         document.querySelectorAll('.expense-row').forEach(row => {
-            const amountEl = row.querySelector('.row-amount');
-            if (amountEl) calcRowReward(amountEl);
+            const cardEl = row.querySelector('.row-card');
+            if (cardEl && !cardEl.value) {
+                cardEl.value = this.value || '';
+                calcRowReward(cardEl);
+            }
         });
-        updateDeductBalance();
     });
 
-    function updateDeductBalance() {
-        const cardSelect = document.getElementById('cardSelect');
-        const deductDiv = document.getElementById('deductBalanceDiv');
-        const deductInput = document.getElementById('deductBalance');
-        const cardId = cardSelect?.value;
-        if (!cardId) { deductDiv.style.display = 'none'; return; }
-        const card = myCards.find(c => c.id == cardId);
-        if (card && card.card_type === 'Debit') {
-            deductDiv.style.display = 'block';
-        } else {
-            deductDiv.style.display = 'none';
-            if (deductInput) deductInput.checked = false;
-        }
-    }
+    // Changing the default date seeds only rows still on the previous default
+    document.getElementById('defaultDate')?.addEventListener('change', function () {
+        document.querySelectorAll('.row-date').forEach(dateEl => {
+            if (!dateEl.value) dateEl.value = this.value;
+        });
+    });
 
     function toggleCardSelect(showCard) {
         const cardDiv = document.getElementById('cardSelectionDiv');
-        const cardSelect = document.getElementById('cardSelect');
-        if (showCard) {
-            cardDiv.style.display = 'block';
-            cardSelect.setAttribute('required', 'required');
-            updateDeductBalance();
-        } else {
-            cardDiv.style.display = 'none';
-            cardSelect.removeAttribute('required');
-            cardSelect.value = '';
-            document.getElementById('deductBalanceDiv').style.display = 'none';
-        }
+        cardDiv.style.display = showCard ? 'block' : 'none';
+        document.querySelectorAll('.expense-row').forEach(applyMethodToRow);
     }
 
     function toggleExchangeRate() {
@@ -401,25 +443,38 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
         }
     }
 
-    // Validate at least one valid row before submit
+    // Validate rows before submit: each complete row needs date (and a card when paying by card)
     document.getElementById('bulkExpenseForm').addEventListener('submit', function(e) {
         const rows = document.querySelectorAll('.expense-row');
-        let valid = false;
+        let anyComplete = false;
+        let missing = false;
         rows.forEach(row => {
             const desc = row.querySelector('input[type="text"]')?.value.trim();
             const amt  = parseFloat(row.querySelector('.row-amount')?.value) || 0;
             const cat  = row.querySelector('.row-category')?.value;
-            if (desc && amt > 0 && cat) valid = true;
+            const date = row.querySelector('.row-date')?.value;
+            const card = row.querySelector('.row-card')?.value;
+
+            const complete = desc && amt > 0 && cat;
+            if (complete) {
+                anyComplete = true;
+                if (!date) missing = true;
+                if (isCardMethod() && !card) missing = true;
+            }
         });
-        if (!valid) {
+        if (!anyComplete) {
             e.preventDefault();
             alert('Please fill in at least one complete expense row (description, amount, category).');
+            return;
+        }
+        if (missing) {
+            e.preventDefault();
+            alert('Every expense row needs a date' + (isCardMethod() ? ' and a card' : '') + '.');
         }
     });
 
     // Init: start with one row
     addRow();
-    updateDeductBalance();
 </script>
 
 <!-- "Add another?" modal -->
@@ -431,10 +486,7 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
                 <h5 class="fw-bold mb-1">
                     <?php echo $saved_count; ?> expense(s) saved!
                 </h5>
-                <?php if ($saved_date): ?>
-                    <p class="text-muted small mb-4">for <?php echo htmlspecialchars($saved_date); ?></p>
-                <?php endif; ?>
-                <p class="mb-4">Do you want to add more expenses for this day?</p>
+                <p class="mb-4">Do you want to add more expenses?</p>
                 <div class="d-flex gap-3 justify-content-center">
                     <button type="button" class="btn btn-success px-4 fw-bold"
                         data-bs-dismiss="modal">

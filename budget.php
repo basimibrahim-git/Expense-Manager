@@ -3,6 +3,8 @@ $page_title = "Smart Budget";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\Layout;
+use App\Helpers\Html;
+use App\Helpers\ExchangeRateHelper;
 
 Bootstrap::init();
 
@@ -13,10 +15,14 @@ $user_id = $_SESSION['user_id'];
 $month = date('n');
 $year = date('Y');
 
-// 1. Get Total Income for this month
-$stmt = $pdo->prepare("SELECT SUM(amount) FROM income WHERE tenant_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ?");
+// 1. Get Total Income for this month (income is stored in its entered currency; convert to AED)
+$stmt = $pdo->prepare("SELECT COALESCE(currency, 'AED') AS currency, SUM(amount) AS total FROM income WHERE tenant_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ? GROUP BY COALESCE(currency, 'AED')");
 $stmt->execute([$_SESSION['tenant_id'], $month, $year]);
-$total_income = $stmt->fetchColumn() ?: 0;
+$total_income = 0;
+foreach ($stmt->fetchAll(PDO::FETCH_KEY_PAIR) as $cur => $sum) {
+    $cur = strtoupper((string) $cur);
+    $total_income += (float) $sum * ($cur === 'AED' ? 1.0 : ExchangeRateHelper::getRate($cur, 'AED', $pdo));
+}
 
 // 2. Get Expenses grouped by Category
 $stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category");
@@ -62,109 +68,205 @@ $needs_color = getStatusColor($needs_pct, 50);
 $wants_color = getStatusColor($wants_pct, 30);
 $savings_color = getStatusColor($savings_pct, 20, true);
 
+// Helper for SVG circular progress offset
+function getCircleOffset($pct) {
+    $clamped = max(0, min($pct, 100));
+    return 314.16 - (314.16 * ($clamped / 100));
+}
 ?>
 
-<div class="mb-4">
-    <h1 class="h3 fw-bold mb-1">Smart Budget <span class="badge bg-light text-dark border ms-2">50/30/20 Rule</span>
-    </h1>
-    <p class="text-muted">Analysis for
-        <?php echo date('F Y'); ?>
-    </p>
+<!-- SVG Gradients Definition -->
+<svg width="0" height="0" style="position: absolute;">
+  <defs>
+    <linearGradient id="needsGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#34d399" />
+    </linearGradient>
+    <linearGradient id="wantsGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#8b5cf6" />
+    </linearGradient>
+    <linearGradient id="savingsGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#2dd4bf" />
+    </linearGradient>
+    <linearGradient id="dangerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f43f5e" />
+      <stop offset="100%" stop-color="#fb7185" />
+    </linearGradient>
+  </defs>
+</svg>
+
+<!-- Premium Header Banner -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="gradient-card-primary p-4 rounded-4 hover-lift position-relative overflow-hidden shadow-sm" style="border-radius: 16px;">
+            <div class="position-absolute top-0 end-0 p-3 opacity-10">
+                <i class="fa-solid fa-chart-pie fa-9x"></i>
+            </div>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 position-relative" style="z-index: 2;">
+                <div>
+                    <h1 class="h3 fw-bold mb-1 text-white">Smart Budget</h1>
+                    <p class="text-white text-opacity-75 mb-0">Unified financial planning using the 50/30/20 Rule for <?php echo date('F Y'); ?></p>
+                </div>
+                <div class="d-flex gap-2">
+                    <span class="badge bg-white text-primary border-0 fw-bold px-3 py-2 fs-6" style="border-radius: 8px;">50% Needs</span>
+                    <span class="badge bg-white text-primary border-0 fw-bold px-3 py-2 fs-6" style="border-radius: 8px;">30% Wants</span>
+                    <span class="badge bg-white text-primary border-0 fw-bold px-3 py-2 fs-6" style="border-radius: 8px;">20% Savings</span>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <?php if ($total_income == 0): ?>
-    <div class="alert alert-warning">
-        <i class="fa-solid fa-triangle-exclamation me-2"></i>
-        No income recorded for this month. <a href="add_income.php" class="alert-link">Add Income</a> to see your budget
-        analysis.
+    <div class="alert alert-warning border-0 shadow-sm p-3 rounded-4 mb-4">
+        <div class="d-flex align-items-center">
+            <i class="fa-solid fa-triangle-exclamation text-warning fa-xl me-3"></i>
+            <div>
+                <strong>No income recorded this month!</strong> 
+                <a href="add_income.php" class="alert-link text-decoration-none ms-1">Add Income</a> to activate your smart budget metrics.
+            </div>
+        </div>
     </div>
 <?php endif; ?>
 
 <div class="row g-4 mb-5">
     <!-- Needs (50%) -->
     <div class="col-md-4">
-        <div class="glass-panel p-4 h-100">
-            <div class="d-flex justify-content-between mb-3">
-                <span class="badge bg-<?php echo $needs_color; ?>-subtle text-<?php echo $needs_color; ?>">Target:
-                    50%</span>
-                <i class="fa-solid fa-house-chimney text-<?php echo $needs_color; ?> fa-lg"></i>
+        <div class="glass-panel-premium p-4 h-100 text-center hover-lift position-relative">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="badge rounded-pill <?php echo $needs_color === 'success' ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'; ?> px-3 py-1 fw-bold">
+                    Target: 50%
+                </span>
+                <div class="p-2 rounded-circle bg-light d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                    <i class="fa-solid fa-house-chimney text-primary"></i>
+                </div>
             </div>
-            <h4 class="fw-bold mb-0">Needs</h4>
-            <div class="display-6 fw-bold my-2">AED <span class="blur-sensitive">
-                    <?php echo number_format($total_needs); ?>
-                </span></div>
 
-            <progress class="progress w-100" style="height: 10px;" value="<?php echo min($needs_pct, 100); ?>"
-                max="100"></progress>
-            <div class="mt-2 small text-muted">
-                You have used <strong>
-                    <?php echo number_format($needs_pct, 1); ?>%
-                </strong> of your income.
+            <div class="position-relative d-inline-flex align-items-center justify-content-center my-3">
+                <svg width="130" height="130" viewBox="0 0 120 120" style="transform: rotate(-90deg);">
+                    <circle cx="60" cy="60" r="50" fill="transparent" stroke="rgba(var(--primary-rgb, 99, 102, 241), 0.08)" stroke-width="8"></circle>
+                    <circle cx="60" cy="60" r="50" fill="transparent" 
+                            stroke="<?php echo $needs_color === 'success' ? 'url(#needsGrad)' : 'url(#dangerGrad)'; ?>" 
+                            stroke-width="8"
+                            stroke-dasharray="314.16" 
+                            stroke-dashoffset="<?php echo getCircleOffset($needs_pct); ?>" 
+                            stroke-linecap="round"
+                            style="transition: stroke-dashoffset 0.8s ease-in-out;"></circle>
+                </svg>
+                <div class="position-absolute d-flex flex-column align-items-center">
+                    <span class="fs-4 fw-bold text-dark"><?php echo number_format($needs_pct, 1); ?>%</span>
+                    <span class="text-muted small">used</span>
+                </div>
             </div>
-            <div class="mt-2 text-muted x-small">
-                Includes: Grocery, Rent, Bills, Transport
+
+            <h4 class="fw-bold mb-1">Needs</h4>
+            <div class="h3 fw-bold text-dark mb-3">
+                <small class="text-muted fs-6">AED</small>
+                <span class="blur-sensitive"><?php echo number_format($total_needs); ?></span>
             </div>
+            
+            <p class="text-muted small mb-0 px-2">
+                Includes essential groceries, housing, utilities, medical bills, and transport costs.
+            </p>
         </div>
     </div>
 
     <!-- Wants (30%) -->
     <div class="col-md-4">
-        <div class="glass-panel p-4 h-100">
-            <div class="d-flex justify-content-between mb-3">
-                <span class="badge bg-<?php echo $wants_color; ?>-subtle text-<?php echo $wants_color; ?>">Target:
-                    30%</span>
-                <i class="fa-solid fa-gamepad text-<?php echo $wants_color; ?> fa-lg"></i>
+        <div class="glass-panel-premium p-4 h-100 text-center hover-lift position-relative">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="badge rounded-pill <?php echo $wants_color === 'success' ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'; ?> px-3 py-1 fw-bold">
+                    Target: 30%
+                </span>
+                <div class="p-2 rounded-circle bg-light d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                    <i class="fa-solid fa-gamepad text-primary"></i>
+                </div>
             </div>
-            <h4 class="fw-bold mb-0">Wants</h4>
-            <div class="display-6 fw-bold my-2">AED <span class="blur-sensitive">
-                    <?php echo number_format($total_wants); ?>
-                </span></div>
 
-            <progress class="progress w-100" style="height: 10px;" value="<?php echo min($wants_pct, 100); ?>"
-                max="100"></progress>
-            <div class="mt-2 small text-muted">
-                You have used <strong>
-                    <?php echo number_format($wants_pct, 1); ?>%
-                </strong> of your income.
+            <div class="position-relative d-inline-flex align-items-center justify-content-center my-3">
+                <svg width="130" height="130" viewBox="0 0 120 120" style="transform: rotate(-90deg);">
+                    <circle cx="60" cy="60" r="50" fill="transparent" stroke="rgba(var(--primary-rgb, 99, 102, 241), 0.08)" stroke-width="8"></circle>
+                    <circle cx="60" cy="60" r="50" fill="transparent" 
+                            stroke="<?php echo $wants_color === 'success' ? 'url(#wantsGrad)' : 'url(#dangerGrad)'; ?>" 
+                            stroke-width="8"
+                            stroke-dasharray="314.16" 
+                            stroke-dashoffset="<?php echo getCircleOffset($wants_pct); ?>" 
+                            stroke-linecap="round"
+                            style="transition: stroke-dashoffset 0.8s ease-in-out;"></circle>
+                </svg>
+                <div class="position-absolute d-flex flex-column align-items-center">
+                    <span class="fs-4 fw-bold text-dark"><?php echo number_format($wants_pct, 1); ?>%</span>
+                    <span class="text-muted small">used</span>
+                </div>
             </div>
-            <div class="mt-2 text-muted x-small">
-                Includes: Dining, Shopping, Travel, Entertainment
+
+            <h4 class="fw-bold mb-1">Wants</h4>
+            <div class="h3 fw-bold text-dark mb-3">
+                <small class="text-muted fs-6">AED</small>
+                <span class="blur-sensitive"><?php echo number_format($total_wants); ?></span>
             </div>
+            
+            <p class="text-muted small mb-0 px-2">
+                Includes dining out, apparel shopping, entertainment, non-essential travel, and leisure.
+            </p>
         </div>
     </div>
 
     <!-- Savings (20%) -->
     <div class="col-md-4">
-        <div class="glass-panel p-4 h-100">
-            <div class="d-flex justify-content-between mb-3">
-                <span class="badge bg-<?php echo $savings_color; ?>-subtle text-<?php echo $savings_color; ?>">Target:
-                    20%</span>
-                <i class="fa-solid fa-piggy-bank text-<?php echo $savings_color; ?> fa-lg"></i>
+        <div class="glass-panel-premium p-4 h-100 text-center hover-lift position-relative">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="badge rounded-pill <?php echo $savings_color === 'success' ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'; ?> px-3 py-1 fw-bold">
+                    Target: 20%
+                </span>
+                <div class="p-2 rounded-circle bg-light d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                    <i class="fa-solid fa-piggy-bank text-primary"></i>
+                </div>
             </div>
-            <h4 class="fw-bold mb-0">Savings</h4>
-            <div class="display-6 fw-bold my-2">AED <span class="blur-sensitive">
-                    <?php echo number_format($total_savings); ?>
-                </span></div>
 
-            <progress class="progress w-100" style="height: 10px;" value="<?php echo min(max($savings_pct, 0), 100); ?>"
-                max="100"></progress>
-            <div class="mt-2 small text-muted">
-                You have saved <strong>
-                    <?php echo number_format($savings_pct, 1); ?>%
-                </strong> of your income.
+            <div class="position-relative d-inline-flex align-items-center justify-content-center my-3">
+                <svg width="130" height="130" viewBox="0 0 120 120" style="transform: rotate(-90deg);">
+                    <circle cx="60" cy="60" r="50" fill="transparent" stroke="rgba(var(--primary-rgb, 99, 102, 241), 0.08)" stroke-width="8"></circle>
+                    <circle cx="60" cy="60" r="50" fill="transparent" 
+                            stroke="<?php echo $savings_color === 'success' ? 'url(#savingsGrad)' : 'url(#dangerGrad)'; ?>" 
+                            stroke-width="8"
+                            stroke-dasharray="314.16" 
+                            stroke-dashoffset="<?php echo getCircleOffset($savings_pct); ?>" 
+                            stroke-linecap="round"
+                            style="transition: stroke-dashoffset 0.8s ease-in-out;"></circle>
+                </svg>
+                <div class="position-absolute d-flex flex-column align-items-center">
+                    <span class="fs-4 fw-bold text-dark"><?php echo number_format(max(0, $savings_pct), 1); ?>%</span>
+                    <span class="text-muted small">saved</span>
+                </div>
             </div>
-            <div class="mt-2 text-muted x-small">
-                Remaining Income (Income - Expenses)
+
+            <h4 class="fw-bold mb-1">Savings</h4>
+            <div class="h3 fw-bold text-dark mb-3">
+                <small class="text-muted fs-6">AED</small>
+                <span class="blur-sensitive"><?php echo number_format($total_savings); ?></span>
             </div>
+            
+            <p class="text-muted small mb-0 px-2">
+                Accumulated savings (Income remaining after all monthly wants and needs are subtracted).
+            </p>
         </div>
     </div>
 </div>
 
-<div class="glass-panel p-4 mb-5">
+<!-- Section: Category Limits vs Actuals -->
+<div class="glass-panel-premium p-4 mb-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h5 class="fw-bold mb-0">Category Budgets vs Actuals</h5>
+        <div>
+            <h5 class="fw-bold mb-1">Category Budgets vs Actuals</h5>
+            <p class="text-muted small mb-0">Live trackers matching your actual category spending with defined constraints</p>
+        </div>
         <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-            <a href="manage_budgets.php" class="btn btn-outline-primary btn-sm rounded-pill px-3">Manage Targets</a>
+            <a href="manage_budgets.php" class="btn btn-primary btn-sm rounded-pill px-4 shadow-sm hover-lift">
+                <i class="fa-solid fa-sliders me-1"></i> Manage Targets
+            </a>
         <?php endif; ?>
     </div>
 
@@ -176,17 +278,20 @@ $savings_color = getStatusColor($savings_pct, 20, true);
     ?>
 
     <?php if (empty($cat_budgets)): ?>
-        <div class="text-center py-4 bg-light rounded-4">
-            <p class="text-muted mb-0">No specific category budgets defined for this month.</p>
+        <div class="text-center py-5 bg-light bg-opacity-50 rounded-4 border border-dashed">
+            <div class="mb-3 text-muted">
+                <i class="fa-solid fa-bullseye fa-3x opacity-25"></i>
+            </div>
+            <p class="text-muted mb-2">No category targets defined for this month.</p>
             <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-                <a href="manage_budgets.php" class="small text-primary">Set individual targets</a>
+                <a href="manage_budgets.php" class="btn btn-outline-primary btn-sm rounded-pill px-3">Set Targets Now</a>
             <?php endif; ?>
         </div>
     <?php else: ?>
         <div class="row g-4">
             <?php foreach ($cat_budgets as $cat => $limit):
                 $spent = $expenses[$cat] ?? 0;
-                $pct = ($spent / $limit) * 100;
+                $pct = $limit > 0 ? ($spent / $limit) * 100 : 0;
                 $var = $limit - $spent;
                 $color = 'success';
                 if ($pct > 80) {
@@ -197,26 +302,52 @@ $savings_color = getStatusColor($savings_pct, 20, true);
                 }
                 ?>
                 <div class="col-md-6 col-lg-4">
-                    <div class="p-3 border rounded-4 bg-white hover-shadow transition-all">
+                    <div class="p-4 rounded-4 border border-light bg-white bg-opacity-50 shadow-sm hover-lift transition-all">
                         <div class="d-flex justify-content-between align-items-start mb-2">
-                            <div class="fw-bold"><?php echo $cat; ?></div>
-                            <div class="badge bg-<?php echo $color; ?>-subtle text-<?php echo $color; ?>">
-                                <?php echo number_format($pct, 0); ?>%
+                            <div class="d-flex align-items-center">
+                                <div class="category-icon me-2 rounded-circle d-flex align-items-center justify-content-center"
+                                    style="width: 32px; height: 32px; background: rgba(var(--primary-rgb, 99, 102, 241), 0.08); color: var(--primary-color);">
+                                    <i class="fa-solid <?php
+                                    echo match ($cat) {
+                                        'Grocery' => 'fa-cart-shopping',
+                                        'Food' => 'fa-utensils',
+                                        'Medical' => 'fa-heart-pulse',
+                                        'Shopping' => 'fa-bag-shopping',
+                                        'Utilities' => 'fa-bolt',
+                                        'Transport' => 'fa-car',
+                                        'Travel' => 'fa-plane',
+                                        'Entertainment' => 'fa-clapperboard',
+                                        'Education' => 'fa-graduation-cap',
+                                        default => 'fa-tag'
+                                    };
+                                    ?>"></i>
+                                </div>
+                                <span class="fw-bold text-dark"><?php echo Html::e($cat); ?></span>
                             </div>
+                            <span class="badge rounded-pill bg-<?php echo $color; ?>-subtle text-<?php echo $color; ?> px-2 py-1 small fw-bold">
+                                <?php echo number_format($pct, 0); ?>%
+                            </span>
                         </div>
-                        <progress class="progress w-100 mb-2" style="height: 8px;" value="<?php echo min($pct, 100); ?>"
-                            max="100"></progress>
-                        <div class="d-flex justify-content-between small text-muted">
-                            <span>Spent: AED <?php echo number_format($spent); ?></span>
-                            <span>Goal: <?php echo number_format($limit); ?></span>
+                        
+                        <!-- Premium Custom Progress Bar -->
+                        <div class="progress rounded-pill mb-2" style="height: 8px; background: rgba(0,0,0,0.05);">
+                            <div class="progress-bar rounded-pill bg-<?php echo $color; ?>" role="progressbar" 
+                                 style="width: <?php echo min($pct, 100); ?>%; transition: width 0.6s ease-in-out;" 
+                                 aria-valuenow="<?php echo min($pct, 100); ?>" aria-valuemin="0" aria-valuemax="100"></div>
                         </div>
+
+                        <div class="d-flex justify-content-between small text-muted mb-2">
+                            <span>Spent: <strong>AED <?php echo number_format($spent); ?></strong></span>
+                            <span>Limit: AED <?php echo number_format($limit); ?></span>
+                        </div>
+
                         <?php if ($var < 0): ?>
-                            <div class="mt-2 text-danger x-small fw-bold">
-                                <i class="fa-solid fa-arrow-up"></i> Over by AED <?php echo number_format(abs($var)); ?>
+                            <div class="text-danger x-small fw-bold d-flex align-items-center gap-1">
+                                <i class="fa-solid fa-triangle-exclamation"></i> Over budget by AED <?php echo number_format(abs($var)); ?>
                             </div>
                         <?php else: ?>
-                            <div class="mt-2 text-success x-small fw-bold">
-                                <i class="fa-solid fa-arrow-down"></i> AED <?php echo number_format($var); ?> remaining
+                            <div class="text-success x-small fw-bold d-flex align-items-center gap-1">
+                                <i class="fa-solid fa-circle-check"></i> AED <?php echo number_format($var); ?> safe to spend
                             </div>
                         <?php endif; ?>
                     </div>
@@ -226,36 +357,62 @@ $savings_color = getStatusColor($savings_pct, 20, true);
     <?php endif; ?>
 </div>
 
-<div class="glass-panel p-4">
-    <h5 class="fw-bold mb-3">Budget Insights</h5>
-    <?php if ($savings_pct >= 20): ?>
-        <p class="text-success mb-0"><i class="fa-solid fa-circle-check me-2"></i> You are hitting your savings goal! Great
-            job.</p>
-    <?php else: ?>
-        <p class="text-danger mb-0"><i class="fa-solid fa-circle-exclamation me-2"></i> You are falling short of the 20%
-            savings target. Try reducing your 'Wants'.</p>
-    <?php endif; ?>
+<!-- Section: Budget Insights -->
+<div class="glass-panel-premium p-4">
+    <div class="d-flex align-items-center mb-3">
+        <div class="rounded-circle p-2 bg-primary-subtle text-primary d-flex align-items-center justify-content-center me-3" style="width: 42px; height: 42px;">
+            <i class="fa-solid fa-lightbulb fa-lg"></i>
+        </div>
+        <h5 class="fw-bold mb-0">Budget Insights & Analytics</h5>
+    </div>
+    
+    <div class="d-flex flex-column gap-3">
+        <?php if ($savings_pct >= 20): ?>
+            <div class="d-flex align-items-start gap-3 p-3 rounded-4 bg-success-subtle bg-opacity-25 border border-success border-opacity-10 text-success">
+                <i class="fa-solid fa-circle-check fa-lg mt-1"></i>
+                <div>
+                    <h6 class="fw-bold mb-1">Savings Goal Achieved</h6>
+                    <p class="small mb-0 text-success-emphasis">You are currently saving <?php echo number_format($savings_pct, 1); ?>% of your income, beating the minimum 20% savings rule. Keep this momentum up!</p>
+                </div>
+            </div>
+        <?php else: ?>
+            <div class="d-flex align-items-start gap-3 p-3 rounded-4 bg-danger-subtle bg-opacity-25 border border-danger border-opacity-10 text-danger">
+                <i class="fa-solid fa-triangle-exclamation fa-lg mt-1"></i>
+                <div>
+                    <h6 class="fw-bold mb-1">Under Savings Target</h6>
+                    <p class="small mb-0 text-danger-emphasis">You are falling short of the recommended 20% savings threshold. Review your 'Wants' category budgets and scale back non-essential expenditures.</p>
+                </div>
+            </div>
+        <?php endif; ?>
 
-    <?php if ($needs_pct > 50): ?>
-        <p class="text-warning mt-2 mb-0"><i class="fa-solid fa-triangle-exclamation me-2"></i> Your 'Needs' are high
-            (>50%). Consider reviewing recurring bills.</p>
-    <?php endif; ?>
+        <?php if ($needs_pct > 50): ?>
+            <div class="d-flex align-items-start gap-3 p-3 rounded-4 bg-warning-subtle bg-opacity-25 border border-warning border-opacity-10 text-warning">
+                <i class="fa-solid fa-triangle-exclamation fa-lg mt-1"></i>
+                <div>
+                    <h6 class="fw-bold mb-1">High Needs Ratio</h6>
+                    <p class="small mb-0 text-warning-emphasis">Your 'Needs' (essential spending) represents <?php echo number_format($needs_pct, 1); ?>% of your monthly cash flow. Consider renegotiating utility plans, reviewing subscriptions, or optimizing groceries to lower fixed costs.</p>
+                </div>
+            </div>
+        <?php endif; ?>
 
-    <?php
-    $over_cats = [];
-    foreach ($cat_budgets as $cat => $limit) {
-        if (($expenses[$cat] ?? 0) > $limit) {
-            $over_cats[] = $cat;
+        <?php
+        $over_cats = [];
+        foreach ($cat_budgets as $cat => $limit) {
+            if (($expenses[$cat] ?? 0) > $limit) {
+                $over_cats[] = $cat;
+            }
         }
-    }
-    if (!empty($over_cats)):
-        ?>
-        <p class="text-danger mt-2 mb-0">
-            <i class="fa-solid fa-circle-xmark me-2"></i> You have exceeded your budget in:
-            <strong><?php echo implode(', ', $over_cats); ?></strong>
-        </p>
-    <?php endif; ?>
+        if (!empty($over_cats)):
+            ?>
+            <div class="d-flex align-items-start gap-3 p-3 rounded-4 bg-danger-subtle bg-opacity-25 border border-danger border-opacity-10 text-danger">
+                <i class="fa-solid fa-circle-xmark fa-lg mt-1"></i>
+                <div>
+                    <h6 class="fw-bold mb-1">Category Targets Exceeded</h6>
+                    <p class="small mb-0 text-danger-emphasis">You have exceeded targets in the following categories: <strong><?php echo Html::e(implode(', ', $over_cats)); ?></strong>. Consider rebalancing your available limits.</p>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
 </div>
 
 <?php Layout::footer(); ?>
-// Structural Audit Complete

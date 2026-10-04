@@ -1,14 +1,12 @@
-﻿<?php
+<?php
 $page_title = "Edit Income";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
+use App\Helpers\Html;
 
 Bootstrap::init();
-
-Layout::header();
-Layout::sidebar();
 
 $income_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 
@@ -18,7 +16,7 @@ if (!$income_id) {
 }
 
 // Fetch income
-$stmt = $pdo->prepare("SELECT id, income_date, amount, description, category, is_recurring, recurrence_day FROM income WHERE id = ? AND tenant_id = ?");
+$stmt = $pdo->prepare("SELECT id, income_date, amount, currency, description, category, is_recurring, recurrence_day FROM income WHERE id = ? AND tenant_id = ?");
 $stmt->execute([$income_id, $_SESSION['tenant_id']]);
 $income = $stmt->fetch();
 
@@ -33,14 +31,30 @@ $categories = [
     'Business' => '🏢 Business Income',
     'Bonus' => '🎁 Bonus',
     'Investment' => '📈 Investment Return',
+    'Freelance' => '💻 Freelance',
     'Gift' => '🎀 Gift',
     'Other' => '🔹 Other'
 ];
+// Keep a legacy category selectable so saving the form does not silently change it
+if ($income['category'] !== '' && !isset($categories[$income['category']])) {
+    $categories[$income['category']] = $income['category'];
+}
+
+$currency = strtoupper($income['currency'] ?: 'AED');
+$currencies = ['AED', 'INR'];
+if (!in_array($currency, $currencies, true)) {
+    $currencies[] = $currency;
+}
+
+$income_ts = strtotime($income['income_date']);
+
+Layout::header();
+Layout::sidebar();
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <a href="monthly_income.php?month=<?php echo date('n', strtotime($income['income_date'])); ?>&year=<?php echo date('Y', strtotime($income['income_date'])); ?>"
+        <a href="monthly_income.php?month=<?php echo date('n', $income_ts); ?>&year=<?php echo date('Y', $income_ts); ?>"
             class="text-decoration-none text-muted small">
             <i class="fa-solid fa-arrow-left"></i> Back to Income
         </a>
@@ -51,7 +65,7 @@ $categories = [
 <?php if (isset($_GET['success'])): ?>
     <div class="alert alert-success alert-dismissible fade show" role="alert">
         <i class="fa-solid fa-check-circle me-2"></i>
-        <?php echo htmlspecialchars($_GET['success']); ?>
+        <?php echo Html::e($_GET['success']); ?>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 <?php endif; ?>
@@ -59,7 +73,7 @@ $categories = [
 <?php if (isset($_GET['error'])): ?>
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
         <i class="fa-solid fa-exclamation-circle me-2"></i>
-        <?php echo htmlspecialchars($_GET['error']); ?>
+        <?php echo Html::e($_GET['error']); ?>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 <?php endif; ?>
@@ -70,36 +84,41 @@ $categories = [
             <form action="income_actions.php" method="POST">
                 <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="update_income">
-                <input type="hidden" name="income_id" value="<?php echo $income['id']; ?>">
+                <input type="hidden" name="income_id" value="<?php echo (int) $income['id']; ?>">
 
                 <div class="mb-3">
                     <label class="form-label" for="amount">Amount <span class="text-danger">*</span></label>
                     <div class="input-group">
-                        <span class="input-group-text fw-bold text-success">AED</span>
-                        <input type="number" name="amount" id="amount" class="form-control form-control-lg" step="0.01"
-                            value="<?php echo $income['amount']; ?>" required autofocus>
+                        <select name="currency" id="incomeCurrency" class="form-select fw-bold text-success"
+                            style="max-width: 100px;" aria-label="Currency">
+                            <?php foreach ($currencies as $cur): ?>
+                                <option value="<?php echo Html::e($cur); ?>" <?php echo $currency === $cur ? 'selected' : ''; ?>><?php echo Html::e($cur); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <input type="number" name="amount" id="amount" class="form-control form-control-lg" step="0.01" min="0.01"
+                            value="<?php echo Html::e($income['amount']); ?>" required autofocus>
                     </div>
                 </div>
 
                 <div class="mb-3">
                     <label class="form-label" for="income_date">Date <span class="text-danger">*</span></label>
                     <input type="date" name="income_date" id="income_date" class="form-control form-control-lg"
-                        value="<?php echo $income['income_date']; ?>" required>
+                        value="<?php echo Html::e($income['income_date']); ?>" required>
                 </div>
 
                 <div class="mb-3">
                     <label class="form-label" for="description">Source / Description <span
                             class="text-danger">*</span></label>
                     <input type="text" name="description" id="description" class="form-control"
-                        value="<?php echo htmlspecialchars($income['description']); ?>" required>
+                        value="<?php echo Html::e($income['description']); ?>" required>
                 </div>
 
                 <div class="mb-3">
                     <label class="form-label" for="category">Category <span class="text-danger">*</span></label>
                     <select name="category" id="category" class="form-select" required>
                         <?php foreach ($categories as $key => $label): ?>
-                            <option value="<?php echo $key; ?>" <?php echo $income['category'] == $key ? 'selected' : ''; ?>>
-                                <?php echo $label; ?>
+                            <option value="<?php echo Html::e($key); ?>" <?php echo $income['category'] === (string) $key ? 'selected' : ''; ?>>
+                                <?php echo Html::e($label); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -110,7 +129,7 @@ $categories = [
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="is_recurring" id="isRecurring"
                                 value="1" <?php echo $income['is_recurring'] ? 'checked' : ''; ?>
-                                onchange="toggleRecurrence()">
+                                data-onchange="toggleRecurrence">
                             <label class="form-check-label fw-bold text-primary" for="isRecurring">
                                 Monthly Recurring?
                             </label>
@@ -122,7 +141,7 @@ $categories = [
                         <label class="small text-muted" for="recurrence_day">Pay Day</label>
                         <input type="number" name="recurrence_day" id="recurrence_day"
                             class="form-control form-control-sm" min="1" max="31"
-                            value="<?php echo $income['recurrence_day'] ?? ''; ?>" placeholder="e.g. 28">
+                            value="<?php echo Html::e($income['recurrence_day'] ?? ''); ?>" placeholder="e.g. 28">
                     </div>
                 </div>
 
@@ -133,10 +152,12 @@ $categories = [
                 </div>
             </form>
             <form action="income_actions.php" method="POST" class="d-grid"
-                onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($income['description'])); ?> - AED <?php echo number_format($income['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($income['income_date'])); ?> permanently?');">
+                data-confirm="<?php echo Html::e('Delete ' . $income['description'] . ' - ' . $currency . ' ' . number_format((float) $income['amount'], 2) . ' - on ' . date('d M Y', $income_ts) . ' permanently?'); ?>">
                 <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="delete_income">
-                <input type="hidden" name="id" value="<?php echo $income['id']; ?>">
+                <input type="hidden" name="id" value="<?php echo (int) $income['id']; ?>">
+                <input type="hidden" name="month" value="<?php echo date('n', $income_ts); ?>">
+                <input type="hidden" name="year" value="<?php echo date('Y', $income_ts); ?>">
                 <button type="submit" class="btn btn-outline-danger py-2">
                     <i class="fa-solid fa-trash me-2"></i> Delete Income
                 </button>
@@ -153,4 +174,3 @@ $categories = [
 </script>
 
 <?php Layout::footer(); ?>
-// Structural Audit Complete

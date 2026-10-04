@@ -3,6 +3,8 @@ require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
+use App\Helpers\BalanceHelper;
+use App\Helpers\ExchangeRateHelper;
 
 Bootstrap::init();
 
@@ -25,7 +27,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-$tenant_id = $_SESSION['tenant_id'];
+$tenant_id = (int) $_SESSION['tenant_id'];
+
+/**
+ * A posted bank_id is only accepted when the bank belongs to this tenant.
+ * Returns the id, null when none was chosen, or false when it is foreign/invalid.
+ */
+function cardActionsBankId(PDO $pdo, int $tenant_id)
+{
+    $bank_id = filter_input(INPUT_POST, 'bank_id', FILTER_VALIDATE_INT);
+    if (!$bank_id) {
+        return null;
+    }
+    return BalanceHelper::bank($pdo, $tenant_id, $bank_id) ? $bank_id : false;
+}
 
 if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $user_id = $_SESSION['user_id'];
@@ -54,9 +69,13 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     }
     $cashback_struct = json_encode($cb_data);
 
-    $bank_url = filter_var($_POST['bank_url'], FILTER_SANITIZE_URL);
+    $bank_url = filter_var($_POST['bank_url'] ?? '', FILTER_SANITIZE_URL);
     $features = $_POST['features'] ?? '';
-    $bank_id = filter_input(INPUT_POST, 'bank_id', FILTER_VALIDATE_INT) ?: null;
+    $bank_id = cardActionsBankId($pdo, $tenant_id);
+    if ($bank_id === false) {
+        header("Location: add_card.php?error=" . urlencode("Invalid linked bank account."));
+        exit();
+    }
 
     try {
         $stmt = $pdo->prepare("INSERT INTO cards (user_id, tenant_id, bank_name, card_name, card_type, network, tier, limit_amount, bill_day, statement_day, cashback_struct, bank_url, features, bank_id, first_four, last_four, fee_type, card_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
@@ -105,22 +124,33 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     }
     $cashback_struct = json_encode($cb_data);
 
-    $bank_url = filter_var($_POST['bank_url'], FILTER_SANITIZE_URL);
+    $bank_url = filter_var($_POST['bank_url'] ?? '', FILTER_SANITIZE_URL);
     $features = $_POST['features'] ?? '';
     $is_default = isset($_POST['is_default']) && $_POST['is_default'] == '1' ? 1 : 0;
-    $bank_id = filter_input(INPUT_POST, 'bank_id', FILTER_VALIDATE_INT) ?: null;
+    $bank_id = cardActionsBankId($pdo, $tenant_id);
+    if ($bank_id === false) {
+        header("Location: edit_card.php?id=$card_id&error=" . urlencode("Invalid linked bank account."));
+        exit();
+    }
+
+    $own = $pdo->prepare("SELECT id FROM cards WHERE id = ? AND tenant_id = ?");
+    $own->execute([$card_id, $tenant_id]);
+    if (!$own->fetchColumn()) {
+        header("Location: my_cards.php?error=" . urlencode("Card not found"));
+        exit();
+    }
 
     try {
         $pdo->beginTransaction();
 
         // If setting as default, clear other cards' default status first
         if ($is_default) {
-            $pdo->prepare("UPDATE cards SET is_default = 0 WHERE tenant_id = ?")->execute([$tenant_id]);
+            $pdo->prepare("UPDATE cards SET is_default = 0 WHERE tenant_id = ? AND id <> ?")->execute([$tenant_id, $card_id]);
         }
 
         // Ensure user owns the card
-        $stmt = $pdo->prepare("UPDATE cards SET bank_name=?, card_name=?, card_type=?, network=?, tier=?, limit_amount=?, bill_day=?, statement_day=?, cashback_struct=?, bank_url=?, features=?, is_default=?, bank_id=?, first_four=?, last_four=?, fee_type=?, card_image=? WHERE id=? AND tenant_id=? AND user_id=?");
-        $stmt->execute([$bank_name, $card_name, $card_type, $network, $tier, $limit_amount, $bill_day, $statement_day, $cashback_struct, $bank_url, $features, $is_default, $bank_id, $first_four, $last_four, $fee_type, $card_image, $card_id, $tenant_id, $user_id]);
+        $stmt = $pdo->prepare("UPDATE cards SET bank_name=?, card_name=?, card_type=?, network=?, tier=?, limit_amount=?, bill_day=?, statement_day=?, cashback_struct=?, bank_url=?, features=?, is_default=?, bank_id=?, first_four=?, last_four=?, fee_type=?, card_image=? WHERE id=? AND tenant_id=?");
+        $stmt->execute([$bank_name, $card_name, $card_type, $network, $tier, $limit_amount, $bill_day, $statement_day, $cashback_struct, $bank_url, $features, $is_default, $bank_id, $first_four, $last_four, $fee_type, $card_image, $card_id, $tenant_id]);
         $pdo->commit();
 
         AuditHelper::log($pdo, 'update_card', "Updated Card: $card_name (ID: $card_id)");
@@ -148,8 +178,8 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
     if ($card_id) {
         try {
-            $stmt = $pdo->prepare("DELETE FROM cards WHERE id = ? AND tenant_id = ? AND user_id = ?");
-            $stmt->execute([$card_id, $tenant_id, $user_id]);
+            $stmt = $pdo->prepare("DELETE FROM cards WHERE id = ? AND tenant_id = ?");
+            $stmt->execute([$card_id, $tenant_id]);
             AuditHelper::log($pdo, 'delete_card', "Deleted Card ID: $card_id");
             header("Location: my_cards.php?success=Card deleted");
             exit();
@@ -162,11 +192,12 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 } elseif ($action == 'record_payment' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $user_id = $_SESSION['user_id'];
     $card_id = filter_input(INPUT_POST, 'card_id', FILTER_VALIDATE_INT);
-    $bank_id = filter_input(INPUT_POST, 'bank_id', FILTER_VALIDATE_INT);
-    if (!$bank_id) {
-        $bank_id = null; // Ensure NULL if empty/false to pass FK constraint
+    $bank_id = cardActionsBankId($pdo, $tenant_id); // NULL when no source bank was chosen
+    if ($bank_id === false) {
+        header("Location: pay_card.php?error=" . urlencode("Invalid source bank account."));
+        exit();
     }
-    $amount = floatval($_POST['amount']);
+    $amount = round(floatval($_POST['amount'] ?? 0), 2);
     $dateRaw = $_POST['payment_date'] ?? '';
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateRaw) || !strtotime($dateRaw)) {
         header("Location: pay_card.php?error=Invalid date format");
@@ -179,14 +210,42 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
+    $own = $pdo->prepare("SELECT id FROM cards WHERE id = ? AND tenant_id = ?");
+    $own->execute([$card_id, $tenant_id]);
+    if (!$own->fetchColumn()) {
+        header("Location: pay_card.php?error=" . urlencode("Card not found"));
+        exit();
+    }
+
+    // The payment is entered in AED; convert to the source account's currency.
+    // (Rate lookup may call an external API, so do it before the transaction starts.)
+    $bank_delta = 0.0;
+    if ($bank_id !== null) {
+        $source = BalanceHelper::bank($pdo, $tenant_id, $bank_id);
+        $bank_cur = strtoupper($source['currency'] ?: 'AED');
+        $bank_delta = -round($bank_cur === 'AED' ? $amount : $amount * ExchangeRateHelper::getRate('AED', $bank_cur, $pdo), 2);
+    }
+
     try {
+        $pdo->beginTransaction();
+
         $stmt = $pdo->prepare("INSERT INTO card_payments (user_id, tenant_id, card_id, bank_id, amount, payment_date) VALUES (?, ?, ?, ?, ?, ?)");
         $stmt->execute([$user_id, $tenant_id, $card_id, $bank_id, $amount, $date]);
+
+        // Deduct the payment from the source account, as promised on pay_card.php
+        if ($bank_id !== null && !BalanceHelper::adjust($pdo, $tenant_id, (int) $user_id, $bank_id, $bank_delta, $date)) {
+            throw new RuntimeException("Source bank $bank_id not owned by tenant $tenant_id");
+        }
+
+        $pdo->commit();
 
         AuditHelper::log($pdo, 'record_card_payment', "Recorded Card Payment: $amount (Card ID: $card_id)");
         header("Location: my_cards.php?success=Payment recorded successfully");
         exit();
-    } catch (PDOException $e) {
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log("Payment Record Error: " . $e->getMessage());
         header("Location: pay_card.php?error=" . urlencode("Failed to record payment."));
         exit();

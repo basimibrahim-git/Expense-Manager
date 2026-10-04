@@ -13,6 +13,9 @@ class ExchangeRateHelper
         'INR' => ['AED' => 0.044],
     ];
 
+    /** Rates already resolved during this request. */
+    private static array $memo = [];
+
     /**
      * Returns the exchange rate from $from currency to $to currency.
      * Checks a DB cache first (6-hour TTL), then fetches from frankfurter.app.
@@ -23,10 +26,20 @@ class ExchangeRateHelper
         if ($from === $to) {
             return 1.0;
         }
+        $key = $from . '>' . $to;
+        if (!isset(self::$memo[$key])) {
+            self::$memo[$key] = self::resolveRate($from, $to, $pdo);
+        }
+        return self::$memo[$key];
+    }
 
-        // Ensure the cache table exists
-        self::ensureTable($pdo);
-
+    /**
+     * Note: no DDL here. CREATE TABLE causes an implicit COMMIT in MySQL/MariaDB,
+     * which silently broke callers running inside a transaction. The
+     * exchange_rate_cache table is created by install/install.php.
+     */
+    private static function resolveRate(string $from, string $to, PDO $pdo): float
+    {
         // 1. Check cache (fresh within 6 hours)
         $cached = self::fetchCached($pdo, $from, $to, true);
         if ($cached !== null) {
@@ -54,18 +67,18 @@ class ExchangeRateHelper
         return self::FALLBACK_RATES[$from][$to] ?? 1.0;
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
-
-    private static function ensureTable(PDO $pdo): void
+    /**
+     * SQL expression converting an amount column to AED (INR rows use today's rate),
+     * e.g. "SELECT SUM(" . ExchangeRateHelper::aedSql($pdo) . ") FROM income ...".
+     * Column names must be code constants, never user input.
+     */
+    public static function aedSql(PDO $pdo, string $amountCol = 'amount', string $currencyCol = 'currency'): string
     {
-        $pdo->exec("CREATE TABLE IF NOT EXISTS exchange_rate_cache (
-            from_currency CHAR(3)        NOT NULL,
-            to_currency   CHAR(3)        NOT NULL,
-            rate          DECIMAL(15,6)  NOT NULL,
-            fetched_at    DATETIME       NOT NULL,
-            PRIMARY KEY (from_currency, to_currency)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $rate = sprintf('%.6F', self::getRate('INR', 'AED', $pdo));
+        return "CASE WHEN {$currencyCol} = 'INR' THEN {$amountCol} * {$rate} ELSE {$amountCol} END";
     }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
 
     /**
      * Returns a cached rate or null.

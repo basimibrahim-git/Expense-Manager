@@ -317,6 +317,18 @@ body {
     border-color: #1e3a8a;
 }
 
+.btn-white {
+    background-color: #ffffff !important;
+    color: var(--primary-color) !important;
+    border: 1px solid rgba(0, 0, 0, 0.1) !important;
+}
+
+.btn-white:hover {
+    background-color: #f8fafc !important;
+    color: var(--primary-color) !important;
+    border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
 /* Tables */
 .custom-table thead th {
     background: #f9fafb;
@@ -454,3 +466,219 @@ body {
         display: none !important;
     }
 }
+
+/* Redesign Styling Additions */
+
+/* Premium Gradient Cards */
+.gradient-card-primary {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%) !important;
+    color: #ffffff !important;
+}
+.gradient-card-success {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+    color: #ffffff !important;
+}
+.gradient-card-danger {
+    background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
+    color: #ffffff !important;
+}
+.gradient-card-info {
+    background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%) !important;
+    color: #ffffff !important;
+}
+.gradient-card-warning {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+    color: #ffffff !important;
+}
+.gradient-card-accent {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
+    color: #ffffff !important;
+}
+
+/* Hover Lifts & Interactive Shadows */
+.hover-lift {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.hover-lift:hover {
+    transform: translateY(-4px) scale(1.01) !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Glassmorphism Accents */
+.glass-panel-premium {
+    background: var(--glass-bg);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-radius: 16px;
+    transition: all 0.3s ease;
+}
+
+/* Realistic Credit Card Mockups */
+.credit-card-mockup {
+    width: 100%;
+    max-width: 350px;
+    height: 190px;
+    border-radius: 15px;
+    padding: 1.25rem;
+    position: relative;
+    color: #ffffff;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    overflow: hidden;
+    isolation: isolate;
+    backface-visibility: hidden;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
+}
+.credit-card-mockup:hover {
+    transform: translateY(-5px) rotateX(4deg) rotateY(4deg);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.25);
+}
+.credit-card-mockup::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 60%);
+    pointer-events: none;
+}
+.credit-card-chip {
+    width: 40px;
+    height: 28px;
+    background: linear-gradient(135deg, #ffd700 0%, #cca100 100%);
+    border-radius: 5px;
+    position: relative;
+    box-shadow: inset 1px 1px 2px rgba(255,255,255,0.5);
+    margin-bottom: 0.75rem;
+}
+.credit-card-chip::after {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 7px;
+    width: 26px;
+    height: 20px;
+    border: 1px solid rgba(0,0,0,0.15);
+    border-radius: 3px;
+}
+.credit-card-number {
+    font-size: 1.20rem;
+    font-weight: 500;
+    letter-spacing: 2px;
+    margin-bottom: 0.5rem;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+}
+.credit-card-holder {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.8;
+}
+.credit-card-expiry {
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+    opacity: 0.8;
+}
+.credit-card-brand {
+    position: absolute;
+    top: 1.25rem;
+    right: 1.25rem;
+    font-size: 1.4rem;
+    font-weight: 700;
+    font-style: italic;
+    opacity: 0.9;
+}
+
+/* Year map styling */
+.month-grid-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(0,0,0,0.05);
+    border-radius: 16px;
+}
+.month-grid-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--primary-color);
+}
+
+/* Theme night updates */
+body.theme-night .glass-panel-premium {
+    background: rgba(22, 27, 34, 0.85);
+    border-color: rgba(48, 54, 61, 0.5);
+}
+body.theme-night .month-grid-card {
+    border-color: rgba(48, 54, 61, 0.5);
+}
+body.theme-night .month-grid-card:hover {
+    border-color: var(--primary-color);
+}
+
+/* Background Opacity Utility Class Fallbacks */
+.bg-opacity-10 {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+.bg-opacity-20 {
+    background-color: rgba(255, 255, 255, 0.2) !important;
+}
+.bg-opacity-25 {
+    background-color: rgba(255, 255, 255, 0.25) !important;
+}
+.bg-opacity-50 {
+    background-color: rgba(255, 255, 255, 0.5) !important;
+}
+.bg-opacity-75 {
+    background-color: rgba(255, 255, 255, 0.75) !important;
+}
+
+/* Dark theme opacity variants */
+body.theme-night .bg-opacity-10 {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+}
+body.theme-night .bg-opacity-20 {
+    background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Contextual opacity overrides */
+.bg-success.bg-opacity-10 {
+    background-color: rgba(16, 185, 129, 0.1) !important;
+}
+.bg-success.bg-opacity-20 {
+    background-color: rgba(16, 185, 129, 0.2) !important;
+}
+.bg-danger.bg-opacity-10 {
+    background-color: rgba(239, 68, 68, 0.1) !important;
+}
+.bg-danger.bg-opacity-20 {
+    background-color: rgba(239, 68, 68, 0.2) !important;
+}
+.bg-info.bg-opacity-10 {
+    background-color: rgba(6, 182, 212, 0.1) !important;
+}
+.bg-info.bg-opacity-20 {
+    background-color: rgba(6, 182, 212, 0.2) !important;
+}
+.bg-warning.bg-opacity-10 {
+    background-color: rgba(245, 158, 11, 0.1) !important;
+}
+.bg-warning.bg-opacity-20 {
+    background-color: rgba(245, 158, 11, 0.2) !important;
+}
+
+/* Bootstrap subtle alerts matching */
+.bg-danger-subtle {
+    background-color: rgba(239, 68, 68, 0.12) !important;
+    color: #ef4444 !important;
+}
+.bg-success-subtle {
+    background-color: rgba(16, 185, 129, 0.12) !important;
+    color: #10b981 !important;
+}
+.bg-warning-subtle {
+    background-color: rgba(245, 158, 11, 0.12) !important;
+    color: #f59e0b !important;
+}
+.bg-info-subtle {
+    background-color: rgba(6, 182, 212, 0.12) !important;
+    color: #06b6d4 !important;
+}

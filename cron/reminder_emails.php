@@ -34,7 +34,7 @@ if (!IS_CLI) {
         $_ENV[trim($k)] = trim(trim($v), "\"'");
     }
     $secret = $_ENV['CRON_SECRET'] ?? '';
-    if ($secret === '' || ($_GET['key'] ?? '') !== $secret) {
+    if ($secret === '' || !hash_equals($secret, (string) ($_GET['key'] ?? ''))) {
         http_response_code(403);
         die('Forbidden');
     }
@@ -44,6 +44,7 @@ require_once dirname(__DIR__) . '/autoload.php';
 
 use App\Core\Bootstrap;
 use App\Helpers\MailHelper;
+use App\Helpers\ExchangeRateHelper;
 
 Bootstrap::init();
 
@@ -61,12 +62,9 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS reminder_email_log (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
 // ── Config ────────────────────────────────────────────────────────────────────
-$RECIPIENTS = array_filter(array_map('trim', explode(',', $_ENV['MAIL_RECIPIENTS'] ?? '')));
-
-if (empty($RECIPIENTS)) {
-    logLine('ERROR No recipients configured — set MAIL_RECIPIENTS in .env');
-    exit(1);
-}
+// Each reminder is emailed to the users of its own tenant (family_admin + users).
+// MAIL_RECIPIENTS is only a fallback for tenants that have no user with an email address.
+$RECIPIENTS = array_values(array_filter(array_map('trim', explode(',', $_ENV['MAIL_RECIPIENTS'] ?? ''))));
 
 $OFFSETS = [-7, -3, 0, 3];  // days relative to alert_date
 $today      = date('Y-m-d');
@@ -84,7 +82,7 @@ $sent    = 0;
 $skipped = 0;
 $errors  = 0;
 
-logLine("INFO  Today=$today | Reminders found=" . count($reminders) . " | Recipients=" . implode(', ', $RECIPIENTS));
+logLine("INFO  Today=$today | Reminders found=" . count($reminders) . " | Fallback recipients=" . count($RECIPIENTS));
 
 foreach ($reminders as $rem) {
     $alert_date = date('Y-m-d', strtotime($rem['alert_date']));
@@ -101,21 +99,31 @@ foreach ($reminders as $rem) {
             continue;
         }
 
-        // Already sent successfully for this offset on any date?
+        // Already sent for this offset in the CURRENT cycle? The email goes out on the trigger
+        // date or (grace retry) the day after, so only log rows from that window count.
+        // Recurring reminders keep their id, so older cycles' rows must not block new emails.
         $check = $pdo->prepare(
-            "SELECT id FROM reminder_email_log WHERE reminder_id = ? AND offset_days = ?"
+            "SELECT id FROM reminder_email_log
+              WHERE reminder_id = ? AND offset_days = ? AND sent_date BETWEEN ? AND ?"
         );
-        $check->execute([$rem['id'], $offset]);
+        $check->execute([$rem['id'], $offset, $trigger_date, date('Y-m-d', strtotime("$trigger_date +1 day"))]);
         if ($check->fetch()) {
             $skipped++;
             logLine("SKIP  reminder #{$rem['id']} ({$rem['title']}) offset={$offset}d — already sent");
             continue;
         }
 
+        $to = reminderRecipients($pdo, $rem['tenant_id'] ?? null, $RECIPIENTS);
+        if (empty($to)) {
+            $errors++;
+            logLine("ERROR reminder #{$rem['id']} ({$rem['title']}) — no recipients for tenant #" . (int) ($rem['tenant_id'] ?? 0) . " and MAIL_RECIPIENTS is empty");
+            continue;
+        }
+
         // ── Build email ───────────────────────────────────────────────────────
         [$subject, $html] = buildEmail($rem, $offset);
 
-        $ok = MailHelper::send($RECIPIENTS, $subject, $html);
+        $ok = MailHelper::send($to, $subject, $html);
 
         if ($ok) {
             // INSERT IGNORE guards against a rare simultaneous double-run
@@ -163,6 +171,33 @@ function logLine(string $msg): void
     echo IS_CLI ? $line : nl2br(htmlspecialchars($line));
 }
 
+/**
+ * Email addresses of a tenant's users (family_admin + user roles); falls back to MAIL_RECIPIENTS
+ * when the tenant has none. Cached per tenant for the run.
+ */
+function reminderRecipients(PDO $pdo, $tenantId, array $fallback): array
+{
+    static $cache = [];
+    $tid = (int) $tenantId;
+    if (!isset($cache[$tid])) {
+        $emails = [];
+        if ($tid > 0) {
+            $stmt = $pdo->prepare(
+                "SELECT DISTINCT email FROM users
+                  WHERE tenant_id = ? AND role IN ('family_admin', 'user')
+                    AND email IS NOT NULL AND email <> ''"
+            );
+            $stmt->execute([$tid]);
+            $emails = array_values(array_filter(
+                $stmt->fetchAll(PDO::FETCH_COLUMN),
+                fn($e) => filter_var($e, FILTER_VALIDATE_EMAIL) !== false
+            ));
+        }
+        $cache[$tid] = !empty($emails) ? $emails : $fallback;
+    }
+    return $cache[$tid];
+}
+
 function advanceReminder(PDO $pdo, array $rem): void
 {
     $map = [
@@ -202,7 +237,7 @@ function runMonthlyDigest(PDO $pdo): void
 
         try {
             $adminStmt = $pdo->prepare(
-                "SELECT name, email FROM users WHERE tenant_id = ? AND role = 'family_admin'
+                "SELECT id, name, email FROM users WHERE tenant_id = ? AND role = 'family_admin'
                   AND email IS NOT NULL AND email <> '' LIMIT 1"
             );
             $adminStmt->execute([$tid]);
@@ -214,7 +249,7 @@ function runMonthlyDigest(PDO $pdo): void
             }
 
             // Income
-            $s = $pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM income WHERE tenant_id=? AND MONTH(income_date)=? AND YEAR(income_date)=?");
+            $s = $pdo->prepare("SELECT COALESCE(SUM(" . ExchangeRateHelper::aedSql($pdo) . "),0) FROM income WHERE tenant_id=? AND MONTH(income_date)=? AND YEAR(income_date)=?");
             $s->execute([$tid, $prevMonth, $prevYear]);
             $totalIncome = (float) $s->fetchColumn();
 
@@ -254,7 +289,7 @@ function runMonthlyDigest(PDO $pdo): void
             $subject = 'Your ' . $monthLabel . ' Financial Digest — ' . $name;
             $ok      = \App\Helpers\MailHelper::send([$admin['email']], $subject, $html);
 
-            digestAuditLog($pdo, $tid, 'monthly_digest_sent', "Month={$monthLabel} | To={$admin['email']} | Income={$totalIncome} | Expenses={$totalExpenses}");
+            digestAuditLog($pdo, $tid, (int) $admin['id'], 'monthly_digest_sent', "Month={$monthLabel} | To={$admin['email']} | Income={$totalIncome} | Expenses={$totalExpenses}");
 
             if ($ok) {
                 $sent++;
@@ -271,11 +306,11 @@ function runMonthlyDigest(PDO $pdo): void
     logLine("DIGEST Done. Sent={$sent}/{$total}");
 }
 
-function digestAuditLog(PDO $pdo, int $tenantId, string $action, string $context): void
+function digestAuditLog(PDO $pdo, int $tenantId, int $userId, string $action, string $context): void
 {
     try {
-        $pdo->prepare("INSERT INTO audit_logs (tenant_id, user_id, action, context, ip_address, user_agent) VALUES (?, NULL, ?, ?, 'cli', 'cron/reminder_emails.php')")
-            ->execute([$tenantId, $action, $context]);
+        $pdo->prepare("INSERT INTO audit_logs (tenant_id, user_id, action, context, ip_address, user_agent) VALUES (?, ?, ?, ?, 'cli', 'cron/reminder_emails.php')")
+            ->execute([$tenantId, $userId, $action, $context]);
     } catch (Throwable $e) {
         error_log("[monthly_digest] auditLog failed: " . $e->getMessage());
     }

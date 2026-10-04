@@ -1,11 +1,19 @@
-﻿<?php
+<?php
 $page_title = "Monthly Expenses";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\Layout;
 use App\Helpers\SecurityHelper;
+use App\Helpers\Html;
 
 Bootstrap::init();
+
+function in_text($str, $arr) {
+    foreach ($arr as $a) {
+        if (stripos($str, $a) !== false) return true;
+    }
+    return false;
+}
 
 // SQL Fragments for Filtering
 const SQL_FILTER_CATEGORY = " AND e.category = :cat";
@@ -18,13 +26,22 @@ const SQL_FILTER_END_DATE = " AND e.expense_date <= :end";
 Layout::header();
 Layout::sidebar();
 
-$month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
-$year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
-$category_filter = filter_input(INPUT_GET, 'category');
-$payment_filter = filter_input(INPUT_GET, 'payment_method');
-$card_filter = filter_input(INPUT_GET, 'card_id', FILTER_VALIDATE_INT);
-$start_date = filter_input(INPUT_GET, 'start');
-$end_date = filter_input(INPUT_GET, 'end');
+$month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]) ?: (int) date('n');
+$year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]) ?: (int) date('Y');
+$category_filter = filter_input(INPUT_GET, 'category') ?: null;
+$payment_filter = filter_input(INPUT_GET, 'payment_method') ?: null;
+$card_filter = filter_input(INPUT_GET, 'card_id', FILTER_VALIDATE_INT) ?: null;
+$start_date = filter_input(INPUT_GET, 'start', FILTER_VALIDATE_REGEXP, ['options' => ['regexp' => '/^\d{4}-\d{2}-\d{2}$/']]) ?: null;
+$end_date = filter_input(INPUT_GET, 'end', FILTER_VALIDATE_REGEXP, ['options' => ['regexp' => '/^\d{4}-\d{2}-\d{2}$/']]) ?: null;
+
+// Active filters, reused by the export and pagination links
+$filter_query = array_filter([
+    'category'       => $category_filter,
+    'payment_method' => $payment_filter,
+    'card_id'        => $card_filter,
+    'start'          => $start_date,
+    'end'            => $end_date,
+], fn($v) => $v !== null && $v !== '');
 
 // Fetch family's cards for filter dropdown
 $cards_stmt = $pdo->prepare("SELECT id, bank_name, card_name FROM cards WHERE tenant_id = ? ORDER BY card_name");
@@ -35,7 +52,7 @@ $month_name = date("F", mktime(0, 0, 0, $month, 10));
 
 // Pagination settings
 $items_per_page = 15;
-$page_num = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT) ?: 1;
+$page_num = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 1;
 $offset = ($page_num - 1) * $items_per_page;
 
 // Count total for pagination
@@ -74,8 +91,8 @@ $total_pages = max(1, ceil($total_items / $items_per_page));
 // Build Query with LIMIT
 $query = "SELECT e.*, c.bank_name, c.card_name, u.name as spender_name
           FROM expenses e
-          LEFT JOIN cards c ON e.card_id = c.id
-          LEFT JOIN users u ON e.spent_by_user_id = u.id
+          LEFT JOIN cards c ON e.card_id = c.id AND c.tenant_id = e.tenant_id
+          LEFT JOIN users u ON e.spent_by_user_id = u.id AND u.tenant_id = e.tenant_id
           WHERE e.tenant_id = :tenant_id
           AND MONTH(e.expense_date) = :month
           AND YEAR(e.expense_date) = :year";
@@ -154,135 +171,132 @@ try {
 }
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <a href="expenses.php?year=<?php echo $year; ?>" class="text-decoration-none text-muted small mb-1">
-            <i class="fa-solid fa-arrow-left"></i> Back to Year
-        </a>
-        <h1 class="h3 fw-bold mb-0">
-            <?php echo $month_name . ' ' . $year; ?>
-        </h1>
-    </div>
-    <div class="text-end">
-        <div class="small text-muted">Total Spent</div>
-        <h3 class="fw-bold text-primary mb-0">AED <span class="blur-sensitive">
-                <?php echo number_format($view_total, 2); ?></span>
-        </h3>
+<!-- Premium Header Banner -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="gradient-card-danger p-4 rounded-4 hover-lift position-relative overflow-hidden shadow-sm" style="border-radius: 16px;">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                <div>
+                    <a href="expenses.php?year=<?php echo $year; ?>" class="text-decoration-none text-white-50 small mb-1 d-inline-block">
+                        <i class="fa-solid fa-arrow-left"></i> Back to Yearly Map
+                    </a>
+                    <h1 class="h2 fw-bold text-white mb-0"><?php echo $month_name . ' ' . $year; ?> Details</h1>
+                    <p class="text-white-50 mb-0">Comprehensive transaction ledger and budget tracking.</p>
+                </div>
+                <div class="text-md-end">
+                    <span class="small text-white-50 d-block uppercase tracking-wider">Total Spent This Month</span>
+                    <h2 class="fw-bold text-white mb-0">
+                        <small style="font-size: 0.6em">AED</small>
+                        <span class="blur-sensitive"><?php echo number_format($view_total, 2); ?></span>
+                    </h2>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
-<!-- Filters & Actions -->
-<div class="glass-panel p-3 mb-4">
-    <form method="GET" class="row g-2 align-items-end">
+<!-- Filters Drawer (Glassmorphic) -->
+<div class="glass-panel-premium p-4 mb-4">
+    <form method="GET" class="row g-3 align-items-end">
         <input type="hidden" name="month" value="<?php echo $month; ?>">
         <input type="hidden" name="year" value="<?php echo $year; ?>">
 
-        <div class="col-6 col-md-2">
-            <label for="filterCategory" class="small text-muted mb-1">Category</label>
-            <select name="category" id="filterCategory" class="form-select form-select-sm"
-                onchange="this.form.submit()">
+        <div class="col-12 col-sm-6 col-md-2">
+            <label for="filterCategory" class="small text-muted mb-1 fw-bold">Category</label>
+            <select name="category" id="filterCategory" class="form-select" data-autosubmit>
                 <option value="">All Categories</option>
                 <?php
                 $categories = ['Grocery', 'Medical', 'Food', 'Utilities', 'Transport', 'Shopping', 'Entertainment', 'Travel', 'Education', 'Other'];
                 foreach ($categories as $cat): ?>
-                    <option value="<?php echo $cat; ?>" <?php echo $category_filter == $cat ? 'selected' : ''; ?>>
-                        <?php echo $cat; ?>
+                    <option value="<?php echo Html::e($cat); ?>" <?php echo $category_filter == $cat ? 'selected' : ''; ?>>
+                        <?php echo Html::e($cat); ?>
                     </option>
                 <?php endforeach; ?>
             </select>
         </div>
 
-        <div class="col-6 col-md-2">
-            <label for="filterPayment" class="small text-muted mb-1">Payment</label>
-            <select name="payment_method" id="filterPayment" class="form-select form-select-sm"
-                onchange="this.form.submit()">
+        <div class="col-12 col-sm-6 col-md-2">
+            <label for="filterPayment" class="small text-muted mb-1 fw-bold">Payment Method</label>
+            <select name="payment_method" id="filterPayment" class="form-select" data-autosubmit>
                 <option value="">All Methods</option>
                 <option value="Cash" <?php echo $payment_filter == 'Cash' ? 'selected' : ''; ?>>Cash</option>
                 <option value="Card" <?php echo $payment_filter == 'Card' ? 'selected' : ''; ?>>Card</option>
             </select>
         </div>
 
-        <div class="col-6 col-md-2">
-            <label for="filterCard" class="small text-muted mb-1">Card</label>
-            <select name="card_id" id="filterCard" class="form-select form-select-sm" onchange="this.form.submit()">
+        <div class="col-12 col-sm-6 col-md-2">
+            <label for="filterCard" class="small text-muted mb-1 fw-bold">Credit Card</label>
+            <select name="card_id" id="filterCard" class="form-select" data-autosubmit>
                 <option value="">All Cards</option>
                 <?php foreach ($user_cards as $uc): ?>
-                    <option value="<?php echo $uc['id']; ?>" <?php echo $card_filter == $uc['id'] ? 'selected' : ''; ?>>
+                    <option value="<?php echo (int) $uc['id']; ?>" <?php echo $card_filter == $uc['id'] ? 'selected' : ''; ?>>
                         <?php echo htmlspecialchars($uc['bank_name'] . ' - ' . $uc['card_name']); ?>
                     </option>
                 <?php endforeach; ?>
             </select>
         </div>
 
-        <div class="col-6 col-md-2">
-            <label for="filterStart" class="small text-muted mb-1">From</label>
-            <input type="date" name="start" id="filterStart" class="form-control form-control-sm"
-                value="<?php echo htmlspecialchars($start_date ?? ''); ?>" onchange="this.form.submit()">
+        <div class="col-6 col-sm-3 col-md-2">
+            <label for="filterStart" class="small text-muted mb-1 fw-bold">Start Date</label>
+            <input type="date" name="start" id="filterStart" class="form-control" value="<?php echo htmlspecialchars($start_date ?? ''); ?>" data-autosubmit>
         </div>
 
-        <div class="col-6 col-md-2">
-            <label for="filterEnd" class="small text-muted mb-1">To</label>
-            <input type="date" name="end" id="filterEnd" class="form-control form-control-sm"
-                value="<?php echo htmlspecialchars($end_date ?? ''); ?>" onchange="this.form.submit()">
+        <div class="col-6 col-sm-3 col-md-2">
+            <label for="filterEnd" class="small text-muted mb-1 fw-bold">End Date</label>
+            <input type="date" name="end" id="filterEnd" class="form-control" value="<?php echo htmlspecialchars($end_date ?? ''); ?>" data-autosubmit>
         </div>
 
-        <div class="col-6 col-md-2 d-flex gap-1 justify-content-end align-items-end">
-            <a href="print_report.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>" target="_blank"
-                class="btn btn-outline-primary btn-sm" title="Print Report">
+        <div class="col-12 col-md-2 d-flex gap-2 justify-content-md-end">
+            <a href="print_report.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>" target="_blank" class="btn btn-outline-secondary flex-grow-1" title="Print Ledger">
                 <i class="fa-solid fa-print"></i>
             </a>
-            <a href="export_actions.php?action=export_expenses&month=<?php echo $month; ?>&year=<?php echo $year; ?>&category=<?php echo $category_filter; ?>&payment_method=<?php echo $payment_filter; ?>&card_id=<?php echo $card_filter; ?>&start=<?php echo $start_date; ?>&end=<?php echo $end_date; ?>"
-                class="btn btn-outline-secondary btn-sm" title="Export CSV">
+            <a href="export_actions.php?<?php echo Html::e(http_build_query(['action' => 'export_expenses', 'month' => $month, 'year' => $year] + $filter_query)); ?>" class="btn btn-outline-secondary flex-grow-1" title="Export CSV">
                 <i class="fa-solid fa-file-csv"></i>
             </a>
             <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-                <a href="add_expense.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>"
-                    class="btn btn-primary btn-sm">
-                    <i class="fa-solid fa-plus me-1"></i> Add
+                <a href="add_expense.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>" class="btn btn-primary flex-grow-1">
+                    <i class="fa-solid fa-plus"></i> Add
                 </a>
             <?php endif; ?>
         </div>
     </form>
 
     <?php if ($category_filter || $payment_filter || $card_filter || $start_date || $end_date): ?>
-        <div class="mt-2 pt-2 border-top">
-            <a href="?month=<?php echo $month; ?>&year=<?php echo $year; ?>" class="btn btn-sm btn-outline-secondary">
-                <i class="fa-solid fa-times me-1"></i> Clear Filters
+        <div class="mt-3 pt-3 border-top">
+            <a href="?month=<?php echo $month; ?>&year=<?php echo $year; ?>" class="btn btn-sm btn-outline-danger">
+                <i class="fa-solid fa-times me-1"></i> Reset Active Filters
             </a>
         </div>
     <?php endif; ?>
 </div>
 
-<!-- Budget Progress Bars -->
+<!-- Budget Progress Indicators (Glassmorphic Grid) -->
 <?php if (!empty($cat_budgets)): ?>
-    <div class="glass-panel p-3 mb-4">
+    <div class="glass-panel-premium p-4 mb-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h6 class="fw-bold mb-0">Budget Progress</h6>
-            <a href="manage_budgets.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>"
-                class="small text-primary text-decoration-none">Manage Budgets</a>
+            <h6 class="fw-bold mb-0"><i class="fa-solid fa-bullseye text-primary me-2"></i> Monthly Budget Tracking</h6>
+            <a href="manage_budgets.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>" class="small text-primary text-decoration-none fw-bold">Adjust Budgets</a>
         </div>
         <div class="row g-3">
             <?php foreach ($cat_budgets as $cat => $limit):
                 $spent = $cat_actuals[$cat] ?? 0;
-                $pct = ($spent / $limit) * 100;
-                $color = 'success';
+                $pct = $limit > 0 ? ($spent / $limit) * 100 : 0;
+                $color = 'bg-success';
                 if ($pct > 80) {
-                    $color = 'warning';
+                    $color = 'bg-warning text-dark';
                 }
                 if ($pct > 100) {
-                    $color = 'danger';
+                    $color = 'bg-danger';
                 }
                 ?>
                 <div class="col-md-3">
                     <div class="small d-flex justify-content-between mb-1">
-                        <span><?php echo $cat; ?></span>
+                        <span class="fw-bold"><?php echo Html::e($cat); ?></span>
                         <span class="fw-bold"><?php echo number_format($pct, 0); ?>%</span>
                     </div>
-                    <progress class="w-100" style="height: 6px;" value="<?php echo min($spent, $limit); ?>"
-                        max="<?php echo $limit ?: 1; ?>"
-                        title="Spent AED <?php echo number_format($spent); ?> of AED <?php echo number_format($limit); ?>">
-                        <?php echo number_format($pct, 0); ?>%
-                    </progress>
+                    <div class="progress" style="height: 8px;" title="Spent AED <?php echo number_format($spent); ?> of AED <?php echo number_format($limit); ?>">
+                        <div class="progress-bar <?php echo $color; ?>" role="progressbar" style="width: <?php echo min($pct, 100); ?>%"></div>
+                    </div>
                     <div class="x-small text-muted mt-1">
                         AED <?php echo number_format($spent); ?> / <?php echo number_format($limit); ?>
                     </div>
@@ -292,79 +306,87 @@ try {
     </div>
 <?php endif; ?>
 
+<!-- Transaction Ledger Card -->
 <?php if (empty($expenses)): ?>
-    <div class="text-center py-5">
-        <p class="text-muted">No expenses found for this period.</p>
+    <div class="glass-panel-premium text-center py-5">
+        <i class="fa-solid fa-face-meh fa-3x text-muted mb-3"></i>
+        <p class="text-muted fw-bold mb-0">No transaction records found matching your filters.</p>
     </div>
 <?php else: ?>
-    <div class="card border-0 shadow-sm overflow-hidden">
+    <div class="glass-panel-premium overflow-hidden shadow-sm border-0">
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="bg-light">
-                    <tr>
-                        <th class="ps-4 py-3" style="width: 40px;">
+            <table class="table table-hover align-middle mb-0" style="border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 2px solid rgba(0,0,0,0.05);">
+                        <th class="ps-4 py-3" style="width: 40px; background: transparent;">
                             <input type="checkbox" class="form-check-input" id="selectAll">
                         </th>
-                        <th class="py-3">Day</th>
-                        <th>Description</th>
-                        <th>Category</th>
-                        <th>Spent By</th>
-                        <th>Payment</th>
-                        <th class="text-end pe-4">Amount</th>
-                        <th></th>
+                        <th class="py-3" style="background: transparent;">Day</th>
+                        <th style="background: transparent;">Description</th>
+                        <th style="background: transparent;">Category</th>
+                        <th style="background: transparent;">Spender</th>
+                        <th style="background: transparent;">Source</th>
+                        <th class="text-end pe-4" style="background: transparent;">Amount</th>
+                        <th style="background: transparent;"></th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ($expenses as $expense): ?>
-                        <tr data-id="<?php echo $expense['id']; ?>">
+                        <tr class="hover-lift-row" data-id="<?php echo (int) $expense['id']; ?>" style="border-bottom: 1px solid rgba(0,0,0,0.03); transition: background 0.2s;">
                             <td class="ps-4">
-                                <input type="checkbox" class="form-check-input row-checkbox" name="expense_ids[]"
-                                    value="<?php echo $expense['id']; ?>">
+                                <input type="checkbox" class="form-check-input row-checkbox" name="expense_ids[]" value="<?php echo (int) $expense['id']; ?>">
                             </td>
                             <td class="fw-bold">
                                 <?php echo date('d', strtotime($expense['expense_date'])); ?>
-                                <span class="small text-muted fw-normal d-block">
+                                <span class="small text-muted fw-normal d-block" style="font-size: 0.75em;">
                                     <?php echo date('D', strtotime($expense['expense_date'])); ?>
                                 </span>
                             </td>
                             <td>
-                                <?php echo htmlspecialchars($expense['description']); ?>
+                                <div class="fw-bold text-dark"><?php echo htmlspecialchars($expense['description']); ?></div>
                                 <?php if (!empty($expense['tags'])): ?>
                                     <div class="mt-1">
                                         <?php foreach (explode(',', $expense['tags']) as $tag): ?>
-                                            <span class="badge bg-secondary-subtle text-secondary me-1" style="font-size: 0.7em;">
-                                                <?php echo htmlspecialchars(trim($tag)); ?>
+                                            <span class="badge bg-light text-secondary border me-1" style="font-size: 0.65em; letter-spacing: 0.2px;">
+                                                #<?php echo htmlspecialchars(trim($tag)); ?>
                                             </span>
                                         <?php endforeach; ?>
                                     </div>
                                 <?php endif; ?>
                             </td>
                             <td>
-                                <span class="badge bg-light text-dark border">
+                                <?php
+                                $badge_style = "bg-primary-subtle text-primary";
+                                if (in_text($expense['category'], ['Grocery', 'Food'])) $badge_style = "bg-success-subtle text-success";
+                                if (in_text($expense['category'], ['Utilities', 'Bill'])) $badge_style = "bg-warning-subtle text-warning";
+                                if (in_text($expense['category'], ['Medical'])) $badge_style = "bg-danger-subtle text-danger";
+                                if (in_text($expense['category'], ['Travel', 'Transport'])) $badge_style = "bg-info-subtle text-info";
+                                ?>
+                                <span class="badge rounded-pill <?php echo $badge_style; ?> px-3 py-2 fw-semibold">
                                     <?php echo htmlspecialchars($expense['category']); ?>
                                 </span>
                             </td>
                             <td>
                                 <div class="small fw-bold text-muted">
-                                    <i class="fa-solid fa-user-tag me-1"></i>
+                                    <i class="fa-solid fa-circle-user me-1 text-secondary"></i>
                                     <?php echo htmlspecialchars($expense['spender_name'] ?? 'Family Head'); ?>
                                 </div>
                             </td>
                             <td>
                                 <?php if ($expense['payment_method'] == 'Card'): ?>
-                                    <div class="small">
+                                    <div class="small fw-semibold text-dark">
                                         <i class="fa-solid fa-credit-card text-primary me-1"></i>
-                                        <?php echo htmlspecialchars($expense['bank_name']); ?>
+                                        <?php echo htmlspecialchars($expense['card_name'] ?: $expense['bank_name']); ?>
                                     </div>
                                 <?php else: ?>
-                                    <div class="small text-secondary">
-                                        <i class="fa-solid fa-coins me-1"></i> Cash
+                                    <div class="small text-secondary fw-semibold">
+                                        <i class="fa-solid fa-coins text-warning me-1"></i> Cash Assets
                                     </div>
                                 <?php endif; ?>
                             </td>
                             <td class="text-end pe-4 fw-bold">
-                                AED <span class="blur-sensitive">
-                                    <?php echo number_format($expense['amount'], 2); ?></span>
+                                <span class="text-dark">AED</span>
+                                <span class="blur-sensitive text-dark"><?php echo number_format($expense['amount'], 2); ?></span>
                                 <?php if (!empty($expense['currency']) && $expense['currency'] != 'AED'): ?>
                                     <div class="small text-muted fw-normal mt-1" style="font-size: 0.75em;">
                                         (<?php echo htmlspecialchars($expense['currency'] . ' ' . number_format($expense['original_amount'], 2)); ?>)
@@ -373,15 +395,12 @@ try {
                             </td>
                             <td class="text-end pe-3">
                                 <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-                                    <a href="edit_expense.php?id=<?php echo $expense['id']; ?>" class="btn btn-sm text-muted me-1"
-                                        title="Edit"><i class="fa-solid fa-pen"></i></a>
-                                    <form action="expense_actions.php" method="POST" class="d-inline"
-                                        onsubmit="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($expense['description'])); ?> - AED <?php echo number_format($expense['amount'], 2); ?> - on <?php echo date('d M Y', strtotime($expense['expense_date'])); ?>?');">
-                                        <input type="hidden" name="csrf_token"
-                                            value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
+                                    <a href="edit_expense.php?id=<?php echo (int) $expense['id']; ?>" class="btn btn-sm btn-link text-muted me-1" title="Edit"><i class="fa-solid fa-pen"></i></a>
+                                    <form action="expense_actions.php" method="POST" class="d-inline" data-confirm="<?php echo Html::e('Delete ' . $expense['description'] . ' - AED ' . number_format((float) $expense['amount'], 2) . '?'); ?>">
+                                        <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                                         <input type="hidden" name="action" value="delete_expense">
-                                        <input type="hidden" name="id" value="<?php echo $expense['id']; ?>">
-                                        <button type="submit" class="btn btn-sm text-danger border-0 p-0" title="Delete">
+                                        <input type="hidden" name="id" value="<?php echo (int) $expense['id']; ?>">
+                                        <button type="submit" class="btn btn-sm btn-link text-danger border-0 p-0" title="Delete">
                                             <i class="fa-solid fa-trash"></i>
                                         </button>
                                     </form>
@@ -405,13 +424,7 @@ try {
                 <nav aria-label="Page navigation">
                     <ul class="pagination pagination-sm mb-0">
                         <?php
-                        $base_url = "?month=$month&year=$year";
-                        if ($category_filter) {
-                            $base_url .= "&category=" . urlencode($category_filter);
-                        }
-                        if ($payment_filter) {
-                            $base_url .= "&payment_method=" . urlencode($payment_filter);
-                        }
+                        $base_url = Html::e('?' . http_build_query(['month' => $month, 'year' => $year] + $filter_query));
                         ?>
                         <li class="page-item <?php echo $page_num <= 1 ? 'disabled' : ''; ?>">
                             <a class="page-link" href="<?php echo $base_url; ?>&page=<?php echo $page_num - 1; ?>">
@@ -435,8 +448,6 @@ try {
     </div>
 <?php endif; ?>
 
-<?php Layout::footer(); ?>
-
 <!-- Bulk Action Floating Bar -->
 <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
     <div id="bulkActionBar"
@@ -456,17 +467,17 @@ try {
                         <?php foreach ($categories as $cat): ?>
                             <li>
                                 <button type="button" class="dropdown-item"
-                                    onclick="bulkAction('change_category', '<?php echo $cat; ?>')">
-                                    <?php echo $cat; ?>
+                                    data-onclick="bulkAction" data-args="<?php echo Html::args('change_category', $cat); ?>">
+                                    <?php echo Html::e($cat); ?>
                                 </button>
                             </li>
                         <?php endforeach; ?>
                     </ul>
                 </div>
-                <button class="btn btn-danger btn-sm rounded-pill px-3" onclick="bulkAction('delete')">
+                <button class="btn btn-danger btn-sm rounded-pill px-3" data-onclick="bulkAction" data-args="<?php echo Html::args('delete'); ?>">
                     <i class="fa-solid fa-trash me-1"></i> Delete
                 </button>
-                <button class="btn btn-link btn-sm text-muted" onclick="deselectAll()">Cancel</button>
+                <button class="btn btn-link btn-sm text-muted" data-onclick="deselectAll">Cancel</button>
             </div>
         </div>
     </div>
@@ -495,6 +506,8 @@ try {
                 bulkBar.classList.add('d-none');
             }
         }
+
+        if (!selectAll || !bulkBar) return; // no rows, or read-only view
 
         selectAll.addEventListener('change', function () {
             rowCheckboxes.forEach(cb => cb.checked = selectAll.checked);
@@ -542,3 +555,5 @@ try {
         }
     }
 </script>
+
+<?php Layout::footer(); ?>

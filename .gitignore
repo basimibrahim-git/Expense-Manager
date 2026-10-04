@@ -51,3 +51,5 @@ debug_budget.php
 debug_*.php
 test_*.php
 scratch_*.php
+# Database dumps (contain real user data) — never commit
+/*.sql

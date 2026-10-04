@@ -1,11 +1,26 @@
-﻿<?php
+<?php
 $page_title = "My Reminders";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
+use App\Helpers\Html;
 use App\Helpers\Layout;
 
 Bootstrap::init();
+
+/**
+ * Builds the alert_date DATETIME value ('Y-m-d H:i:00') from the date + time inputs, or null if invalid.
+ */
+function reminder_datetime($date, $time): ?string
+{
+    $date = (string) $date;
+    $time = trim((string) $time) === '' ? '00:00' : substr(trim((string) $time), 0, 5);
+    $dt = DateTime::createFromFormat('!Y-m-d H:i', "$date $time");
+    return ($dt && $dt->format('Y-m-d H:i') === "$date $time") ? $dt->format('Y-m-d H:i:00') : null;
+}
+
+$allowed_recurrence = ['none', 'monthly', 'yearly'];
+$allowed_colors     = ['primary', 'success', 'danger', 'warning', 'info', 'secondary', 'dark'];
 
 // 1. Handle Actions
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
@@ -13,15 +28,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        header("Location: reminders.php?error=Unauthorized: Read-only access");
+        header("Location: reminders.php?error=" . urlencode('Unauthorized: Read-only access'));
         exit();
     }
 
+    if ($_POST['action'] == 'add_reminder' || $_POST['action'] == 'update_reminder') {
+        $title = trim((string) ($_POST['title'] ?? ''));
+        $date = reminder_datetime($_POST['alert_date'] ?? '', $_POST['alert_time'] ?? '');
+        if ($title === '' || mb_strlen($title) > 255 || $date === null) {
+            header("Location: reminders.php?error=" . urlencode('Please enter a title and a valid date/time.'));
+            exit;
+        }
+    }
+
     if ($_POST['action'] == 'add_reminder') {
-        $title = trim($_POST['title'] ?? '');
-        $date = $_POST['alert_date'] . ' ' . ($_POST['alert_time'] ?? '00:00:00');
-        $recur_type = $_POST['recurrence_type'] ?? 'none';
-        $color = $_POST['color'] ?? 'primary';
+        $recur_type = in_array($_POST['recurrence_type'] ?? 'none', $allowed_recurrence, true) ? $_POST['recurrence_type'] : 'none';
+        $color = in_array($_POST['color'] ?? 'primary', $allowed_colors, true) ? $_POST['color'] : 'primary';
 
         $stmt = $pdo->prepare("INSERT INTO reminders (user_id, tenant_id, title, alert_date, recurrence_type, color) VALUES (?, ?, ?, ?, ?, ?)");
         $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $title, $date, $recur_type, $color]);
@@ -30,21 +52,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         exit;
     } elseif ($_POST['action'] == 'update_reminder') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
-        $title = trim($_POST['title'] ?? '');
-        $date = $_POST['alert_date'] . ' ' . ($_POST['alert_time'] ?? '00:00:00');
-        $recur_type = $_POST['recurrence_type'] ?? 'none';
+        $recur_type = in_array($_POST['recurrence_type'] ?? 'none', $allowed_recurrence, true) ? $_POST['recurrence_type'] : 'none';
 
         if ($id) {
-            $stmt = $pdo->prepare("UPDATE reminders SET title=?, alert_date=?, recurrence_type=? WHERE id=? AND tenant_id=? AND user_id=?");
-            $stmt->execute([$title, $date, $recur_type, $id, $_SESSION['tenant_id'], $_SESSION['user_id']]);
+            $stmt = $pdo->prepare("UPDATE reminders SET title=?, alert_date=?, recurrence_type=? WHERE id=? AND tenant_id=?");
+            $stmt->execute([$title, $date, $recur_type, $id, $_SESSION['tenant_id']]);
         }
         header("Location: reminders.php?success=Reminder Updated");
         exit;
     } elseif ($_POST['action'] == 'delete_reminder') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
         if ($id) {
-            $stmt = $pdo->prepare("DELETE FROM reminders WHERE id = ? AND tenant_id = ? AND user_id = ?");
-            $stmt->execute([$id, $_SESSION['tenant_id'], $_SESSION['user_id']]);
+            $stmt = $pdo->prepare("DELETE FROM reminders WHERE id = ? AND tenant_id = ?");
+            $stmt->execute([$id, $_SESSION['tenant_id']]);
         }
         header("Location: reminders.php?deleted=1");
         exit;
@@ -59,6 +79,19 @@ $stmt = $pdo->prepare("SELECT id, title, alert_date, recurrence_type, color FROM
 $stmt->execute([$_SESSION['tenant_id']]);
 $reminders = $stmt->fetchAll();
 ?>
+
+<?php if (!empty($_GET['success'])): ?>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <?php echo Html::e($_GET['success']); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+<?php if (!empty($_GET['error'])): ?>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <?php echo Html::e($_GET['error']); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 fw-bold mb-0">My Reminders</h1>
@@ -137,10 +170,10 @@ $reminders = $stmt->fetchAll();
                                 <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
                                     <button type="button"
                                         class="btn btn-sm btn-link <?php echo htmlspecialchars($text_color); ?> p-0 opacity-50 hover-100"
-                                        onclick="editReminder(<?php echo intval($rem['id']); ?>, <?php echo json_encode($rem['title']); ?>, <?php echo json_encode($target_dt->setTimezone($uae_tz)->format('Y-m-d')); ?>, <?php echo json_encode($target_dt->setTimezone($uae_tz)->format('H:i')); ?>, <?php echo json_encode($rem['recurrence_type']); ?>)">
+                                        data-onclick="editReminder" data-args="<?php echo Html::args(intval($rem['id']), $rem['title'], $target_dt->format('Y-m-d'), $target_dt->format('H:i'), $rem['recurrence_type']); ?>">
                                         <i class="fa-solid fa-pen"></i>
                                     </button>
-                                    <form method="POST" onsubmit="return confirm('Delete this reminder?');">
+                                    <form method="POST" data-confirm="Delete this reminder?">
                                         <input type="hidden" name="csrf_token"
                                             value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                                         <input type="hidden" name="action" value="delete_reminder">
@@ -188,7 +221,7 @@ $reminders = $stmt->fetchAll();
                         <?php if ($rem['recurrence_type'] != 'none'): ?>
                             <div class="mt-3 small opacity-75">
                                 <i class="fa-solid fa-repeat me-1"></i> Repeats:
-                                <?php echo ucfirst($rem['recurrence_type']); ?>
+                                <?php echo Html::e(ucfirst($rem['recurrence_type'])); ?>
                             </div>
                         <?php endif; ?>
                     </div>
@@ -207,7 +240,7 @@ $reminders = $stmt->fetchAll();
                 <input type="hidden" name="action" value="add_reminder" id="formAction">
                 <input type="hidden" name="id" id="reminderId">
                 <div class="modal-header">
-                    <h5 class="modal-title fw-bold">Add Reminder</h5>
+                    <h5 class="modal-title fw-bold" id="reminderModalTitle">Add Reminder</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -271,16 +304,15 @@ $reminders = $stmt->fetchAll();
     function editReminder(id, title, date, time, recurrence) {
         document.getElementById('formAction').value = 'update_reminder';
         document.getElementById('reminderId').value = id;
-        document.querySelector('input[name="title"]').value = title;
-        document.querySelector('input[name="alert_date"]').value = date;
-        document.querySelector('input[name="alert_time"]').value = time;
-        document.querySelector('select[name="recurrence_type"]').value = recurrence;
+        document.getElementById('reminderTitle').value = title;
+        document.getElementById('reminderDate').value = date;
+        document.getElementById('reminderTime').value = time;
+        document.getElementById('reminderRecurrence').value = recurrence;
 
-        document.querySelector('.modal-title').textContent = 'Edit Reminder';
+        document.getElementById('reminderModalTitle').textContent = 'Edit Reminder';
         document.getElementById('submitBtn').textContent = 'Save Changes';
 
-        const modal = new bootstrap.Modal(document.getElementById('addReminderModal'));
-        modal.show();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('addReminderModal')).show();
     }
 
     // Reset modal on close
@@ -288,7 +320,7 @@ $reminders = $stmt->fetchAll();
         document.getElementById('reminderForm').reset();
         document.getElementById('formAction').value = 'add_reminder';
         document.getElementById('reminderId').value = '';
-        document.querySelector('.modal-title').textContent = 'Add Reminder';
+        document.getElementById('reminderModalTitle').textContent = 'Add Reminder';
         document.getElementById('submitBtn').textContent = 'Add Reminder';
     });
 </script>

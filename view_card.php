@@ -3,11 +3,9 @@ $page_title = "Card Details";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\Layout;
+use App\Helpers\Html;
 
 Bootstrap::init();
-
-Layout::header();
-Layout::sidebar();
 
 // Get Card ID
 $card_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
@@ -18,14 +16,17 @@ if (!$card_id) {
 }
 
 // Fetch Card Data
-$stmt = $pdo->prepare("SELECT * FROM cards WHERE id = :id AND user_id = :user_id");
-$stmt->execute(['id' => $card_id, 'user_id' => $_SESSION['user_id']]);
+$stmt = $pdo->prepare("SELECT * FROM cards WHERE id = :id AND tenant_id = :tenant_id");
+$stmt->execute(['id' => $card_id, 'tenant_id' => $_SESSION['tenant_id']]);
 $card = $stmt->fetch();
 
 if (!$card) {
     header('Location: my_cards.php');
     exit;
 }
+
+Layout::header();
+Layout::sidebar();
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -34,7 +35,7 @@ if (!$card) {
         <a href="my_cards.php" class="btn btn-light me-2">
             <i class="fa-solid fa-arrow-left me-2"></i> Back
         </a>
-        <a href="edit_card.php?id=<?php echo $card['id']; ?>" class="btn btn-primary">
+        <a href="edit_card.php?id=<?php echo (int) $card['id']; ?>" class="btn btn-primary">
             <i class="fa-solid fa-edit me-2"></i> Edit
         </a>
     </div>
@@ -57,10 +58,10 @@ if (!$card) {
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <h4 class="mb-0 fw-bold">
-                            <?php echo htmlspecialchars($card['bank_name']); ?>
+                            <?php echo Html::e($card['bank_name']); ?>
                         </h4>
                         <small class="text-white-50">
-                            <?php echo htmlspecialchars($card['card_name']); ?>
+                            <?php echo Html::e($card['card_name']); ?>
                         </small>
                     </div>
                     <?php if ($card['network'] == 'Visa'): ?>
@@ -75,7 +76,7 @@ if (!$card) {
                 <div class="mt-4">
                     <div class="h4 mb-1" style="letter-spacing: 3px;">**** **** **** ****</div>
                     <small class="text-white-50">
-                        <?php echo htmlspecialchars($card['tier']); ?>
+                        <?php echo Html::e($card['tier']); ?>
                     </small>
                 </div>
 
@@ -83,19 +84,19 @@ if (!$card) {
                     <div>
                         <small class="text-white-50 d-block">Limit</small>
                         <span class="fw-bold fs-5">
-                            <?php echo htmlspecialchars($card['currency']) . ' ' . number_format($card['limit_amount'], 2); ?>
+                            <?php echo Html::e($card['currency'] ?: 'AED') . ' ' . number_format((float) $card['limit_amount'], 2); ?>
                         </span>
                     </div>
                     <span class="badge bg-white text-dark">
-                        <?php echo htmlspecialchars($card['card_type']); ?>
+                        <?php echo Html::e($card['card_type']); ?>
                     </span>
                 </div>
             </div>
         </div>
 
-        <?php if (!empty($card['bank_url'])): ?>
+        <?php if (!empty($card['bank_url']) && preg_match('#^https?://#i', $card['bank_url'])): ?>
             <div class="d-grid">
-                <a href="<?php echo htmlspecialchars($card['bank_url']); ?>" target="_blank"
+                <a href="<?php echo Html::e($card['bank_url']); ?>" target="_blank" rel="noopener noreferrer"
                     class="btn btn-outline-primary py-3">
                     <i class="fa-solid fa-external-link-alt me-2"></i> Visit Bank Website
                 </a>
@@ -110,13 +111,13 @@ if (!$card) {
 
             <?php if (!empty($card['features'])): ?>
                 <div class="p-3 bg-light rounded-3 border" style="white-space: pre-wrap; line-height: 1.6;">
-                    <?php echo htmlspecialchars($card['features']); ?>
+                    <?php echo Html::e($card['features']); ?>
                 </div>
             <?php else: ?>
                 <div class="text-center py-5 text-muted">
                     <i class="fa-solid fa-clipboard-list fa-3x mb-3 opacity-25"></i>
                     <p>No offers or features added yet.</p>
-                    <a href="edit_card.php?id=<?php echo $card['id']; ?>" class="btn btn-sm btn-outline-primary">Add
+                    <a href="edit_card.php?id=<?php echo (int) $card['id']; ?>" class="btn btn-sm btn-outline-primary">Add
                         Details</a>
                 </div>
             <?php endif; ?>
@@ -127,19 +128,19 @@ if (!$card) {
                 <div class="col-6 col-md-4">
                     <div class="text-muted small">Card Type</div>
                     <div class="fw-bold">
-                        <?php echo htmlspecialchars($card['card_type']); ?>
+                        <?php echo Html::e($card['card_type']); ?>
                     </div>
                 </div>
                 <div class="col-6 col-md-4">
                     <div class="text-muted small">Network</div>
                     <div class="fw-bold">
-                        <?php echo htmlspecialchars($card['network']); ?>
+                        <?php echo Html::e($card['network']); ?>
                     </div>
                 </div>
                 <div class="col-6 col-md-4">
                     <div class="text-muted small">Currency</div>
                     <div class="fw-bold">
-                        <?php echo htmlspecialchars($card['currency']); ?>
+                        <?php echo Html::e($card['currency']); ?>
                     </div>
                 </div>
                 <div class="col-6 col-md-4">

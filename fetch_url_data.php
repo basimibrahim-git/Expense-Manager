@@ -5,12 +5,29 @@
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 
-Bootstrap::init();
+Bootstrap::init(); // returns 401 JSON when not logged in
 header('Content-Type: application/json');
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['success' => false, 'error' => 'POST required']);
+    exit;
+}
 
 // 1. Validate Input
 $data = json_decode(file_get_contents('php://input'), true);
-$url = $data['url'] ?? '';
+if (!is_array($data)) {
+    $data = [];
+}
+$url = is_string($data['url'] ?? null) ? $data['url'] : '';
+
+// 0. CSRF: token from the X-CSRF-Token header, a JSON body field, or a form field
+$csrf = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($data['csrf_token'] ?? ($_POST['csrf_token'] ?? ''));
+if (empty($_SESSION['csrf_token']) || !is_string($csrf) || !hash_equals($_SESSION['csrf_token'], $csrf)) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
+    exit;
+}
 
 if (!filter_var($url, FILTER_VALIDATE_URL)) {
     echo json_encode(['success' => false, 'error' => 'Invalid URL']);
@@ -70,8 +87,14 @@ if (empty($host)) {
     exit;
 }
 
-$resolved_ip = gethostbyname($host);
-if ($resolved_ip === $host) {
+// Hostname must be a plain DNS name or IPv4 literal (also keeps the CURLOPT_RESOLVE entry well-formed)
+if (!preg_match('/^[A-Za-z0-9.-]+$/', $host)) {
+    echo json_encode(['success' => false, 'error' => 'Invalid URL: unsupported host']);
+    exit;
+}
+
+$resolved_ip = filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) ? $host : gethostbyname($host);
+if (!filter_var($resolved_ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
     // gethostbyname returns the hostname if it fails to resolve
     echo json_encode(['success' => false, 'error' => 'Unable to resolve hostname']);
     exit;
@@ -115,10 +138,12 @@ if (isset($parsed['scheme'])) {
 
 // Port: Only allow numeric ports
 $url_port = '';
+$connect_port = $url_scheme === 'https' ? 443 : 80;
 if (isset($parsed['port']) && is_numeric($parsed['port'])) {
     $port_num = intval($parsed['port']);
     if ($port_num > 0 && $port_num < 65536) {
         $url_port = ':' . $port_num;
+        $connect_port = $port_num;
     }
 }
 
@@ -151,14 +176,14 @@ if ($validated_ip === false) {
     exit;
 }
 
-// Build the final URL using only validated components
-$safe_url = $url_scheme . '://' . $validated_ip . $url_port . $url_path . $url_query;
-
-// Store original host for the Host header (required for virtual hosting)
-$original_host = $host;
+// Build the final URL using only validated components. The original host name is kept in the
+// URL (so TLS SNI / certificate verification and virtual hosting work) and CURLOPT_RESOLVE pins
+// the connection to the IP validated above, so DNS cannot be re-resolved to an internal address.
+$safe_url = $url_scheme . '://' . $host . $url_port . $url_path . $url_query;
 
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, $safe_url);
+curl_setopt($ch, CURLOPT_RESOLVE, [$host . ':' . $connect_port . ':' . $validated_ip]);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false); // Disable following redirects to prevent SSRF via redirect
 curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS); // Restrict protocols
@@ -166,7 +191,6 @@ curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
 curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    'Host: ' . $original_host,  // Set Host header for virtual hosting
     'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
     'Accept-Language: en-US,en;q=0.9',
     'Cache-Control: no-cache',

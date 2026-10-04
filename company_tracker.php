@@ -1,17 +1,12 @@
-﻿<?php
+<?php
 $page_title = "Incentive Tracker";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
+use App\Helpers\Html;
 use App\Helpers\Layout;
 
 Bootstrap::init();
-
-// Auth Check
-if (!isset($_SESSION['user_id'])) {
-    header("Location: index.php");
-    exit();
-}
 
 // 1. Auto-Binding - Removed for security (use install.php)
 // Schema creation moved to install/install.php to prevent unexpected DDL on production requests.
@@ -20,61 +15,79 @@ if (!isset($_SESSION['user_id'])) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
+    $year = filter_var($_POST['year'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]) ?: (int) date('Y');
+    $back = "company_tracker.php?year=" . (int) $year;
+
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        header("Location: company_tracker.php?year=" . ($_POST['year'] ?? '') . "&error=Unauthorized: Read-only access");
+        header("Location: $back&error=" . urlencode('Unauthorized: Read-only access'));
         exit();
     }
 
+    $amount = $_POST['amount'] ?? ''; // raw input to allow "0"
+    $amount_ok = is_numeric($amount) && abs((float) $amount) <= 99999999.99;
+
     // ADD NEW
     if ($_POST['action'] == 'quick_add') {
-        $year = intval($_POST['year']);
-        $month = intval($_POST['month']);
-        $amount = $_POST['amount']; // raw input to allow "0"
+        $month = filter_var($_POST['month'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]);
 
-        if (is_numeric($amount) && $month >= 1 && $month <= 12) {
-            $date = "$year-$month-01";
-            $stmt = $pdo->prepare("INSERT INTO company_incentives (user_id, tenant_id, amount, incentive_date) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], floatval($amount), $date]);
-            header("Location: company_tracker.php?year=$year&success=Incentive Added");
+        if ($amount_ok && $month) {
+            $date = sprintf('%04d-%02d-01', $year, $month);
+            // title is NOT NULL without a default, so it must be supplied
+            $stmt = $pdo->prepare("INSERT INTO company_incentives (user_id, tenant_id, title, amount, incentive_date) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], 'Incentive', (float) $amount, $date]);
+            header("Location: $back&success=" . urlencode('Incentive Added'));
             exit;
         }
     }
 
     // UPDATE EXISTING
     elseif ($_POST['action'] == 'update_incentive') {
-        $id = intval($_POST['id']);
-        $amount = $_POST['amount'];
-        $year = intval($_POST['year']);
+        $id = (int) ($_POST['id'] ?? 0);
 
-        if ($id > 0 && is_numeric($amount)) {
+        if ($id > 0 && $amount_ok) {
             $stmt = $pdo->prepare("UPDATE company_incentives SET amount = ? WHERE id = ? AND tenant_id = ?");
-            $stmt->execute([floatval($amount), $id, $_SESSION['tenant_id']]);
-            header("Location: company_tracker.php?year=$year&success=Updated");
+            $stmt->execute([(float) $amount, $id, $_SESSION['tenant_id']]);
+            header("Location: $back&success=" . urlencode('Updated'));
             exit;
         }
     }
 
     // DELETE EXISTING
     elseif ($_POST['action'] == 'delete_incentive') {
-        $id = intval($_POST['id']);
-        $year = intval($_POST['year']);
+        $id = (int) ($_POST['id'] ?? 0);
 
         if ($id > 0) {
             $stmt = $pdo->prepare("DELETE FROM company_incentives WHERE id = ? AND tenant_id = ?");
             $stmt->execute([$id, $_SESSION['tenant_id']]);
-            header("Location: company_tracker.php?year=$year&success=Deleted");
+            header("Location: $back&success=" . urlencode('Deleted'));
             exit;
         }
     }
+
+    header("Location: $back&error=" . urlencode('Please enter a valid amount.'));
+    exit;
 }
 
 Layout::header();
 Layout::sidebar();
 
 // Determine View Mode: YEAR LIST vs MONTH GRID
-$selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
+$selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]);
 ?>
+
+<?php if (!empty($_GET['success'])): ?>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <?php echo Html::e($_GET['success']); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+<?php if (!empty($_GET['error'])): ?>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <?php echo Html::e($_GET['error']); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
 
 <?php if (!$selected_year): ?>
     <!-- VIEW 1: YEAR OVERVIEW -->
@@ -97,7 +110,7 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h4 fw-bold mb-0">Incentive Tracker</h1>
         <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-            <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="showAddYear()">
+            <button class="btn btn-sm btn-outline-primary rounded-pill px-3" data-onclick="showAddYear">
                 <i class="fa-solid fa-plus me-1"></i> Add Year
             </button>
         <?php endif; ?>
@@ -129,9 +142,8 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
     <!-- Hidden Input for Custom Year -->
     <div id="addYearDiv" class="d-none mt-4 text-center glass-panel p-3 mw-400px mx-auto">
         <h6 class="fw-bold mb-2">Jump to Year</h6>
-        <form class="d-flex gap-2 justify-content-center"
-            onsubmit="event.preventDefault(); window.location.href='?year=' + this.customYear.value">
-            <input type="number" name="customYear" class="form-control" placeholder="YYYY" min="2000" max="2099" required>
+        <form class="d-flex gap-2 justify-content-center" method="GET">
+            <input type="number" name="year" class="form-control" placeholder="YYYY" min="2000" max="2100" required>
             <button type="submit" class="btn btn-primary">Go</button>
         </form>
     </div>
@@ -226,7 +238,7 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
             $border_class = $has_entries ? "border-success border-2" : "border-0 shadow-sm";
             ?>
             <div class="col-6 col-md-3 col-lg-2">
-                <button type="button" onclick="openManageModal(<?php echo $num; ?>, '<?php echo $name; ?>')"
+                <button type="button" data-onclick="openManageModal" data-args="<?php echo Html::args($num, $name); ?>"
                     class="card h-100 p-2 text-center cursor-pointer w-100 <?php echo $bg_class . ' ' . $border_class; ?>"
                     style="cursor: pointer; transition: transform 0.1s; border: none; text-align: inherit; background: none;">
                     <div class="text-uppercase fw-bold small opacity-75 mb-1"><?php echo $name; ?></div>
@@ -307,9 +319,9 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
 
     <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         // Pass PHP data to JS
-        const monthlyData = <?php echo json_encode($monthly_data); ?>;
-        const csrfToken = '<?php echo SecurityHelper::generateCsrfToken(); ?>';
-        const currentYear = <?php echo $year; ?>;
+        const monthlyData = <?php echo Html::json($monthly_data); ?>;
+        const csrfToken = <?php echo Html::json(SecurityHelper::generateCsrfToken()); ?>;
+        const currentYear = <?php echo (int) $year; ?>;
         const canEdit = <?php echo (($_SESSION['permission'] ?? 'edit') !== 'read_only') ? 'true' : 'false'; ?>;
         let deleteModalInstance = null;
 
@@ -324,47 +336,55 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
 
             const items = monthlyData[monthNum] || [];
 
+            // Small DOM helper: element with attributes (no HTML parsing of data)
+            function el(tag, attrs, children) {
+                const node = document.createElement(tag);
+                Object.keys(attrs || {}).forEach(k => node.setAttribute(k, attrs[k]));
+                (children || []).forEach(c => node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c));
+                return node;
+            }
+
             if (items.length > 0) {
                 items.forEach(item => {
-                    const div = document.createElement('div');
-                    div.className = 'd-flex gap-1 mb-2 align-items-center';
+                    const div = el('div', { 'class': 'd-flex gap-1 mb-2 align-items-center' });
 
                     if (canEdit) {
-                        div.innerHTML = `
-                            <form method="POST" class="flex-grow-1" style="margin:0;">
-                                <input type="hidden" name="csrf_token" value="${csrfToken}">
-                                <input type="hidden" name="action" value="update_incentive">
-                                <input type="hidden" name="id" value="${item.id}">
-                                <input type="hidden" name="year" value="${currentYear}">
-                                <div class="input-group input-group-sm">
-                                    <span class="input-group-text bg-light border-0">AED</span>
-                                    <input type="number" step="0.01" name="amount" value="${item.amount}" class="form-control fw-bold border-0 bg-light" onchange="this.form.submit()">
-                                </div>
-                            </form>
-                            <button type="button" class="btn btn-outline-danger btn-sm border-0" onclick="confirmDelete(${item.id}, '${item.amount}')">
-                                <i class="fa-solid fa-trash"></i>
-                            </button>
-                        `;
+                        const form = el('form', { method: 'POST', 'class': 'flex-grow-1', style: 'margin:0;' }, [
+                            el('input', { type: 'hidden', name: 'csrf_token', value: csrfToken }),
+                            el('input', { type: 'hidden', name: 'action', value: 'update_incentive' }),
+                            el('input', { type: 'hidden', name: 'id', value: String(item.id) }),
+                            el('input', { type: 'hidden', name: 'year', value: String(currentYear) }),
+                            el('div', { 'class': 'input-group input-group-sm' }, [
+                                el('span', { 'class': 'input-group-text bg-light border-0' }, ['AED']),
+                                el('input', { type: 'number', step: '0.01', name: 'amount', value: String(item.amount), 'class': 'form-control fw-bold border-0 bg-light', 'data-autosubmit': '' })
+                            ])
+                        ]);
+                        const delBtn = el('button', {
+                            type: 'button',
+                            'class': 'btn btn-outline-danger btn-sm border-0',
+                            'data-onclick': 'confirmDelete',
+                            'data-args': JSON.stringify([item.id, String(item.amount)])
+                        }, [el('i', { 'class': 'fa-solid fa-trash' })]);
+                        div.appendChild(form);
+                        div.appendChild(delBtn);
                     } else {
-                        div.innerHTML = `
-                            <div class="flex-grow-1 p-2 bg-light rounded text-start fw-bold">
-                                AED ${parseFloat(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                        `;
+                        div.appendChild(el('div', { 'class': 'flex-grow-1 p-2 bg-light rounded text-start fw-bold' }, [
+                            'AED ' + parseFloat(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        ]));
                     }
                     container.appendChild(div);
                 });
-                container.innerHTML += `<hr class="my-2 opacity-25">`;
+                container.appendChild(el('hr', { 'class': 'my-2 opacity-25' }));
             }
 
             // Show Modal
-            new bootstrap.Modal(document.getElementById('manageModal')).show();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('manageModal')).show();
         }
 
         function confirmDelete(id, amount) {
             document.getElementById('deleteId').value = id;
             document.getElementById('deleteEntryMsg').innerText = `Are you sure you want to delete this incentive of AED ${amount}?`;
-            new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('deleteConfirmModal')).show();
         }
     </script>
 <?php endif; ?>
@@ -377,4 +397,3 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
 </style>
 
 <?php Layout::footer(); ?>
-// Structural Audit Complete

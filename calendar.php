@@ -1,11 +1,15 @@
-﻿<?php
+<?php
 $page_title = "My Calendar";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
+use App\Helpers\Html;
 use App\Helpers\Layout;
 
 Bootstrap::init();
+
+// Bootstrap contextual colours a reminder may use (free text would be injected into class names)
+$allowed_colors = ['primary', 'success', 'danger', 'warning', 'info', 'secondary', 'dark'];
 
 // 2. Handle Actions (Logic BEFORE Header)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -13,22 +17,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        header("Location: calendar.php?error=Unauthorized: Read-only access");
+        header("Location: calendar.php?error=" . urlencode('Unauthorized: Read-only access'));
         exit();
     }
 
-    if ($_POST['action'] == 'add_reminder') {
-        $title = $_POST['title'];
-        $date = $_POST['alert_date'];
-        $recur_type = $_POST['recurrence_type'] ?? 'none';
-        $color = $_POST['color'] ?? 'primary';
+    $action = $_POST['action'] ?? '';
+
+    if ($action == 'add_reminder') {
+        $title = trim((string) ($_POST['title'] ?? ''));
+        $date_in = (string) ($_POST['alert_date'] ?? '');
+        $d = DateTime::createFromFormat('!Y-m-d', $date_in);
+        $recur_type = in_array($_POST['recurrence_type'] ?? 'none', ['none', 'monthly', 'yearly'], true) ? $_POST['recurrence_type'] : 'none';
+        $color = in_array($_POST['color'] ?? 'primary', $allowed_colors, true) ? $_POST['color'] : 'primary';
+
+        if ($title === '' || mb_strlen($title) > 255 || !$d || $d->format('Y-m-d') !== $date_in) {
+            header("Location: calendar.php?error=" . urlencode('Please enter a title and a valid date.'));
+            exit;
+        }
+        $date = $d->format('Y-m-d 00:00:00'); // alert_date is DATETIME; the calendar form has no time field
 
         $stmt = $pdo->prepare("INSERT INTO reminders (user_id, tenant_id, title, alert_date, recurrence_type, color) VALUES (?, ?, ?, ?, ?, ?)");
         $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $title, $date, $recur_type, $color]);
 
         header("Location: calendar.php?success=Reminder Added");
         exit;
-    } elseif ($_POST['action'] == 'delete_reminder') {
+    } elseif ($action == 'delete_reminder') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
         if ($id) {
             $stmt = $pdo->prepare("DELETE FROM reminders WHERE id = ? AND tenant_id = ?");
@@ -37,13 +50,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         header("Location: calendar.php?deleted=1");
         exit;
     }
+
+    header("Location: calendar.php");
+    exit;
 }
 
 Layout::header();
 Layout::sidebar();
 
-$year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
-$month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
+$year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]) ?: (int) date('Y');
+$month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]) ?: (int) date('n');
 
 // Navigation
 $prev_month = $month - 1;
@@ -61,15 +77,26 @@ if ($next_month > 12) {
 }
 
 $month_name = date('F', mktime(0, 0, 0, $month, 10));
-$days_in_month = cal_days_in_month(CAL_GREGORIAN, $month, $year);
-$first_day_of_week = date('N', strtotime("$year-$month-01")); // 1 (Mon) - 7 (Sun)
+$days_in_month = (int) date('t', mktime(0, 0, 0, $month, 1, $year));
+$first_day_of_week = date('N', mktime(0, 0, 0, $month, 1, $year)); // 1 (Mon) - 7 (Sun)
 
 // 1. Fetch Events
 $events = [];
 
-// A. Subscriptions
-$stmt = $pdo->prepare("SELECT id, description, amount, expense_date FROM expenses WHERE tenant_id = ? AND is_subscription = 1");
-$stmt->execute([$_SESSION['tenant_id']]);
+// A. Subscriptions — one entry per subscription (the latest row per description),
+//    not one per monthly charge that has been logged.
+$stmt = $pdo->prepare("
+    SELECT e.id, e.description, e.amount, e.expense_date
+    FROM expenses e
+    JOIN (
+        SELECT MAX(id) AS id
+        FROM expenses
+        WHERE tenant_id = ? AND is_subscription = 1
+        GROUP BY description
+    ) latest ON latest.id = e.id
+    WHERE e.tenant_id = ?
+");
+$stmt->execute([$_SESSION['tenant_id'], $_SESSION['tenant_id']]);
 $subs = $stmt->fetchAll();
 
 foreach ($subs as $sub) {
@@ -113,7 +140,7 @@ foreach ($reminders as $rem) {
     $rMonth = date('n', strtotime($rem['alert_date']));
     $rYear = date('Y', strtotime($rem['alert_date']));
 
-    $recur_type = $rem['recurrence_type'] ?? ($rem['is_recurring'] ? 'monthly' : 'none'); // Fallback for old rows
+    $recur_type = $rem['recurrence_type'] ?? 'none';
 
     $should_show = false;
     if ($recur_type == 'monthly') {
@@ -139,7 +166,7 @@ foreach ($reminders as $rem) {
             'id' => $rem['id'],
             'title' => $rem['title'],
             'amount' => '',
-            'color' => $rem['color'] ?? 'primary',
+            'color' => in_array($rem['color'] ?? '', $allowed_colors, true) ? $rem['color'] : 'primary',
             'icon' => 'fa-bell'
         ];
     }
@@ -205,14 +232,15 @@ foreach ($reminders as $rem) {
                 // If it's a reminder, we allow delete
                 $is_rem = ($evt['type'] === 'reminder');
 
-                echo "<div class='event-badge bg-{$evt['color']}-subtle text-{$evt['color']} small d-flex justify-content-between align-items-center' title='" . htmlspecialchars($evt['title']) . "'>";
-                echo "<span><i class='fa-solid {$evt['icon']} me-1'></i>" . htmlspecialchars($evt['title']) . "</span>";
+                $color = Html::e($evt['color']);
+                echo "<div class='event-badge bg-{$color}-subtle text-{$color} small d-flex justify-content-between align-items-center' title='" . Html::e($evt['title']) . "'>";
+                echo "<span><i class='fa-solid " . Html::e($evt['icon']) . " me-1'></i>" . Html::e($evt['title']) . "</span>";
 
                 if ($is_rem) {
                     if (($_SESSION['permission'] ?? 'edit') !== 'read_only') {
                         echo "<button type='button' class='btn btn-link p-0 text-danger ms-1'" .
                             " style='font-size: 0.9em; line-height: 1;'" .
-                            " onclick=\"confirmDeleteReminder({$evt['id']}, '" . addslashes(htmlspecialchars($evt['title'])) . "')\">" .
+                            " data-onclick='confirmDeleteReminder' data-args='" . Html::args((int) $evt['id'], $evt['title']) . "'>" .
                             " <i class='fa-solid fa-times'></i>" .
                             "</button>";
                     } else {
@@ -384,8 +412,18 @@ foreach ($reminders as $rem) {
 <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     function confirmDeleteReminder(id, title) {
         document.getElementById('deleteReminderId').value = id;
-        document.getElementById('deleteReminderMsg').innerHTML = `Delete reminder: <strong>${title}</strong>? <br><span class="text-danger small">This cannot be undone.</span>`;
-        new bootstrap.Modal(document.getElementById('deleteReminderModal')).show();
+        const msg = document.getElementById('deleteReminderMsg');
+        msg.textContent = 'Delete reminder: ';
+        const strong = document.createElement('strong');
+        strong.textContent = title;
+        msg.appendChild(strong);
+        msg.appendChild(document.createTextNode('?'));
+        msg.appendChild(document.createElement('br'));
+        const warn = document.createElement('span');
+        warn.className = 'text-danger small';
+        warn.textContent = 'This cannot be undone.';
+        msg.appendChild(warn);
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('deleteReminderModal')).show();
     }
 </script>
 

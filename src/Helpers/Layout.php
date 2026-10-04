@@ -38,4 +38,33 @@ class Layout
     {
         require_once __DIR__ . '/../../includes/footer.php';
     }
+
+    /**
+     * Opens the layout for public (logged-out) pages.
+     */
+    public static function authHeader(string $title)
+    {
+        $auth_title = $title;
+        require_once __DIR__ . '/../../includes/auth_header.php';
+    }
+
+    /**
+     * Closes the layout for public (logged-out) pages.
+     */
+    public static function authFooter()
+    {
+        require_once __DIR__ . '/../../includes/auth_footer.php';
+    }
+
+    /**
+     * Password field with live requirement hints (works with checkPasswordStrength in app.js).
+     */
+    public static function passwordRequirements(): string
+    {
+        return '<div id="pwRequirements" class="mt-1 small" style="display:none;">'
+            . '<span id="pwLen" class="me-2">&#10007; 8+ characters</span>'
+            . '<span id="pwLet" class="me-2">&#10007; letter</span>'
+            . '<span id="pwNum" class="me-2">&#10007; number</span>'
+            . '</div>';
+    }
 }

@@ -1,56 +1,78 @@
 <?php
 // v3_archive_engine.php - Maintenance script for cleaning up old data.
+// CLI only:  php v3_archive_engine.php
+// Moves expenses/income older than the retention period (all tenants) into *_archive tables.
+
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
-use App\Helpers\AuditHelper;
 
 Bootstrap::init();
-
-if (php_sapi_name() !== 'cli' && !isset($_SESSION['user_id'])) {
-    die("Unauthorized. Run via CLI or log in.");
-}
 
 $retention_years = 2;
 $cutoff_date = date('Y-m-d', strtotime("-$retention_years years"));
 
-echo "🚀 Starting Archiving Engine (Retention: $retention_years years, Cutoff: $cutoff_date)\n";
+echo "Starting Archiving Engine (Retention: $retention_years years, Cutoff: $cutoff_date)\n";
+
+/**
+ * Moves rows older than the cutoff from $table to $archive inside one transaction.
+ * Only columns present in both tables are copied, so a later ALTER on the live table
+ * cannot break the INSERT.
+ */
+function archiveTable(PDO $pdo, string $table, string $archive, string $dateColumn, string $cutoff): int
+{
+    // DDL commits implicitly, so it runs before the transaction. LIKE copies columns and
+    // indexes but not foreign keys, which is what an archive needs.
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `$archive` LIKE `$table`");
+
+    $liveCols    = $pdo->query("SHOW COLUMNS FROM `$table`")->fetchAll(PDO::FETCH_COLUMN);
+    $archiveCols = $pdo->query("SHOW COLUMNS FROM `$archive`")->fetchAll(PDO::FETCH_COLUMN);
+    $cols = array_values(array_intersect($liveCols, $archiveCols));
+    if (!in_array('id', $cols, true)) {
+        throw new RuntimeException("Archive table $archive has no id column");
+    }
+    $colList = implode(', ', array_map(fn($c) => "`$c`", $cols));
+
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare("INSERT INTO `$archive` ($colList) SELECT $colList FROM `$table` WHERE `$dateColumn` < ?");
+        $stmt->execute([$cutoff]);
+        $moved = $stmt->rowCount();
+
+        if ($moved > 0) {
+            // Delete exactly the rows that are now in the archive
+            $del = $pdo->prepare("DELETE t FROM `$table` t JOIN `$archive` a ON a.id = t.id WHERE t.`$dateColumn` < ?");
+            $del->execute([$cutoff]);
+        }
+
+        $pdo->commit();
+        return $moved;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
 
 try {
-    // 1. Archive Tables (Handled by install.php)
-    echo "✔ Archive tables verification skipped (Assumed exists via installer).\n";
+    $moved_expenses = archiveTable($pdo, 'expenses', 'expenses_archive', 'expense_date', $cutoff_date);
+    echo $moved_expenses > 0 ? "Moved $moved_expenses expenses to archive.\n" : "No old expenses to archive.\n";
 
-    // 2. Move Expenses
-    $stmt = $pdo->prepare("INSERT INTO expenses_archive SELECT * FROM expenses WHERE expense_date < ?");
-    $stmt->execute([$cutoff_date]);
-    $moved_expenses = $stmt->rowCount();
+    $moved_income = archiveTable($pdo, 'income', 'income_archive', 'income_date', $cutoff_date);
+    echo $moved_income > 0 ? "Moved $moved_income income records to archive.\n" : "No old income to archive.\n";
 
-    if ($moved_expenses > 0) {
-        $pdo->prepare("DELETE FROM expenses WHERE expense_date < ?")->execute([$cutoff_date]);
-        echo "✔ Moved $moved_expenses expenses to archive.\n";
-    } else {
-        echo "ℹ No old expenses to archive.\n";
+    if ($moved_expenses > 0 || $moved_income > 0) {
+        $pdo->query("OPTIMIZE TABLE expenses, income")->fetchAll();
+        echo "Tables optimized.\n";
     }
 
-    // 3. Move Income
-    $stmt = $pdo->prepare("INSERT INTO income_archive SELECT * FROM income WHERE income_date < ?");
-    $stmt->execute([$cutoff_date]);
-    $moved_income = $stmt->rowCount();
-
-    if ($moved_income > 0) {
-        $pdo->prepare("DELETE FROM income WHERE income_date < ?")->execute([$cutoff_date]);
-        echo "✔ Moved $moved_income income records to archive.\n";
-    } else {
-        echo "ℹ No old income to archive.\n";
-    }
-
-    // 4. Optimize Tables
-    $pdo->exec("OPTIMIZE TABLE expenses, income");
-    echo "✔ Tables optimized.\n";
-
-    AuditHelper::log($pdo, 'data_archive', "Archived data older than $cutoff_date. Expenses: $moved_expenses, Income: $moved_income");
-    echo "\n✅ Archiving complete.\n";
-
-} catch (Exception $e) {
-    error_log($e->getMessage());
-    die("❌ A system error occurred during archiving. Please check the logs.");
+    error_log("[archive] Archived data older than $cutoff_date. Expenses: $moved_expenses, Income: $moved_income");
+    echo "\nArchiving complete.\n";
+} catch (Throwable $e) {
+    error_log('[archive] ' . $e->getMessage());
+    fwrite(STDERR, "A system error occurred during archiving: " . $e->getMessage() . "\n");
+    exit(1);
 }

@@ -7,6 +7,8 @@ use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
 use App\Helpers\AuditHelper;
 use App\Helpers\ExchangeRateHelper;
+use App\Helpers\BalanceHelper;
+use App\Helpers\Html;
 
 Bootstrap::init();
 
@@ -16,38 +18,13 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-$tenant_id     = $_SESSION['tenant_id'];
+$tenant_id     = (int) $_SESSION['tenant_id'];
 $base_currency  = $_SESSION['preferences']['base_currency'] ?? 'AED';
 $inr_to_aed     = ExchangeRateHelper::getRate('INR', 'AED', $pdo);
 $aed_to_inr     = ($inr_to_aed > 0) ? (1 / $inr_to_aed) : 22.0;
 $currency_label = $base_currency;
 
-// Create tables if not exist
-$pdo->exec("CREATE TABLE IF NOT EXISTS net_worth_items (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  tenant_id INT NOT NULL,
-  name VARCHAR(150) NOT NULL,
-  type ENUM('asset','liability') NOT NULL,
-  category VARCHAR(80) NOT NULL DEFAULT 'Other',
-  amount DECIMAL(15,2) NOT NULL DEFAULT 0,
-  notes VARCHAR(255),
-  sort_order INT DEFAULT 0,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_tenant (tenant_id)
-)");
-
-$pdo->exec("CREATE TABLE IF NOT EXISTS net_worth_snapshots (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  tenant_id INT NOT NULL,
-  snap_year SMALLINT NOT NULL,
-  snap_month TINYINT NOT NULL,
-  total_assets DECIMAL(15,2) NOT NULL DEFAULT 0,
-  total_liabilities DECIMAL(15,2) NOT NULL DEFAULT 0,
-  net_worth DECIMAL(15,2) NOT NULL DEFAULT 0,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY unique_snap (tenant_id, snap_year, snap_month)
-)");
+// Tables net_worth_items / net_worth_snapshots are created by the installer.
 
 // ── POST Handling ──────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -112,25 +89,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
 
     } elseif ($action === 'take_snapshot') {
-        // Compute totals inline for snapshot — convert each row to AED first
-        $stmt = $pdo->prepare(
-            "SELECT bb.amount, bb.currency
-             FROM bank_balances bb
-             INNER JOIN (
-                 SELECT bank_id, MAX(balance_date) AS max_date
-                 FROM bank_balances
-                 WHERE tenant_id = ?
-                 GROUP BY bank_id
-             ) latest ON bb.bank_id = latest.bank_id AND bb.balance_date = latest.max_date
-             WHERE bb.tenant_id = ?"
-        );
-        $stmt->execute([$tenant_id, $tenant_id]);
-        $snap_bank = 0.0;
-        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $snap_bank += ($row['currency'] === 'INR')
-                ? (float)$row['amount'] * $inr_to_aed
-                : (float)$row['amount'];
-        }
+        // Compute totals inline for snapshot (AED); bank balances come from BalanceHelper
+        $snap_bank = BalanceHelper::totalAed($pdo, $tenant_id);
 
         $stmt = $pdo->prepare("SELECT COALESCE(SUM(current_saved), 0) FROM sinking_funds WHERE tenant_id = ?");
         $stmt->execute([$tenant_id]);
@@ -172,25 +132,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ── Data Fetching ──────────────────────────────────────────────────────────────
 
-// Auto-tracked assets
-$stmt = $pdo->prepare(
-    "SELECT bb.amount, bb.currency
-     FROM bank_balances bb
-     INNER JOIN (
-         SELECT bank_id, MAX(balance_date) AS max_date
-         FROM bank_balances
-         WHERE tenant_id = ?
-         GROUP BY bank_id
-     ) latest ON bb.bank_id = latest.bank_id AND bb.balance_date = latest.max_date
-     WHERE bb.tenant_id = ?"
-);
-$stmt->execute([$tenant_id, $tenant_id]);
-$bank_balances_total = 0.0;
-foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-    $bank_balances_total += ($row['currency'] === 'INR')
-        ? (float)$row['amount'] * $inr_to_aed
-        : (float)$row['amount'];
-}
+// Auto-tracked assets: current balance of every bank (AED)
+$bank_balances_total = BalanceHelper::totalAed($pdo, $tenant_id);
 // Apply base currency display multiplier
 if ($base_currency === 'INR') {
     $bank_balances_total *= $aed_to_inr;
@@ -228,10 +171,10 @@ $total_assets      = $auto_total + $manual_assets_total;
 $total_liabilities = $manual_liabilities_total;
 $net_worth         = $total_assets - $total_liabilities;
 
-// Trend data — last 12 snapshots
-$stmt = $pdo->prepare("SELECT snap_year, snap_month, net_worth FROM net_worth_snapshots WHERE tenant_id = ? ORDER BY snap_year ASC, snap_month ASC LIMIT 12");
+// Trend data — latest 12 snapshots, oldest first
+$stmt = $pdo->prepare("SELECT snap_year, snap_month, net_worth FROM net_worth_snapshots WHERE tenant_id = ? ORDER BY snap_year DESC, snap_month DESC LIMIT 12");
 $stmt->execute([$tenant_id]);
-$snapshots = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$snapshots = array_reverse($stmt->fetchAll(PDO::FETCH_ASSOC));
 
 $snap_labels = [];
 $snap_values = [];
@@ -245,8 +188,8 @@ $flash_success = $_SESSION['success'] ?? null; unset($_SESSION['success']);
 $flash_error   = $_SESSION['error']   ?? null; unset($_SESSION['error']);
 
 // Also check GET-passed messages (legacy compat)
-if (!$flash_success && isset($_GET['success'])) $flash_success = htmlspecialchars($_GET['success']);
-if (!$flash_error   && isset($_GET['error']))   $flash_error   = htmlspecialchars($_GET['error']);
+if (!$flash_success && isset($_GET['success'])) $flash_success = (string) $_GET['success'];
+if (!$flash_error   && isset($_GET['error']))   $flash_error   = (string) $_GET['error'];
 
 Layout::header();
 Layout::sidebar();
@@ -268,11 +211,11 @@ Layout::sidebar();
             </button>
         </form>
         <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#itemModal"
-            onclick="openAddModal('asset')">
+            data-onclick="openAddModal" data-args='["asset"]'>
             <i class="fa-solid fa-plus me-1"></i> Add Asset
         </button>
         <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#itemModal"
-            onclick="openAddModal('liability')">
+            data-onclick="openAddModal" data-args='["liability"]'>
             <i class="fa-solid fa-plus me-1"></i> Add Liability
         </button>
     </div>
@@ -282,13 +225,13 @@ Layout::sidebar();
 <!-- Flash Messages -->
 <?php if ($flash_success): ?>
 <div class="alert alert-success alert-dismissible fade show" role="alert">
-    <i class="fa-solid fa-check-circle me-2"></i><?php echo $flash_success; ?>
+    <i class="fa-solid fa-check-circle me-2"></i><?php echo Html::e($flash_success); ?>
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 <?php endif; ?>
 <?php if ($flash_error): ?>
 <div class="alert alert-danger alert-dismissible fade show" role="alert">
-    <i class="fa-solid fa-triangle-exclamation me-2"></i><?php echo $flash_error; ?>
+    <i class="fa-solid fa-triangle-exclamation me-2"></i><?php echo Html::e($flash_error); ?>
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 <?php endif; ?>
@@ -301,7 +244,7 @@ Layout::sidebar();
                 <i class="fa-solid fa-arrow-trend-up fa-3x text-success"></i>
             </div>
             <h6 class="text-muted fw-bold text-uppercase small mb-2">Total Assets</h6>
-            <h3 class="fw-bold text-success mb-1"><?php echo $currency_label; ?> <span class="blur-sensitive"><?php echo number_format($total_assets, 2); ?></span></h3>
+            <h3 class="fw-bold text-success mb-1"><?php echo Html::e($currency_label); ?> <span class="blur-sensitive"><?php echo number_format($total_assets, 2); ?></span></h3>
             <div class="small text-muted">Auto-tracked + manual</div>
         </div>
     </div>
@@ -311,7 +254,7 @@ Layout::sidebar();
                 <i class="fa-solid fa-arrow-trend-down fa-3x text-danger"></i>
             </div>
             <h6 class="text-muted fw-bold text-uppercase small mb-2">Total Liabilities</h6>
-            <h3 class="fw-bold text-danger mb-1"><?php echo $currency_label; ?> <span class="blur-sensitive"><?php echo number_format($total_liabilities, 2); ?></span></h3>
+            <h3 class="fw-bold text-danger mb-1"><?php echo Html::e($currency_label); ?> <span class="blur-sensitive"><?php echo number_format($total_liabilities, 2); ?></span></h3>
             <div class="small text-muted">Manual entries</div>
         </div>
     </div>
@@ -322,7 +265,7 @@ Layout::sidebar();
             </div>
             <h6 class="text-muted fw-bold text-uppercase small mb-2">Net Worth</h6>
             <h3 class="fw-bold <?php echo $net_worth >= 0 ? 'text-primary' : 'text-danger'; ?> mb-1">
-                <?php echo $currency_label; ?> <span class="blur-sensitive"><?php echo number_format($net_worth, 2); ?></span>
+                <?php echo Html::e($currency_label); ?> <span class="blur-sensitive"><?php echo number_format($net_worth, 2); ?></span>
             </h3>
             <div class="small text-muted">Assets minus liabilities</div>
         </div>
@@ -342,7 +285,7 @@ Layout::sidebar();
                         <span class="fw-semibold">Bank Balances</span>
                         <div class="small text-muted">From linked bank accounts</div>
                     </div>
-                    <span class="fw-bold text-success blur-sensitive"><?php echo $currency_label; ?> <?php echo number_format($bank_balances_total, 2); ?></span>
+                    <span class="fw-bold text-success blur-sensitive"><?php echo Html::e($currency_label); ?> <?php echo number_format($bank_balances_total, 2); ?></span>
                 </li>
                 <li class="list-group-item bg-transparent px-0 d-flex justify-content-between align-items-center border-bottom py-3">
                     <div>
@@ -350,7 +293,7 @@ Layout::sidebar();
                         <span class="fw-semibold">Savings Goals</span>
                         <div class="small text-muted">Sinking funds balance</div>
                     </div>
-                    <span class="fw-bold text-info blur-sensitive"><?php echo $currency_label; ?> <?php echo number_format($savings_goals, 2); ?></span>
+                    <span class="fw-bold text-info blur-sensitive"><?php echo Html::e($currency_label); ?> <?php echo number_format($savings_goals, 2); ?></span>
                 </li>
                 <li class="list-group-item bg-transparent px-0 d-flex justify-content-between align-items-center py-3">
                     <div>
@@ -358,12 +301,12 @@ Layout::sidebar();
                         <span class="fw-semibold">Money Lent Out</span>
                         <div class="small text-muted">Pending repayments</div>
                     </div>
-                    <span class="fw-bold text-warning blur-sensitive"><?php echo $currency_label; ?> <?php echo number_format($money_lent, 2); ?></span>
+                    <span class="fw-bold text-warning blur-sensitive"><?php echo Html::e($currency_label); ?> <?php echo number_format($money_lent, 2); ?></span>
                 </li>
             </ul>
             <div class="border-top pt-3 mt-2 d-flex justify-content-between fw-bold">
                 <span class="text-muted">Auto Total</span>
-                <span class="text-success blur-sensitive"><?php echo $currency_label; ?> <?php echo number_format($auto_total, 2); ?></span>
+                <span class="text-success blur-sensitive"><?php echo Html::e($currency_label); ?> <?php echo number_format($auto_total, 2); ?></span>
             </div>
         </div>
     </div>
@@ -375,7 +318,7 @@ Layout::sidebar();
                 <h5 class="fw-bold mb-0"><i class="fa-solid fa-hand-pointer me-2 text-success"></i>Manual Assets</h5>
                 <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
                 <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#itemModal"
-                    onclick="openAddModal('asset')">
+                    data-onclick="openAddModal" data-args='["asset"]'>
                     <i class="fa-solid fa-plus me-1"></i> Add
                 </button>
                 <?php endif; ?>
@@ -403,22 +346,22 @@ Layout::sidebar();
                             <?php foreach ($manual_assets as $item): ?>
                             <tr>
                                 <td>
-                                    <span class="fw-semibold"><?php echo htmlspecialchars($item['name']); ?></span>
+                                    <span class="fw-semibold"><?php echo Html::e($item['name']); ?></span>
                                     <?php if (!empty($item['notes'])): ?>
-                                    <div class="small text-muted fst-italic"><?php echo htmlspecialchars($item['notes']); ?></div>
+                                    <div class="small text-muted fst-italic"><?php echo Html::e($item['notes']); ?></div>
                                     <?php endif; ?>
                                 </td>
-                                <td><span class="badge bg-success-subtle text-success"><?php echo htmlspecialchars($item['category']); ?></span></td>
-                                <td class="text-end fw-bold text-success blur-sensitive"><?php echo $currency_label; ?> <?php echo number_format($item['amount'], 2); ?></td>
+                                <td><span class="badge bg-success-subtle text-success"><?php echo Html::e($item['category']); ?></span></td>
+                                <td class="text-end fw-bold text-success blur-sensitive"><?php echo Html::e($currency_label); ?> <?php echo number_format($item['amount'], 2); ?></td>
                                 <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
                                 <td class="text-end">
                                     <button class="btn btn-sm btn-outline-primary border-0"
-                                        onclick="openEditModal(<?php echo (int)$item['id']; ?>, <?php echo htmlspecialchars(json_encode($item['name'])); ?>, 'asset', <?php echo htmlspecialchars(json_encode($item['category'])); ?>, <?php echo (float)$item['amount']; ?>, <?php echo htmlspecialchars(json_encode($item['notes'] ?? '')); ?>)"
+                                        data-onclick="openEditModal" data-args="<?php echo Html::args((int) $item['id'], $item['name'], 'asset', $item['category'], (float) $item['amount'], $item['notes'] ?? ''); ?>"
                                         data-bs-toggle="modal" data-bs-target="#itemModal">
                                         <i class="fa-solid fa-pencil"></i>
                                     </button>
                                     <button class="btn btn-sm btn-outline-danger border-0"
-                                        onclick="openDeleteConfirm(<?php echo (int)$item['id']; ?>, <?php echo htmlspecialchars(json_encode($item['name'])); ?>)"
+                                        data-onclick="openDeleteConfirm" data-args="<?php echo Html::args((int) $item['id'], $item['name']); ?>"
                                         data-bs-toggle="modal" data-bs-target="#deleteModal">
                                         <i class="fa-solid fa-trash"></i>
                                     </button>
@@ -430,7 +373,7 @@ Layout::sidebar();
                         <tfoot>
                             <tr class="table-success">
                                 <td colspan="2" class="fw-bold">Manual Assets Total</td>
-                                <td class="text-end fw-bold blur-sensitive"><?php echo $currency_label; ?> <?php echo number_format($manual_assets_total, 2); ?></td>
+                                <td class="text-end fw-bold blur-sensitive"><?php echo Html::e($currency_label); ?> <?php echo number_format($manual_assets_total, 2); ?></td>
                                 <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?><td></td><?php endif; ?>
                             </tr>
                         </tfoot>
@@ -447,7 +390,7 @@ Layout::sidebar();
         <h5 class="fw-bold mb-0"><i class="fa-solid fa-credit-card me-2 text-danger"></i>Liabilities</h5>
         <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
         <button class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#itemModal"
-            onclick="openAddModal('liability')">
+            data-onclick="openAddModal" data-args='["liability"]'>
             <i class="fa-solid fa-plus me-1"></i> Add Liability
         </button>
         <?php endif; ?>
@@ -475,22 +418,22 @@ Layout::sidebar();
                     <?php foreach ($manual_liabilities as $item): ?>
                     <tr>
                         <td>
-                            <span class="fw-semibold"><?php echo htmlspecialchars($item['name']); ?></span>
+                            <span class="fw-semibold"><?php echo Html::e($item['name']); ?></span>
                             <?php if (!empty($item['notes'])): ?>
-                            <div class="small text-muted fst-italic"><?php echo htmlspecialchars($item['notes']); ?></div>
+                            <div class="small text-muted fst-italic"><?php echo Html::e($item['notes']); ?></div>
                             <?php endif; ?>
                         </td>
-                        <td><span class="badge bg-danger-subtle text-danger"><?php echo htmlspecialchars($item['category']); ?></span></td>
-                        <td class="text-end fw-bold text-danger blur-sensitive"><?php echo $currency_label; ?> <?php echo number_format($item['amount'], 2); ?></td>
+                        <td><span class="badge bg-danger-subtle text-danger"><?php echo Html::e($item['category']); ?></span></td>
+                        <td class="text-end fw-bold text-danger blur-sensitive"><?php echo Html::e($currency_label); ?> <?php echo number_format($item['amount'], 2); ?></td>
                         <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
                         <td class="text-end">
                             <button class="btn btn-sm btn-outline-primary border-0"
-                                onclick="openEditModal(<?php echo (int)$item['id']; ?>, <?php echo htmlspecialchars(json_encode($item['name'])); ?>, 'liability', <?php echo htmlspecialchars(json_encode($item['category'])); ?>, <?php echo (float)$item['amount']; ?>, <?php echo htmlspecialchars(json_encode($item['notes'] ?? '')); ?>)"
+                                data-onclick="openEditModal" data-args="<?php echo Html::args((int) $item['id'], $item['name'], 'liability', $item['category'], (float) $item['amount'], $item['notes'] ?? ''); ?>"
                                 data-bs-toggle="modal" data-bs-target="#itemModal">
                                 <i class="fa-solid fa-pencil"></i>
                             </button>
                             <button class="btn btn-sm btn-outline-danger border-0"
-                                onclick="openDeleteConfirm(<?php echo (int)$item['id']; ?>, <?php echo htmlspecialchars(json_encode($item['name'])); ?>)"
+                                data-onclick="openDeleteConfirm" data-args="<?php echo Html::args((int) $item['id'], $item['name']); ?>"
                                 data-bs-toggle="modal" data-bs-target="#deleteModal">
                                 <i class="fa-solid fa-trash"></i>
                             </button>
@@ -502,7 +445,7 @@ Layout::sidebar();
                 <tfoot>
                     <tr class="table-danger">
                         <td colspan="2" class="fw-bold">Total Liabilities</td>
-                        <td class="text-end fw-bold blur-sensitive"><?php echo $currency_label; ?> <?php echo number_format($total_liabilities, 2); ?></td>
+                        <td class="text-end fw-bold blur-sensitive"><?php echo Html::e($currency_label); ?> <?php echo number_format($total_liabilities, 2); ?></td>
                         <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?><td></td><?php endif; ?>
                     </tr>
                 </tfoot>
@@ -526,8 +469,9 @@ Layout::sidebar();
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>"></script>
 <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
 (function() {
-    const labels = <?php echo json_encode($snap_labels, JSON_UNESCAPED_UNICODE); ?>;
-    const values = <?php echo json_encode($snap_values); ?>;
+    const labels = <?php echo Html::json($snap_labels); ?>;
+    const values = <?php echo Html::json($snap_values); ?>;
+    const CURRENCY_LABEL = <?php echo Html::json($currency_label); ?>;
 
     const ctx = document.getElementById('nwTrendChart').getContext('2d');
 
@@ -560,7 +504,7 @@ Layout::sidebar();
                 tooltip: {
                     callbacks: {
                         label: function(ctx) {
-                            return ' <?php echo $currency_label; ?> ' + ctx.parsed.y.toLocaleString('en-AE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                            return ' ' + CURRENCY_LABEL + ' ' + ctx.parsed.y.toLocaleString('en-AE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                         }
                     }
                 }
@@ -569,7 +513,7 @@ Layout::sidebar();
                 y: {
                     ticks: {
                         callback: function(value) {
-                            return '<?php echo $currency_label; ?> ' + value.toLocaleString('en-AE', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+                            return CURRENCY_LABEL + ' ' + value.toLocaleString('en-AE', {minimumFractionDigits: 0, maximumFractionDigits: 0});
                         }
                     },
                     grid: { color: 'rgba(0,0,0,0.05)' }
@@ -606,7 +550,7 @@ Layout::sidebar();
 
                     <div class="mb-3">
                         <label for="formType" class="form-label">Type <span class="text-danger">*</span></label>
-                        <select name="type" id="formType" class="form-select" onchange="updateCategoryOptions(this.value)">
+                        <select name="type" id="formType" class="form-select">
                             <option value="asset">Asset</option>
                             <option value="liability">Liability</option>
                         </select>
@@ -675,8 +619,11 @@ const LIABILITY_CATEGORIES  = ['Credit Card','Loan','Mortgage','Other'];
 
 function updateCategoryOptions(type, selected) {
     const sel = document.getElementById('formCategory');
-    const cats = type === 'liability' ? LIABILITY_CATEGORIES : ASSET_CATEGORIES;
+    let cats = type === 'liability' ? LIABILITY_CATEGORIES : ASSET_CATEGORIES;
     sel.innerHTML = '';
+    if (selected && cats.indexOf(selected) === -1) {
+        cats = cats.concat([selected]); // keep a custom category on edit
+    }
     cats.forEach(function(cat) {
         const opt = document.createElement('option');
         opt.value = cat;

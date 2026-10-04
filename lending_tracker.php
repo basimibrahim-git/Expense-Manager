@@ -1,18 +1,23 @@
-﻿<?php
+<?php
 $page_title = "Lending Tracker";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
+use App\Helpers\Html;
 use App\Helpers\Layout;
+use App\Helpers\ExchangeRateHelper;
 
 Bootstrap::init();
 
-// Auth Check
-if (!isset($_SESSION['user_id'])) {
-    header("Location: index.php");
-    exit();
+/**
+ * Returns the value when it is a real Y-m-d date, otherwise null.
+ */
+function lending_valid_date($date): ?string
+{
+    $date = (string) $date;
+    $d = DateTime::createFromFormat('!Y-m-d', $date);
+    return ($d && $d->format('Y-m-d') === $date) ? $date : null;
 }
-
 
 // Handle Actions (Must be before outputting any HTML)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -20,26 +25,38 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        header("Location: lending_tracker.php?error=Unauthorized: Read-only access");
+        header("Location: lending_tracker.php?error=" . urlencode('Unauthorized: Read-only access'));
         exit();
     }
 
     if (isset($_POST['action'])) {
         if ($_POST['action'] == 'add_lending') {
-            $name = trim($_POST['borrower_name']);
-            $amount = floatval($_POST['amount']);
-            $currency = $_POST['currency'] ?? 'AED';
-            $lent_date = $_POST['lent_date'];
-            $due_date = null;
-            if (!empty($_POST['due_date'])) {
-                $due_date = $_POST['due_date'];
-            }
-            $notes = trim($_POST['notes']);
+            $name = trim((string) ($_POST['borrower_name'] ?? ''));
+            $amount = floatval($_POST['amount'] ?? 0);
+            $currency = in_array($_POST['currency'] ?? 'AED', ['AED', 'INR'], true) ? $_POST['currency'] : 'AED';
+            $lent_date = lending_valid_date($_POST['lent_date'] ?? '');
+            $due_date = lending_valid_date($_POST['due_date'] ?? '');
+            $notes = trim((string) ($_POST['notes'] ?? ''));
 
-            if (!empty($name) && $amount > 0) {
+            if (!empty($name) && $amount > 0 && $lent_date !== null) {
                 $stmt = $pdo->prepare("INSERT INTO lending_tracker (user_id, tenant_id, borrower_name, amount, currency, lent_date, due_date, notes, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending')");
                 $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $name, $amount, $currency, $lent_date, $due_date, $notes]);
                 header("Location: lending_tracker.php?success=Record Added");
+                exit;
+            }
+        } elseif ($_POST['action'] == 'edit_lending') {
+            $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
+            $name = trim((string) ($_POST['borrower_name'] ?? ''));
+            $amount = floatval($_POST['amount'] ?? 0);
+            $currency = in_array($_POST['currency'] ?? 'AED', ['AED', 'INR'], true) ? $_POST['currency'] : 'AED';
+            $lent_date = lending_valid_date($_POST['lent_date'] ?? '');
+            $due_date = lending_valid_date($_POST['due_date'] ?? '');
+            $notes = trim((string) ($_POST['notes'] ?? ''));
+
+            if ($id && !empty($name) && $amount > 0 && $lent_date !== null) {
+                $stmt = $pdo->prepare("UPDATE lending_tracker SET borrower_name = ?, amount = ?, currency = ?, lent_date = ?, due_date = ?, notes = ? WHERE id = ? AND tenant_id = ?");
+                $stmt->execute([$name, $amount, $currency, $lent_date, $due_date, $notes, $id, $_SESSION['tenant_id']]);
+                header("Location: lending_tracker.php?success=Record Updated");
                 exit;
             }
         } elseif ($_POST['action'] == 'mark_paid') {
@@ -57,11 +74,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             if ($id) {
                 $stmt = $pdo->prepare("DELETE FROM lending_tracker WHERE id = ? AND tenant_id = ?");
                 $stmt->execute([$id, $_SESSION['tenant_id']]);
-
-                // Reset IDs (Optional, harmless for this app)
-                $pdo->exec("SET @count = 0");
-                $pdo->exec("UPDATE lending_tracker SET id = @count:= @count + 1");
-                $pdo->exec("ALTER TABLE lending_tracker AUTO_INCREMENT = 1");
 
                 header("Location: lending_tracker.php?success=Record Deleted");
                 exit;
@@ -90,13 +102,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             exit;
         }
     }
+
+    header("Location: lending_tracker.php?error=" . urlencode('Please fill in the name, an amount greater than zero and a valid lent date.'));
+    exit;
 }
 
 Layout::header();
 Layout::sidebar();
 
 // Fetch Logic
-$filter_status = $_GET['status'] ?? 'Pending';
+$filter_status = in_array($_GET['status'] ?? 'Pending', ['Pending', 'Paid', 'Partially Paid', 'All'], true) ? ($_GET['status'] ?? 'Pending') : 'Pending';
 $query = "SELECT * FROM lending_tracker WHERE tenant_id = ?";
 $params = [$_SESSION['tenant_id']];
 
@@ -110,172 +125,197 @@ $stmt = $pdo->prepare($query);
 $stmt->execute($params);
 $records = $stmt->fetchAll();
 
-// Summary (Convert INR to AED for Display Stats approx / 24)
+// Summary
+$inr_to_aed = ExchangeRateHelper::getRate('INR', 'AED', $pdo);
 $stmt = $pdo->prepare("SELECT
     SUM(CASE
-        WHEN status = 'Pending' AND currency = 'INR' THEN amount / 24
+        WHEN status = 'Pending' AND currency = 'INR' THEN amount * ?
         WHEN status = 'Pending' THEN amount
         ELSE 0
     END) as pending_total,
     SUM(CASE
-        WHEN status = 'Paid' AND currency = 'INR' THEN amount / 24
+        WHEN status = 'Paid' AND currency = 'INR' THEN amount * ?
         WHEN status = 'Paid' THEN amount
         ELSE 0
     END) as paid_total
     FROM lending_tracker WHERE tenant_id = ?");
-$stmt->execute([$_SESSION['tenant_id']]);
+$stmt->execute([$inr_to_aed, $inr_to_aed, $_SESSION['tenant_id']]);
 $summary = $stmt->fetch();
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h1 class="h3 fw-bold mb-1">Money Lending Tracker</h1>
-        <p class="text-muted mb-0">Track who owes you money.</p>
+<?php if (!empty($_GET['success'])): ?>
+    <div class="alert alert-success alert-dismissible fade show rounded-4" role="alert">
+        <?php echo Html::e($_GET['success']); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
-    <div class="text-end">
-        <div class="d-flex gap-2">
-            <a href="export_actions.php?action=export_lending" class="btn btn-outline-secondary">
-                <i class="fa-solid fa-file-csv me-1"></i> Export
-            </a>
-            <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-                <button class="btn btn-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#addLendingModal">
-                    <i class="fa-solid fa-plus me-2"></i> New Record
-                </button>
-            <?php endif; ?>
+<?php endif; ?>
+<?php if (!empty($_GET['error'])): ?>
+    <div class="alert alert-danger alert-dismissible fade show rounded-4" role="alert">
+        <?php echo Html::e($_GET['error']); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+
+<!-- Premium Header Banner -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="gradient-card-primary p-4 rounded-4 hover-lift position-relative overflow-hidden shadow-sm" style="border-radius: 16px;">
+            <div class="position-absolute top-0 end-0 p-3 opacity-10">
+                <i class="fa-solid fa-hand-holding-dollar fa-9x"></i>
+            </div>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 position-relative" style="z-index: 2;">
+                <div>
+                    <h1 class="h3 fw-bold mb-1 text-white">Lending Tracker</h1>
+                    <p class="text-white text-opacity-75 mb-0">Manage outstanding loans, repayments, and consolidated receivables</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="export_actions.php?action=export_lending" class="btn btn-white text-primary border-0 rounded-pill px-3 py-1.5 fw-bold shadow-sm hover-lift">
+                        <i class="fa-solid fa-file-csv me-1"></i> Export Data
+                    </a>
+                    <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                        <button class="btn btn-dark border-0 rounded-pill px-4 py-1.5 fw-bold shadow-sm hover-lift" data-bs-toggle="modal" data-bs-target="#addLendingModal">
+                            <i class="fa-solid fa-plus me-1"></i> New Record
+                        </button>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
 <!-- Stats Row -->
 <div class="row g-4 mb-4">
-    <div class="col-12 col-sm-6">
-        <div class="glass-panel p-4 position-relative overflow-hidden">
-            <div class="position-absolute top-0 end-0 opacity-10 p-3">
-                <i class="fa-solid fa-clock-rotate-left fa-3x text-warning"></i>
+    <div class="col-12 col-md-6">
+        <div class="glass-panel-premium p-4 h-100 hover-lift position-relative overflow-hidden" style="border-left: 4px solid #f59e0b !important;">
+            <div class="position-absolute end-0 top-50 translate-middle-y me-4 opacity-10">
+                <i class="fa-solid fa-clock-rotate-left fa-4x text-warning"></i>
             </div>
-            <h5 class="fw-bold text-muted mb-1">Pending Collection</h5>
-            <h3 class="fw-bold text-warning mb-0">AED <span
-                    class="blur-sensitive"><?php echo number_format($summary['pending_total'], 2); ?></span></h3>
-            <div class="x-small text-muted mt-1">(Approx. consolidated in AED)</div>
+            <h6 class="text-muted fw-bold text-uppercase small mb-2">Pending Collection</h6>
+            <h2 class="fw-bold text-warning mb-1">
+                <small class="fs-6 text-muted">AED</small> 
+                <span class="blur-sensitive"><?php echo number_format($summary['pending_total'] ?? 0, 2); ?></span>
+            </h2>
+            <p class="text-muted small mb-0">Total active funds currently out on loan</p>
         </div>
     </div>
-    <div class="col-12 col-sm-6">
-        <div class="glass-panel p-4 position-relative overflow-hidden">
-            <div class="position-absolute top-0 end-0 opacity-10 p-3">
-                <i class="fa-solid fa-check-circle fa-3x text-success"></i>
+    <div class="col-12 col-md-6">
+        <div class="glass-panel-premium p-4 h-100 hover-lift position-relative overflow-hidden" style="border-left: 4px solid #10b981 !important;">
+            <div class="position-absolute end-0 top-50 translate-middle-y me-4 opacity-10">
+                <i class="fa-solid fa-circle-check fa-4x text-success"></i>
             </div>
-            <h5 class="fw-bold text-muted mb-1">Recovered</h5>
-            <h3 class="fw-bold text-success mb-0">AED <span
-                    class="blur-sensitive"><?php echo number_format($summary['paid_total'], 2); ?></span></h3>
+            <h6 class="text-muted fw-bold text-uppercase small mb-2">Total Recovered</h6>
+            <h2 class="fw-bold text-success mb-1">
+                <small class="fs-6 text-muted">AED</small> 
+                <span class="blur-sensitive"><?php echo number_format($summary['paid_total'] ?? 0, 2); ?></span>
+            </h2>
+            <p class="text-muted small mb-0">Settled debts collected from borrowers</p>
         </div>
     </div>
 </div>
 
-<!-- Filter Tabs -->
-<ul class="nav nav-pills mb-3" id="pills-tab">
-    <li class="nav-item">
-        <a class="nav-link <?php echo $filter_status == 'Pending' ? 'active' : ''; ?>"
-            href="?status=Pending">Pending</a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?php echo $filter_status == 'Paid' ? 'active' : ''; ?>" href="?status=Paid">Completed</a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?php echo $filter_status == 'All' ? 'active' : ''; ?>" href="?status=All">All
-            Records</a>
-    </li>
-</ul>
+<!-- Premium Filter Navigation -->
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+    <div class="bg-light p-1 rounded-pill d-flex gap-1" style="border: 1px solid rgba(0,0,0,0.05);">
+        <a class="btn btn-sm rounded-pill px-4 fw-bold <?php echo $filter_status == 'Pending' ? 'btn-primary text-white shadow-sm' : 'btn-light text-muted'; ?>"
+           href="?status=Pending">Pending</a>
+        <a class="btn btn-sm rounded-pill px-4 fw-bold <?php echo $filter_status == 'Paid' ? 'btn-primary text-white shadow-sm' : 'btn-light text-muted'; ?>" 
+           href="?status=Paid">Completed</a>
+        <a class="btn btn-sm rounded-pill px-4 fw-bold <?php echo $filter_status == 'All' ? 'btn-primary text-white shadow-sm' : 'btn-light text-muted'; ?>" 
+           href="?status=All">All Records</a>
+    </div>
+</div>
 
 <!-- Records List -->
 <?php if (empty($records)): ?>
-    <div class="text-center py-5 glass-panel">
+    <div class="text-center py-5 glass-panel-premium">
         <div class="mb-3 text-muted opacity-25">
             <i class="fa-solid fa-hand-holding-dollar fa-3x"></i>
         </div>
-        <h5 class="text-muted">No records found.</h5>
-        <p class="text-muted small">Lent money to someone? Add it here to track it.</p>
+        <h5 class="text-dark fw-bold mb-1">No Lending Records Found</h5>
+        <p class="text-muted small px-3">Have you lent money to someone? Add it to track status updates here.</p>
     </div>
 <?php else: ?>
-    <div class="row g-3">
+    <div class="row g-4">
         <?php foreach ($records as $r): ?>
             <?php
-            // Color Logic
             $is_overdue = ($r['status'] == 'Pending' && !empty($r['due_date']) && strtotime($r['due_date']) < time());
-            $border_class = 'border-warning'; // Default for pending
+            $border_color = '#e2e8f0'; // default
             if ($r['status'] == 'Paid') {
-                $border_class = 'border-success';
+                $border_color = '#10b981';
             } elseif ($is_overdue) {
-                $border_class = 'border-danger';
-            }
-
-            $statusClass = 'bg-success';
-            if ($r['status'] === 'Pending') {
-                $statusClass = 'bg-warning text-dark';
-            } elseif ($is_overdue) { // Assuming 'Overdue' is a state derived from 'Pending'
-                $statusClass = 'bg-danger';
+                $border_color = '#f43f5e';
+            } elseif ($r['status'] == 'Pending') {
+                $border_color = '#f59e0b';
             }
             $curr = $r['currency'] ?? 'AED';
             ?>
             <div class="col-12 col-md-6 col-xl-4">
-                <div class="glass-panel p-3 h-100 position-relative border-start border-4 <?php echo $border_class; ?>">
-                    <div class="position-absolute top-0 end-0 m-2">
+                <div class="glass-panel-premium p-4 h-100 position-relative hover-lift transition-all" 
+                     style="border-left: 4px solid <?php echo $border_color; ?> !important;">
+                    <div class="position-absolute top-0 end-0 m-3 d-flex align-items-center gap-2">
                         <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-                            <input type="checkbox" class="form-check-input row-checkbox" value="<?php echo $r['id']; ?>">
+                            <input type="checkbox" class="form-check-input row-checkbox" value="<?php echo $r['id']; ?>" style="width: 18px; height: 18px; border-radius: 4px;">
                         <?php endif; ?>
                     </div>
-                    <div class="d-flex justify-content-between align-items-start mb-2 pe-4">
+
+                    <div class="d-flex justify-content-between align-items-start mb-3 pe-4">
                         <div>
-                            <h5 class="fw-bold mb-0"><?php echo htmlspecialchars($r['borrower_name']); ?></h5>
-                            <div class="small text-muted">
-                                Lent: <?php echo date('M d, Y', strtotime($r['lent_date'])); ?>
-                            </div>
+                            <h5 class="fw-bold mb-1 text-dark"><?php echo htmlspecialchars($r['borrower_name']); ?></h5>
+                            <small class="text-muted d-block">
+                                <i class="fa-solid fa-calendar-day me-1"></i> Lent: <?php echo date('M d, Y', strtotime($r['lent_date'])); ?>
+                            </small>
                         </div>
                         <div class="text-end">
-                            <h5 class="fw-bold text-primary mb-0">
-                                <?php echo $curr; ?> <span
-                                    class="blur-sensitive"><?php echo number_format($r['amount'], 2); ?></span>
-                            </h5>
+                            <h4 class="fw-bold text-primary mb-0">
+                                <small class="fs-6 text-muted"><?php echo Html::e($curr); ?></small>
+                                <span class="blur-sensitive"><?php echo number_format($r['amount'], 2); ?></span>
+                            </h4>
                             <?php if ($r['status'] == 'Pending'): ?>
-                                <span class="badge bg-warning-subtle text-warning-emphasis">Pending</span>
+                                <span class="badge rounded-pill bg-warning-subtle text-warning px-2 py-0.5 small fw-bold">Pending</span>
                             <?php else: ?>
-                                <span class="badge bg-success-subtle text-success">Paid</span>
+                                <span class="badge rounded-pill bg-success-subtle text-success px-2 py-0.5 small fw-bold">Paid</span>
                             <?php endif; ?>
                         </div>
                     </div>
 
                     <?php if (!empty($r['notes'])): ?>
-                        <p class="small text-muted bg-light p-2 rounded mb-2 fst-italic">
+                        <div class="p-3 bg-light rounded-3 text-muted small mb-3 fst-italic border border-light">
                             "<?php echo htmlspecialchars($r['notes']); ?>"
-                        </p>
+                        </div>
                     <?php endif; ?>
 
-                    <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
-                        <div class="small fw-bold <?php echo $is_overdue ? 'text-danger' : 'text-muted'; ?>">
+                    <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top border-light">
+                        <div class="small fw-bold <?php echo $is_overdue ? 'text-danger animate-pulse' : 'text-muted'; ?>">
                             <?php if ($r['status'] == 'Paid'): ?>
-                                <i class="fa-solid fa-check me-1"></i> Recovered
+                                <span class="text-success"><i class="fa-solid fa-check me-1"></i> Recovered</span>
                             <?php elseif (!empty($r['due_date'])): ?>
-                                <i class="fa-solid fa-calendar-check me-1"></i> Due:
-                                <?php echo date('M d, Y', strtotime($r['due_date'])); ?>
+                                <i class="fa-solid fa-calendar-check me-1"></i> Due: <?php echo date('M d, Y', strtotime($r['due_date'])); ?>
                                 <?php echo $is_overdue ? '(Overdue)' : ''; ?>
                             <?php else: ?>
-                                <i class="fa-solid fa-infinity me-1"></i> No Due Date
+                                <i class="fa-solid fa-infinity me-1"></i> Open repayment
                             <?php endif; ?>
                         </div>
 
-                        <div class="btn-group">
+                        <div class="d-flex gap-1">
                             <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
                                 <?php if ($r['status'] == 'Pending'): ?>
-                                    <button type="button" class="btn btn-sm btn-success"
-                                        onclick="openPayModal(<?php echo $r['id']; ?>, '<?php echo htmlspecialchars($r['borrower_name']); ?>')">
+                                    <button type="button" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm hover-lift"
+                                        data-onclick="openPayModal" data-args="<?php echo Html::args((int) $r['id'], $r['borrower_name']); ?>">
                                         <i class="fa-solid fa-check"></i> Paid
                                     </button>
                                 <?php endif; ?>
-                                <button type="button" class="btn btn-sm btn-outline-danger border-0"
-                                    onclick="openDeleteModal(<?php echo $r['id']; ?>, '<?php echo addslashes(htmlspecialchars($r['borrower_name'])); ?>', '<?php echo number_format($r['amount'], 2); ?>', '<?php echo $curr; ?>')">
+                                <button type="button" class="btn btn-sm btn-outline-secondary border-0 rounded-circle hover-lift"
+                                    data-onclick="openEditModal" data-args="<?php echo Html::args((int) $r['id'], $r['borrower_name'], $r['amount'], $curr, $r['lent_date'], $r['due_date'] ?? '', $r['notes'] ?? ''); ?>"
+                                    style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;">
+                                    <i class="fa-solid fa-pen"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger border-0 rounded-circle hover-lift"
+                                    data-onclick="openDeleteModal" data-args="<?php echo Html::args((int) $r['id'], $r['borrower_name'], number_format($r['amount'], 2), $curr); ?>"
+                                    style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;">
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
                             <?php else: ?>
-                                <i class="fa-solid fa-lock text-muted small" title="Read Only"></i>
+                                <span class="badge bg-light text-muted"><i class="fa-solid fa-lock me-1"></i> Locked</span>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -288,59 +328,120 @@ $summary = $stmt->fetch();
 <!-- Add Modal -->
 <div class="modal fade" id="addLendingModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content glass-panel border-0">
-            <div class="modal-header border-0">
-                <h5 class="modal-title fw-bold">Add Lending Record</h5>
+        <div class="modal-content glass-panel-premium border-0 shadow-lg p-0">
+            <div class="modal-header border-bottom border-light p-4">
+                <h5 class="modal-title fw-bold text-dark">Add Lending Entry</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body p-4">
                 <form method="POST">
                     <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="add_lending">
 
                     <div class="mb-3">
-                        <label for="borrowerName" class="form-label">Borrower Name <span
-                                class="text-danger">*</span></label>
-                        <input type="text" name="borrower_name" id="borrowerName" class="form-control"
+                        <label for="borrowerName" class="form-label fw-bold text-muted small">Borrower Name <span class="text-danger">*</span></label>
+                        <input type="text" name="borrower_name" id="borrowerName" class="form-control rounded-pill px-3"
                             placeholder="e.g. John Doe" required>
                     </div>
 
-                    <div class="row g-2 mb-3">
+                    <div class="row g-3 mb-3">
                         <div class="col-4">
-                            <label for="lendingCurrency" class="form-label">Currency</label>
-                            <select name="currency" id="lendingCurrency" class="form-select">
+                            <label for="lendingCurrency" class="form-label fw-bold text-muted small">Currency</label>
+                            <select name="currency" id="lendingCurrency" class="form-select rounded-pill px-3">
                                 <option value="AED">AED</option>
                                 <option value="INR">INR</option>
                             </select>
                         </div>
                         <div class="col-8">
-                            <label for="lendingAmount" class="form-label">Amount <span
-                                    class="text-danger">*</span></label>
-                            <input type="number" step="0.01" name="amount" id="lendingAmount" class="form-control"
+                            <label for="lendingAmount" class="form-label fw-bold text-muted small">Amount <span class="text-danger">*</span></label>
+                            <input type="number" step="0.01" name="amount" id="lendingAmount" class="form-control rounded-pill px-3"
                                 placeholder="0.00" required>
                         </div>
                     </div>
 
                     <div class="mb-3">
-                        <label for="lentDate" class="form-label">Lent Date <span class="text-danger">*</span></label>
-                        <input type="date" name="lent_date" id="lentDate" class="form-control"
+                        <label for="lentDate" class="form-label fw-bold text-muted small">Lent Date <span class="text-danger">*</span></label>
+                        <input type="date" name="lent_date" id="lentDate" class="form-control rounded-pill px-3"
                             value="<?php echo date('Y-m-d'); ?>" required>
                     </div>
 
                     <div class="mb-3">
-                        <label for="dueDate" class="form-label">Expected Repayment Date (Optional)</label>
-                        <input type="date" name="due_date" id="dueDate" class="form-control">
-                        <div class="form-text">Leave empty if indefinite.</div>
+                        <label for="dueDate" class="form-label fw-bold text-muted small">Expected Repayment (Optional)</label>
+                        <input type="date" name="due_date" id="dueDate" class="form-control rounded-pill px-3">
                     </div>
 
-                    <div class="mb-3">
-                        <label for="lendingNotes" class="form-label">Notes</label>
-                        <textarea name="notes" id="lendingNotes" class="form-control" rows="2"
-                            placeholder="Any details..."></textarea>
+                    <div class="mb-4">
+                        <label for="lendingNotes" class="form-label fw-bold text-muted small">Notes / Description</label>
+                        <textarea name="notes" id="lendingNotes" class="form-control rounded-4 p-3" rows="2"
+                            placeholder="Reason or repayment agreements..."></textarea>
                     </div>
 
                     <div class="d-grid">
-                        <button type="submit" class="btn btn-primary fw-bold">Save Record</button>
+                        <button type="submit" class="btn btn-primary fw-bold py-2.5 rounded-pill shadow-sm hover-lift">
+                            Record Loan <i class="fa-solid fa-check ms-1"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editLendingModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content glass-panel-premium border-0 shadow-lg p-0">
+            <div class="modal-header border-bottom border-light p-4">
+                <h5 class="modal-title fw-bold text-dark">Edit Lending Entry</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
+                    <input type="hidden" name="action" value="edit_lending">
+                    <input type="hidden" name="id" id="editLendingId">
+
+                    <div class="mb-3">
+                        <label for="editBorrowerName" class="form-label fw-bold text-muted small">Borrower Name <span class="text-danger">*</span></label>
+                        <input type="text" name="borrower_name" id="editBorrowerName" class="form-control rounded-pill px-3"
+                            placeholder="e.g. John Doe" required>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-4">
+                            <label for="editLendingCurrency" class="form-label fw-bold text-muted small">Currency</label>
+                            <select name="currency" id="editLendingCurrency" class="form-select rounded-pill px-3">
+                                <option value="AED">AED</option>
+                                <option value="INR">INR</option>
+                            </select>
+                        </div>
+                        <div class="col-8">
+                            <label for="editLendingAmount" class="form-label fw-bold text-muted small">Amount <span class="text-danger">*</span></label>
+                            <input type="number" step="0.01" name="amount" id="editLendingAmount" class="form-control rounded-pill px-3"
+                                placeholder="0.00" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="editLentDate" class="form-label fw-bold text-muted small">Lent Date <span class="text-danger">*</span></label>
+                        <input type="date" name="lent_date" id="editLentDate" class="form-control rounded-pill px-3" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="editDueDate" class="form-label fw-bold text-muted small">Expected Repayment (Optional)</label>
+                        <input type="date" name="due_date" id="editDueDate" class="form-control rounded-pill px-3">
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="editLendingNotes" class="form-label fw-bold text-muted small">Notes / Description</label>
+                        <textarea name="notes" id="editLendingNotes" class="form-control rounded-4 p-3" rows="2"
+                            placeholder="Reason or repayment agreements..."></textarea>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary fw-bold py-2.5 rounded-pill shadow-sm hover-lift">
+                            Update Loan <i class="fa-solid fa-check ms-1"></i>
+                        </button>
                     </div>
                 </form>
             </div>
@@ -351,20 +452,20 @@ $summary = $stmt->fetch();
 <!-- Delete Confirmation Modal -->
 <div class="modal fade" id="deleteConfirmModal" tabindex="-1" style="z-index: 1060;">
     <div class="modal-dialog modal-dialog-centered modal-sm">
-        <div class="modal-content glass-panel border-0">
+        <div class="modal-content glass-panel-premium border-0 shadow-lg">
             <div class="modal-body text-center p-4">
-                <div class="mb-3 text-danger opacity-75">
-                    <i class="fa-solid fa-trash-can fa-3x"></i>
+                <div class="rounded-circle bg-danger bg-opacity-10 text-danger p-3 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                    <i class="fa-solid fa-trash fa-2x"></i>
                 </div>
-                <h5 class="fw-bold mb-2">Delete Record?</h5>
+                <h5 class="fw-bold mb-2 text-dark">Delete Record?</h5>
                 <p id="deleteLendingMsg" class="text-muted small mb-4">This action cannot be undone.</p>
                 <form method="POST">
                     <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="delete_lending">
                     <input type="hidden" name="id" id="deleteModalId">
-                    <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-danger fw-bold">Yes, Delete It</button>
-                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-light rounded-pill w-100 py-2" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger rounded-pill w-100 py-2">Delete</button>
                     </div>
                 </form>
             </div>
@@ -375,21 +476,20 @@ $summary = $stmt->fetch();
 <!-- Pay Confirmation Modal -->
 <div class="modal fade" id="payConfirmModal" tabindex="-1" style="z-index: 1060;">
     <div class="modal-dialog modal-dialog-centered modal-sm">
-        <div class="modal-content glass-panel border-0">
+        <div class="modal-content glass-panel-premium border-0 shadow-lg">
             <div class="modal-body text-center p-4">
-                <div class="mb-3 text-success opacity-75">
-                    <i class="fa-solid fa-circle-check fa-3x"></i>
+                <div class="rounded-circle bg-success bg-opacity-10 text-success p-3 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                    <i class="fa-solid fa-circle-check fa-2x"></i>
                 </div>
-                <h5 class="fw-bold mb-2">Mark as Paid?</h5>
-                <p class="text-muted small mb-4">Confirm that <span id="payModalName" class="fw-bold"></span> has
-                    returned the money.</p>
+                <h5 class="fw-bold mb-2 text-dark">Confirm Recovery?</h5>
+                <p class="text-muted small mb-4">Has <span id="payModalName" class="fw-bold text-dark"></span> fully returned this balance?</p>
                 <form method="POST">
                     <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <input type="hidden" name="action" value="mark_paid">
                     <input type="hidden" name="id" id="payModalId">
-                    <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-success fw-bold">Yes, Fully Paid</button>
-                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-light rounded-pill w-100 py-2" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success rounded-pill w-100 py-2">Mark Settled</button>
                     </div>
                 </form>
             </div>
@@ -397,24 +497,22 @@ $summary = $stmt->fetch();
     </div>
 </div>
 
-<?php Layout::footer(); ?>
-
 <!-- Bulk Action Floating Bar -->
 <div id="bulkActionBar"
-    class="position-fixed bottom-0 start-50 translate-middle-x mb-4 shadow-lg glass-panel p-3 d-none animate__animated animate__fadeInUp"
-    style="z-index: 1050; border-radius: 50px; min-width: 400px;">
-    <div class="d-flex align-items-center justify-content-between gap-4 px-2">
-        <div class="text-nowrap fw-bold">
-            <span id="selectedCount">0</span> Selected
+    class="position-fixed bottom-0 start-50 translate-middle-x mb-4 shadow-lg glass-panel-premium py-3 px-4 d-none animate__animated animate__fadeInUp"
+    style="z-index: 1050; border-radius: 50px; min-width: 420px; background: rgba(255,255,255,0.95); backdrop-filter: blur(16px); border: 1px solid rgba(0,0,0,0.1);">
+    <div class="d-flex align-items-center justify-content-between gap-4">
+        <div class="text-nowrap fw-bold text-dark">
+            <span id="selectedCount" class="badge bg-primary rounded-circle me-1" style="width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px;">0</span> Selected
         </div>
         <div class="d-flex gap-2">
-            <button class="btn btn-success btn-sm rounded-pill px-3" onclick="bulkAction('paid')">
-                <i class="fa-solid fa-check me-1"></i> Mark Paid
+            <button class="btn btn-success btn-sm rounded-pill px-3 shadow-sm hover-lift" data-onclick="bulkAction" data-args="<?php echo Html::args('paid'); ?>">
+                <i class="fa-solid fa-check me-1"></i> Settle Loans
             </button>
-            <button class="btn btn-danger btn-sm rounded-pill px-3" onclick="bulkAction('delete')">
+            <button class="btn btn-danger btn-sm rounded-pill px-3 shadow-sm hover-lift" data-onclick="bulkAction" data-args="<?php echo Html::args('delete'); ?>">
                 <i class="fa-solid fa-trash me-1"></i> Delete
             </button>
-            <button class="btn btn-link btn-sm text-muted" onclick="deselectAll()">Cancel</button>
+            <button class="btn btn-link btn-sm text-muted text-decoration-none" data-onclick="deselectAll">Cancel</button>
         </div>
     </div>
 </div>
@@ -455,7 +553,8 @@ $summary = $stmt->fetch();
         const checked = document.querySelectorAll('.row-checkbox:checked');
         if (checked.length === 0) return;
 
-        if (confirm(`Are you sure you want to ${type} ${checked.length} selected records?`)) {
+        const label = type === 'paid' ? 'mark as paid' : 'delete';
+        window.askConfirm(`Are you sure you want to ${label} ${checked.length} selected records?`, type === 'paid' ? 'Mark Paid' : 'Delete', function () {
             const form = document.getElementById('bulkActionForm');
             document.getElementById('bulkActionType').value = 'bulk_' + type + '_lending';
 
@@ -470,18 +569,41 @@ $summary = $stmt->fetch();
             });
 
             form.submit();
-        }
+        });
     }
 
     function openDeleteModal(id, name, amount, curr) {
         document.getElementById('deleteModalId').value = id;
-        document.getElementById('deleteLendingMsg').innerHTML = `Delete lending record for <strong>${name}</strong> (${curr} ${amount})? <br><span class="text-danger small">This cannot be undone.</span>`;
-        new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
+        const msg = document.getElementById('deleteLendingMsg');
+        msg.textContent = 'Delete lending record for ';
+        const strong = document.createElement('strong');
+        strong.textContent = name;
+        msg.appendChild(strong);
+        msg.appendChild(document.createTextNode(` (${curr} ${amount})?`));
+        msg.appendChild(document.createElement('br'));
+        const warn = document.createElement('span');
+        warn.className = 'text-danger small';
+        warn.textContent = 'This cannot be undone.';
+        msg.appendChild(warn);
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('deleteConfirmModal')).show();
     }
 
     function openPayModal(id, name) {
         document.getElementById('payModalId').value = id;
         document.getElementById('payModalName').innerText = name;
-        new bootstrap.Modal(document.getElementById('payConfirmModal')).show();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('payConfirmModal')).show();
+    }
+
+    function openEditModal(id, name, amount, curr, lentDate, dueDate, notes) {
+        document.getElementById('editLendingId').value = id;
+        document.getElementById('editBorrowerName').value = name;
+        document.getElementById('editLendingAmount').value = amount;
+        document.getElementById('editLendingCurrency').value = curr;
+        document.getElementById('editLentDate').value = lentDate;
+        document.getElementById('editDueDate').value = dueDate;
+        document.getElementById('editLendingNotes').value = notes;
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('editLendingModal')).show();
     }
 </script>
+
+<?php Layout::footer(); ?>

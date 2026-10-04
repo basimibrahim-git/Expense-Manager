@@ -4,6 +4,7 @@ require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
+use App\Helpers\Html;
 
 Bootstrap::init();
 Layout::header();
@@ -58,6 +59,19 @@ try {
     </div>
 </div>
 
+<?php if (isset($_GET['success'])): ?>
+    <div class="alert alert-success alert-dismissible fade show rounded-4" role="alert">
+        <i class="fa-solid fa-check-circle me-2"></i> <?php echo Html::e($_GET['success']); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+<?php endif; ?>
+<?php if (isset($_GET['error'])): ?>
+    <div class="alert alert-danger alert-dismissible fade show rounded-4" role="alert">
+        <i class="fa-solid fa-exclamation-circle me-2"></i> <?php echo Html::e($_GET['error']); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+<?php endif; ?>
+
 <?php if (empty($cards)): ?>
     <div class="text-center py-5 glass-panel">
         <div class="mb-3 text-muted" style="font-size: 3rem;">
@@ -74,113 +88,115 @@ try {
             $used = ($card['total_expenses'] ?: 0) - ($card['total_payments'] ?: 0);
             $limit = $card['limit_amount'] ?: 0;
             $usage_pct = $limit > 0 ? min(($used / $limit) * 100, 100) : 0;
-            $usage_color = 'danger';
-            if ($usage_pct < 50) {
-                $usage_color = 'success';
-            } elseif ($usage_pct < 85) {
-                $usage_color = 'warning';
+            
+            // Usage bar color logic
+            $usage_color_class = 'bg-success';
+            if ($usage_pct >= 85) {
+                $usage_color_class = 'bg-danger';
+            } elseif ($usage_pct >= 50) {
+                $usage_color_class = 'bg-warning text-dark';
             }
-
 
             $f4 = $card['first_four'] ?: '****';
             $l4 = $card['last_four'] ?: '****';
+            
+            // Dynamic premium background logic based on card network or level
+            $card_bg = "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)"; // Classic Slate Dark
+            if (stripos($card['tier'], 'Signature') !== false || stripos($card['tier'], 'Infinite') !== false || stripos($card['tier'], 'World') !== false) {
+                $card_bg = "linear-gradient(135deg, #1e1b4b 0%, #311042 100%)"; // Deep Royal Indigo-Purple
+            } elseif (stripos($card['tier'], 'Platinum') !== false) {
+                $card_bg = "linear-gradient(135deg, #334155 0%, #475569 100%)"; // Metallic Platinum
+            } elseif (stripos($card['card_type'], 'Debit') !== false) {
+                $card_bg = "linear-gradient(135deg, #064e3b 0%, #065f46 100%)"; // Emerald Green for debit
+            }
             ?>
             <div class="col-12 col-md-6 col-lg-4">
-                <!-- Card Action Wrapper -->
-                <div class="card border-0 shadow-sm text-white position-relative overflow-hidden"
-                    style="background: <?php echo !empty($card['card_image']) ? "linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('" . htmlspecialchars($card['card_image']) . "')" : "linear-gradient(45deg, #1e1e1e, #3a3a3a)"; ?>; background-size: cover; background-position: center; border-radius: 16px; min-height: 220px; transition: transform 0.2s;">
-
-                    <!-- Make card clickable -->
-                    <a href="view_card.php?id=<?php echo $card['id']; ?>" class="text-decoration-none text-white h-100 d-block"
-                        aria-label="View details for <?php echo htmlspecialchars($card['bank_name'] . ' ' . $card['card_name']); ?>">
-                        <div
-                            style="position: absolute; top: -20px; right: -20px; width: 100px; height: 100px; background: rgba(255,255,255,0.1); border-radius: 50%;">
-                        </div>
-                        <div
-                            style="position: absolute; bottom: -40px; left: -20px; width: 150px; height: 150px; background: rgba(255,255,255,0.05); border-radius: 50%;">
-                        </div>
-
-                        <div class="card-body d-flex flex-column justify-content-between p-4">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <h5 class="mb-0 fw-bold"><?php echo htmlspecialchars($card['bank_name']); ?></h5>
-                                    <small class="text-white-50"><?php echo htmlspecialchars($card['card_name']); ?></small>
-                                </div>
+                <div class="glass-panel-premium p-4 h-100 d-flex flex-column justify-content-between hover-lift shadow-sm">
+                    <!-- Physical Mockup Area -->
+                    <div class="d-flex justify-content-center mb-4">
+                        <div class="credit-card-mockup" style="background: <?php echo $card_bg; ?>;">
+                            <div class="credit-card-brand">
                                 <?php if ($card['network'] == 'Visa'): ?>
-                                    <i class="fa-brands fa-cc-visa fa-2x"></i>
+                                    <i class="fa-brands fa-cc-visa"></i>
                                 <?php elseif ($card['network'] == 'Mastercard'): ?>
-                                    <i class="fa-brands fa-cc-mastercard fa-2x"></i>
+                                    <i class="fa-brands fa-cc-mastercard"></i>
                                 <?php else: ?>
-                                    <i class="fa-brands fa-cc-amex fa-2x"></i>
+                                    <i class="fa-brands fa-cc-amex"></i>
                                 <?php endif; ?>
                             </div>
-
-                            <div class="mt-3">
-                                <div class="h5 mb-1" style="letter-spacing: 2px; font-family: monospace;">
-                                    <?php echo $f4; ?> **** **** <?php echo $l4; ?>
-                                </div>
-                                <small class="text-white-50"><?php echo htmlspecialchars($card['tier']); ?></small>
+                            <div class="credit-card-chip"></div>
+                            <div class="credit-card-number">
+                                <?php echo Html::e($f4); ?> **** **** <?php echo Html::e($l4); ?>
                             </div>
-
-                            <div class="mt-3">
-                                <div class="d-flex justify-content-between small mb-1">
-                                    <span class="text-white-50">Monthly Usage</span>
-                                    <span class="fw-bold text-<?php echo $usage_color; ?>">
-                                        <?php echo number_format($usage_pct, 1); ?>%
+                            <div class="d-flex justify-content-between align-items-end mt-2">
+                                <div>
+                                    <div class="credit-card-holder mb-0" style="font-size: 0.85rem; font-weight: 600; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
+                                        <?php echo Html::e($card['card_name']); ?>
+                                    </div>
+                                    <small style="font-size: 0.65rem; opacity: 0.7; letter-spacing: 0.5px; text-transform: uppercase;">
+                                        <?php echo Html::e($card['bank_name']); ?>
+                                    </small>
+                                </div>
+                                <div class="text-end">
+                                    <span style="font-size: 0.6rem; opacity: 0.7; display: block;">TIER</span>
+                                    <span class="fw-bold" style="font-size: 0.75rem; letter-spacing: 0.5px; opacity: 0.9; text-transform: uppercase;">
+                                        <?php echo Html::e($card['tier'] ?: 'Standard'); ?>
                                     </span>
-                                </div>
-                                <div class="progress-wrapper mb-2">
-                                    <progress class="w-100" value="<?php echo min($usage_pct, 100); ?>" max="100"
-                                        title="<?php echo number_format($usage_pct, 1); ?>% usage"></progress>
-                                </div>
-                                <div class="d-flex justify-content-between mt-2 align-items-end">
-                                    <div class="lh-1">
-                                        <small class="text-white-50 x-small d-block mb-1">Spent / Limit</small>
-                                        <span class="fw-bold small">
-                                            AED <?php echo number_format($used, 2); ?> / <?php echo number_format($limit, 2); ?>
-                                        </span>
-                                    </div>
-                                    <div class="d-flex gap-1">
-                                        <?php if (!empty($card['fee_type'])): ?>
-                                            <span
-                                                class="badge bg-warning text-dark small"><?php echo htmlspecialchars($card['fee_type']); ?></span>
-                                        <?php endif; ?>
-                                        <span
-                                            class="badge bg-white text-dark small"><?php echo htmlspecialchars($card['card_type']); ?></span>
-                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </a>
-                </div>
+                    </div>
 
-                <!-- Card Actions -->
-                <div class="mt-2 d-flex justify-content-end gap-2 flex-wrap">
-                    <?php if (!empty($card['bank_url'])): ?>
-                        <a href="<?php echo htmlspecialchars($card['bank_url']); ?>" target="_blank"
-                            class="btn btn-sm btn-outline-primary" title="Visit Bank Site">
-                            <i class="fa-solid fa-external-link-alt"></i> Bank
-                        </a>
-                    <?php endif; ?>
-                    <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-                        <a href="pay_card.php?card_id=<?php echo $card['id']; ?>" class="btn btn-sm btn-success text-white">
-                            <i class="fa-solid fa-receipt me-1"></i> Pay
-                        </a>
-                        <a href="edit_card.php?id=<?php echo $card['id']; ?>" class="btn btn-sm btn-light text-muted" title="Edit">
-                            <i class="fa-solid fa-pen"></i>
-                        </a>
-                        <form action="card_actions.php" method="POST" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
-                            <input type="hidden" name="action" value="delete_card">
-                            <input type="hidden" name="id" value="<?php echo $card['id']; ?>">
-                            <button type="submit" class="btn btn-sm btn-light text-danger" title="Delete"
-                                onclick="return confirmSubmit(this, 'Delete <?php echo addslashes(htmlspecialchars($card['bank_name'] . ' ' . $card['card_name'])); ?>? (This will permanently remove card details)');">
-                                <i class="fa-solid fa-trash"></i>
-                            </button>
-                        </form>
-                    <?php else: ?>
-                        <span class="text-muted small align-self-center"><i class="fa-solid fa-lock me-1"></i> Read Only</span>
-                    <?php endif; ?>
+                    <!-- Usage Details -->
+                    <div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted small fw-bold text-uppercase">Card Utilization</span>
+                            <span class="badge rounded-pill <?php echo $usage_pct >= 85 ? 'bg-danger' : ($usage_pct >= 50 ? 'bg-warning text-dark' : 'bg-success'); ?> small">
+                                <?php echo number_format($usage_pct, 1); ?>%
+                            </span>
+                        </div>
+                        <div class="progress mb-3" style="height: 6px;">
+                            <div class="progress-bar <?php echo $usage_color_class; ?>" role="progressbar" style="width: <?php echo min($usage_pct, 100); ?>%;"></div>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-3">
+                            <div>
+                                <span class="text-muted small d-block mb-1">Spent / Outstanding</span>
+                                <span class="fw-bold text-dark blur-sensitive">AED <?php echo number_format($used, 2); ?></span>
+                            </div>
+                            <div class="text-end">
+                                <span class="text-muted small d-block mb-1">Total Credit Limit</span>
+                                <span class="fw-bold text-secondary blur-sensitive">AED <?php echo number_format($limit, 2); ?></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card Actions -->
+                    <div class="d-flex gap-2 justify-content-end pt-3 border-top">
+                        <?php if (!empty($card['bank_url']) && preg_match('#^https?://#i', $card['bank_url'])): ?>
+                            <a href="<?php echo Html::e($card['bank_url']); ?>" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary rounded-pill px-3" title="Visit Bank Site">
+                                <i class="fa-solid fa-external-link-alt"></i> Bank
+                            </a>
+                        <?php endif; ?>
+                        <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                            <a href="pay_card.php?card_id=<?php echo (int) $card['id']; ?>" class="btn btn-sm btn-success text-white rounded-pill px-3">
+                                <i class="fa-solid fa-receipt me-1"></i> Pay
+                            </a>
+                            <a href="edit_card.php?id=<?php echo (int) $card['id']; ?>" class="btn btn-sm btn-light text-muted rounded-pill px-3" title="Edit">
+                                <i class="fa-solid fa-pen"></i>
+                            </a>
+                            <form action="card_actions.php" method="POST" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
+                                <input type="hidden" name="action" value="delete_card">
+                                <input type="hidden" name="id" value="<?php echo (int) $card['id']; ?>">
+                                <button type="submit" class="btn btn-sm btn-light text-danger rounded-pill px-3" title="Delete" data-confirm="<?php echo Html::e('Delete ' . $card['bank_name'] . ' ' . $card['card_name'] . '?'); ?>">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </form>
+                        <?php else: ?>
+                            <span class="text-muted small align-self-center"><i class="fa-solid fa-lock me-1"></i> Read Only</span>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
         <?php endforeach; ?>

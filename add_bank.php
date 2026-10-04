@@ -4,6 +4,7 @@ require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
+use App\Helpers\Html;
 
 Bootstrap::init();
 
@@ -11,85 +12,107 @@ Layout::header();
 Layout::sidebar();
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <a href="my_banks.php" class="text-decoration-none text-muted small">
-            <i class="fa-solid fa-arrow-left"></i> Back to Banks
+<div class="container-fluid py-4">
+    <!-- Back and Header -->
+    <div class="mb-4">
+        <a href="my_banks.php" class="btn btn-sm btn-light rounded-pill px-3 shadow-sm mb-2 hover-lift">
+            <i class="fa-solid fa-arrow-left me-1"></i> Back to Banks
         </a>
-        <h1 class="h3 fw-bold mb-0">Add Bank Account</h1>
+        <h1 class="h3 fw-bold mb-1 text-dark">Add Bank Account</h1>
+        <p class="text-muted mb-0">Connect a new bank account to track balances and cash flows</p>
     </div>
-</div>
 
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="glass-panel p-4">
-            <form action="bank_actions.php" method="POST">
-                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
-                <input type="hidden" name="action" value="add_bank">
+    <?php if (isset($_GET['error'])): ?>
+        <div class="alert alert-danger alert-dismissible fade show rounded-4" role="alert">
+            <i class="fa-solid fa-exclamation-circle me-2"></i> <?php echo Html::e($_GET['error']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
 
-                <div class="mb-3">
-                    <label for="bank_name" class="form-label">Bank Name <span class="text-danger">*</span></label>
-                    <input type="text" name="bank_name" id="bank_name" class="form-control form-control-lg"
-                        placeholder="e.g. Emirates NBD, ADCB, FAB..." required autofocus>
-                </div>
+    <?php if (isset($_GET['success'])): ?>
+        <div class="alert alert-success alert-dismissible fade show rounded-4" role="alert">
+            <i class="fa-solid fa-check-circle me-2"></i> <?php echo Html::e($_GET['success']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
 
-                <div class="mb-3">
-                    <label for="account_type" class="form-label">Account Type</label>
-                    <select name="account_type" id="account_type" class="form-select">
-                        <option value="Current">Current Account</option>
-                        <option value="Savings">Savings Account</option>
-                        <option value="Salary">Salary Account</option>
-                    </select>
-                </div>
+    <div class="row justify-content-center">
+        <div class="col-lg-6 col-md-8">
+            <div class="glass-panel-premium p-4 shadow-sm">
+                <form action="bank_actions.php" method="POST">
+                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
+                    <input type="hidden" name="action" value="add_bank">
 
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="account_number" class="form-label">Account Number</label>
-                        <input type="text" name="account_number" id="account_number" class="form-control"
-                            placeholder="Optional">
+                    <!-- Bank Name -->
+                    <div class="mb-3">
+                        <label for="bank_name" class="form-label fw-bold text-muted small">Bank Name <span class="text-danger">*</span></label>
+                        <input type="text" name="bank_name" id="bank_name" class="form-control rounded-pill px-3"
+                            placeholder="e.g. Emirates NBD, ADCB, FAB, Mashreq..." required autofocus>
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <label for="iban" class="form-label">IBAN</label>
-                        <input type="text" name="iban" id="iban" class="form-control" placeholder="Optional">
+
+                    <!-- Account Type -->
+                    <div class="mb-3">
+                        <label for="account_type" class="form-label fw-bold text-muted small">Account Type</label>
+                        <select name="account_type" id="account_type" class="form-select rounded-pill px-3">
+                            <option value="Current">Current Account</option>
+                            <option value="Savings">Savings Account</option>
+                            <option value="Salary">Salary Account</option>
+                        </select>
                     </div>
-                </div>
 
-                <div class="mb-3">
-                    <label for="currency" class="form-label">Currency</label>
-                    <select name="currency" id="currency" class="form-select">
-                        <option value="AED">AED - UAE Dirham</option>
-                        <option value="USD">USD - US Dollar</option>
-                        <option value="EUR">EUR - Euro</option>
-                        <option value="GBP">GBP - British Pound</option>
-                        <option value="INR">INR - Indian Rupee</option>
-                    </select>
-                </div>
-
-                <div class="mb-3">
-                    <label for="notes" class="form-label">Notes</label>
-                    <textarea name="notes" id="notes" class="form-control" rows="2"
-                        placeholder="Optional notes..."></textarea>
-                </div>
-
-                <div class="mb-4 p-3 bg-primary bg-opacity-10 rounded border border-primary">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="is_default" id="isDefault" value="1">
-                        <label class="form-check-label fw-bold text-primary" for="isDefault">
-                            <i class="fa-solid fa-star me-1"></i> Set as Default Bank
-                        </label>
-                        <div class="form-text x-small">Pre-selected when adding income to balance</div>
+                    <!-- Details Row -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="account_number" class="form-label fw-bold text-muted small">Account Number</label>
+                            <input type="text" name="account_number" id="account_number" class="form-control rounded-pill px-3"
+                                placeholder="Last 4 digits or full number">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="iban" class="form-label fw-bold text-muted small">IBAN</label>
+                            <input type="text" name="iban" id="iban" class="form-control rounded-pill px-3" placeholder="Optional IBAN">
+                        </div>
                     </div>
-                </div>
 
-                <div class="d-grid">
-                    <button type="submit" class="btn btn-primary py-3 fw-bold">
-                        <i class="fa-solid fa-save me-2"></i> Save Bank Account
-                    </button>
-                </div>
-            </form>
+                    <!-- Currency -->
+                    <div class="mb-3">
+                        <label for="currency" class="form-label fw-bold text-muted small">Base Currency</label>
+                        <select name="currency" id="currency" class="form-select rounded-pill px-3">
+                            <option value="AED">AED - UAE Dirham</option>
+                            <option value="USD">USD - US Dollar</option>
+                            <option value="EUR">EUR - Euro</option>
+                            <option value="GBP">GBP - British Pound</option>
+                            <option value="INR">INR - Indian Rupee</option>
+                        </select>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="mb-3">
+                        <label for="notes" class="form-label fw-bold text-muted small">Notes / Description</label>
+                        <textarea name="notes" id="notes" class="form-control rounded-4 p-3" rows="2"
+                            placeholder="Optional notes or description..."></textarea>
+                    </div>
+
+                    <!-- Default flag checkbox widget -->
+                    <div class="mb-4 p-3 bg-light rounded-4 border border-light">
+                        <div class="form-check d-flex align-items-center gap-2">
+                            <input class="form-check-input mt-0" type="checkbox" name="is_default" id="isDefault" value="1" style="width: 18px; height: 18px; border-radius: 4px;">
+                            <label class="form-check-label fw-bold text-primary mb-0" for="isDefault">
+                                <i class="fa-solid fa-star me-1 text-warning"></i> Set as Default Account
+                            </label>
+                        </div>
+                        <div class="form-text text-muted x-small mt-1 ps-4">This bank will be automatically pre-selected when logging new transactions.</div>
+                    </div>
+
+                    <!-- Submit -->
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg fw-bold rounded-pill shadow-sm hover-lift py-2.5">
+                            Save Bank Account <i class="fa-solid fa-check ms-1"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 </div>
 
 <?php Layout::footer(); ?>
-// Structural Audit Complete

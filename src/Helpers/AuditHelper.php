@@ -25,9 +25,16 @@ class AuditHelper
             return false;
         }
 
+        return self::logFor($pdo, (int) $_SESSION['user_id'], $_SESSION['tenant_id'] ?? null, $action, $context);
+    }
+
+    /**
+     * Logs an action for an explicit user — for flows without a session
+     * (failed logins, password reset).
+     */
+    public static function logFor(PDO $pdo, int $userId, $tenantId, string $action, $context = null): bool
+    {
         try {
-            $userId = $_SESSION['user_id'];
-            $tenantId = $_SESSION['tenant_id'] ?? null;
             $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
             $ua = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
 

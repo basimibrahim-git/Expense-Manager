@@ -1,261 +1,305 @@
-﻿<?php
+<?php
 $page_title = "Monthly Sadaqa";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
+use App\Helpers\Html;
 use App\Helpers\Layout;
 
 Bootstrap::init();
 
-// Handle Actions (Add/Delete)
+// Categories offered in the add/edit modals (anything else is stored as "General").
+$sadaqa_categories = ['General', 'Masjid', 'Education', 'Poor/Needy', 'Family', 'Emergency'];
+
+/**
+ * Returns the date string when it is a real Y-m-d calendar date, otherwise null.
+ */
+function sadaqa_valid_date(string $date): ?string
+{
+    $d = DateTime::createFromFormat('!Y-m-d', $date);
+    return ($d && $d->format('Y-m-d') === $date && (int) $d->format('Y') >= 2000 && (int) $d->format('Y') <= 2100) ? $date : null;
+}
+
+// Handle Actions (Add/Edit/Delete) — records live in sadaqa_tracker (same table as the yearly view and the export)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
+    $month = filter_var($_POST['month'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]) ?: (int) date('n');
+    $year  = filter_var($_POST['year'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]) ?: (int) date('Y');
+    $back  = "monthly_sadaqa.php?month=" . (int) $month . "&year=" . (int) $year;
+
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        header("Location: monthly_sadaqa.php?error=Unauthorized: Read-only access");
+        header("Location: $back&error=" . urlencode('Unauthorized: Read-only access'));
         exit();
     }
 
-    if (isset($_POST['action'])) {
-        if ($_POST['action'] == 'add_sadaqa') {
-            $month = $_POST['month'];
-            $year = $_POST['year'];
-            $title = $_POST['title'];
-            $amount = $_POST['amount'];
-            $category = $_POST['category'] ?? 'General';
-            $date = date('Y-m-d');
+    $action = $_POST['action'] ?? '';
 
-            $stmt = $pdo->prepare("INSERT INTO monthly_sadaqa (tenant_id, month, year, title, amount, category, record_date) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$_SESSION['tenant_id'], $month, $year, $title, $amount, $category, $date]);
+    if ($action === 'add_sadaqa' || $action === 'edit_sadaqa') {
+        $title    = trim((string) ($_POST['title'] ?? ''));
+        $amount   = filter_var($_POST['amount'] ?? null, FILTER_VALIDATE_FLOAT);
+        $category = in_array($_POST['category'] ?? '', $sadaqa_categories, true) ? $_POST['category'] : 'General';
+        $date     = sadaqa_valid_date((string) ($_POST['sadaqa_date'] ?? ''));
 
-            AuditHelper::log($pdo, 'add_sadaqa', "Added sadaqa: $title (AED $amount)");
-            header("Location: monthly_sadaqa.php?month=$month&year=$year&success=Sadaqa added");
-            exit();
-        } elseif ($_POST['action'] == 'delete_sadaqa') {
-            $id = $_POST['id'];
-            $month = $_POST['month'];
-            $year = $_POST['year'];
-
-            $stmt = $pdo->prepare("DELETE FROM monthly_sadaqa WHERE id = ? AND tenant_id = ?");
-            $stmt->execute([$id, $_SESSION['tenant_id']]);
-
-            AuditHelper::log($pdo, 'delete_sadaqa', "Deleted sadaqa ID: $id");
-            header("Location: monthly_sadaqa.php?month=$month&year=$year&success=Sadaqa deleted");
+        if ($title === '' || mb_strlen($title) > 255 || $amount === false || $amount <= 0 || $amount > 99999999.99 || $date === null) {
+            header("Location: $back&error=" . urlencode('Please enter a description, an amount greater than zero and a valid date.'));
             exit();
         }
+
+        // Show the month the entry was saved in
+        $back = "monthly_sadaqa.php?month=" . (int) date('n', strtotime($date)) . "&year=" . (int) date('Y', strtotime($date));
+
+        if ($action === 'add_sadaqa') {
+            $stmt = $pdo->prepare("INSERT INTO sadaqa_tracker (user_id, tenant_id, title, amount, category, sadaqa_date) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $title, $amount, $category, $date]);
+
+            AuditHelper::log($pdo, 'add_sadaqa', "Added sadaqa: $title (AED $amount)");
+            header("Location: $back&success=" . urlencode('Sadaqa added'));
+            exit();
+        }
+
+        $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($id) {
+            $stmt = $pdo->prepare("UPDATE sadaqa_tracker SET title = ?, amount = ?, category = ?, sadaqa_date = ? WHERE id = ? AND tenant_id = ?");
+            $stmt->execute([$title, $amount, $category, $date, $id, $_SESSION['tenant_id']]);
+            AuditHelper::log($pdo, 'edit_sadaqa', "Updated sadaqa ID: $id");
+        }
+        header("Location: $back&success=" . urlencode('Sadaqa updated'));
+        exit();
     }
+
+    if ($action === 'delete_sadaqa') {
+        $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($id) {
+            $stmt = $pdo->prepare("DELETE FROM sadaqa_tracker WHERE id = ? AND tenant_id = ?");
+            $stmt->execute([$id, $_SESSION['tenant_id']]);
+            AuditHelper::log($pdo, 'delete_sadaqa', "Deleted sadaqa ID: $id");
+        }
+        header("Location: $back&success=" . urlencode('Sadaqa deleted'));
+        exit();
+    }
+
+    header("Location: $back");
+    exit();
 }
+
+$month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]) ?: (int) date('n');
+$year  = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]) ?: (int) date('Y');
+
+// Default date for a new entry: today when viewing the current month, otherwise the 1st of the viewed month
+$default_date = ($month === (int) date('n') && $year === (int) date('Y')) ? date('Y-m-d') : sprintf('%04d-%02d-01', $year, $month);
 
 Layout::header();
 Layout::sidebar();
 
-$month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT) ?? date('n');
-$year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
-
 // Fetch Records
-$stmt = $pdo->prepare("SELECT * FROM monthly_sadaqa WHERE tenant_id = ? AND month = ? AND year = ? ORDER BY record_date ASC");
+$stmt = $pdo->prepare("SELECT id, title, amount, category, sadaqa_date FROM sadaqa_tracker WHERE tenant_id = ? AND MONTH(sadaqa_date) = ? AND YEAR(sadaqa_date) = ? ORDER BY sadaqa_date ASC, id ASC");
 $stmt->execute([$_SESSION['tenant_id'], $month, $year]);
 $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $total_sadaqa = array_sum(array_column($records, 'amount'));
+$can_edit = ($_SESSION['permission'] ?? 'edit') !== 'read_only';
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h1 class="h3 fw-bold mb-1">Sadaqa Tracker</h1>
-        <p class="text-muted mb-0">Track charitable donations for
-            <?php echo date('F Y', mktime(0, 0, 0, $month, 1, $year)); ?>
-        </p>
-    </div>
-    <div class="d-flex gap-2">
-        <form class="d-flex gap-2 me-2" method="GET">
-            <select name="month" class="form-select form-select-sm">
-                <?php for ($m = 1; $m <= 12; $m++): ?>
-                    <option value="<?php echo $m; ?>" <?php echo $month == $m ? 'selected' : ''; ?>>
-                        <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
-                    </option>
-                <?php endfor; ?>
-            </select>
-            <select name="year" class="form-select form-select-sm">
-                <?php for ($y = date('Y') - 1; $y <= date('Y') + 1; $y++): ?>
-                    <option value="<?php echo $y; ?>" <?php echo $year == $y ? 'selected' : ''; ?>>
-                        <?php echo $y; ?>
-                    </option>
-                <?php endfor; ?>
-            </select>
-            <button type="submit" class="btn btn-sm btn-light border">Go</button>
-        </form>
-        <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-            <button class="btn btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#addSadaqaModal">
-                <i class="fa-solid fa-plus me-2"></i> Add Sadaqa
-            </button>
-        <?php endif; ?>
-    </div>
-</div>
+<div class="container-fluid py-4">
+    <?php if (!empty($_GET['success'])): ?>
+        <div class="alert alert-success alert-dismissible fade show rounded-4" role="alert">
+            <?php echo Html::e($_GET['success']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    <?php endif; ?>
+    <?php if (!empty($_GET['error'])): ?>
+        <div class="alert alert-danger alert-dismissible fade show rounded-4" role="alert">
+            <?php echo Html::e($_GET['error']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    <?php endif; ?>
 
-<div class="row g-4 mb-4">
-    <div class="col-md-4">
-        <div class="glass-panel p-4 h-100 border-start border-4 border-success">
-            <h6 class="text-muted fw-bold text-uppercase small mb-2">Total Sadaqa</h6>
-            <h3 class="fw-bold text-success mb-0">AED <span class="blur-sensitive">
-                    <?php echo number_format($total_sadaqa, 2); ?>
-                </span></h3>
-            <p class="text-muted small mb-0 mt-2">Personal donations for this month</p>
+    <!-- Header row with Filter -->
+    <div class="row align-items-center mb-4 g-3">
+        <div class="col-md-6">
+            <h1 class="h3 fw-bold mb-1 text-dark">Sadaqa Logs</h1>
+            <p class="text-muted mb-0">Donations for <strong><?php echo date('F Y', mktime(0, 0, 0, $month, 1, $year)); ?></strong></p>
+        </div>
+        <div class="col-md-6">
+            <div class="d-flex gap-2 justify-content-md-end flex-wrap">
+                <form class="d-flex gap-2" method="GET">
+                    <select name="month" class="form-select rounded-pill px-3" style="max-width: 130px; border: 1px solid rgba(0,0,0,0.1);">
+                        <?php for ($m = 1; $m <= 12; $m++): ?>
+                            <option value="<?php echo $m; ?>" <?php echo $month == $m ? 'selected' : ''; ?>>
+                                <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
+                            </option>
+                        <?php endfor; ?>
+                    </select>
+                    <select name="year" class="form-select rounded-pill px-3" style="max-width: 110px; border: 1px solid rgba(0,0,0,0.1);">
+                        <?php for ($y = min($year, (int) date('Y') - 1); $y <= max($year, (int) date('Y') + 1); $y++): ?>
+                            <option value="<?php echo $y; ?>" <?php echo $year == $y ? 'selected' : ''; ?>>
+                                <?php echo $y; ?>
+                            </option>
+                        <?php endfor; ?>
+                    </select>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 shadow-sm">
+                        Filter
+                    </button>
+                </form>
+                <?php if ($can_edit): ?>
+                    <button class="btn btn-success fw-bold rounded-pill px-4 shadow-sm hover-lift" data-bs-toggle="modal" data-bs-target="#addSadaqaModal">
+                        <i class="fa-solid fa-plus me-1"></i> Add Entry
+                    </button>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Widgets -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            <div class="glass-panel-premium p-4 h-100 hover-lift position-relative overflow-hidden" style="border-left: 4px solid #10b981 !important;">
+                <div class="position-absolute end-0 top-50 translate-middle-y me-4 opacity-10">
+                    <i class="fa-solid fa-heart fa-4x text-success"></i>
+                </div>
+                <h6 class="text-muted fw-bold text-uppercase small mb-2">Total Sadaqa Given</h6>
+                <h3 class="fw-bold text-success mb-1">
+                    <small class="fs-6 text-muted">AED</small>
+                    <span class="blur-sensitive"><?php echo number_format($total_sadaqa, 2); ?></span>
+                </h3>
+                <p class="text-muted small mb-0">Total voluntary charity logged for the period</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table Logs Container -->
+    <div class="glass-panel-premium p-0 overflow-hidden shadow-sm">
+        <div class="p-4 border-bottom border-light d-flex justify-content-between align-items-center">
+            <h5 class="fw-bold mb-0 text-dark">Donation Transactions</h5>
+            <span class="badge rounded-pill bg-light text-dark px-3 py-1 border"><?php echo count($records); ?> entries</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr class="text-uppercase text-muted small" style="border-bottom: 1px solid rgba(0,0,0,0.05);">
+                        <th class="ps-4 py-3">Description</th>
+                        <th class="py-3">Category</th>
+                        <th class="py-3">Amount</th>
+                        <th class="text-end pe-4 py-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($records)): ?>
+                        <tr>
+                            <td colspan="4" class="text-center py-5 text-muted">
+                                <i class="fa-solid fa-heart fa-3x mb-3 d-block opacity-20"></i>
+                                <span>No Sadaqa recorded for this period. Click "Add Entry" to begin tracking.</span>
+                            </td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($records as $r): ?>
+                            <tr style="border-bottom: 1px solid rgba(0,0,0,0.03);">
+                                <td class="ps-4 py-3">
+                                    <div class="d-flex align-items-center">
+                                        <div class="rounded-circle p-2 bg-success bg-opacity-10 text-success d-flex align-items-center justify-content-center me-3" style="width: 38px; height: 38px;">
+                                            <i class="fa-solid fa-heart-pulse"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold text-dark"><?php echo Html::e($r['title']); ?></div>
+                                            <small class="text-muted"><?php echo date('d M Y', strtotime($r['sadaqa_date'])); ?></small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge rounded-pill bg-light text-dark px-3 py-1 border">
+                                        <?php echo Html::e($r['category'] ?? 'General'); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="fw-bold text-success">
+                                        AED <?php echo number_format($r['amount'], 2); ?>
+                                    </span>
+                                </td>
+                                <td class="text-end pe-4">
+                                    <?php if ($can_edit): ?>
+                                        <div class="d-inline-flex gap-1">
+                                            <button type="button" class="btn btn-sm btn-outline-primary border-0 rounded-circle p-2 hover-lift"
+                                                    data-onclick="openEditSadaqa"
+                                                    data-args="<?php echo Html::args((int) $r['id'], $r['title'], $r['amount'], $r['category'] ?? 'General', $r['sadaqa_date']); ?>"
+                                                    style="width: 36px; height: 36px;" title="Edit">
+                                                <i class="fa-solid fa-pen"></i>
+                                            </button>
+                                            <form method="POST" class="d-inline"
+                                                  data-confirm="<?php echo Html::e('Delete "' . $r['title'] . '" (AED ' . number_format($r['amount'], 2) . ')? This cannot be undone.'); ?>">
+                                                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
+                                                <input type="hidden" name="action" value="delete_sadaqa">
+                                                <input type="hidden" name="month" value="<?php echo (int) $month; ?>">
+                                                <input type="hidden" name="year" value="<?php echo (int) $year; ?>">
+                                                <input type="hidden" name="id" value="<?php echo (int) $r['id']; ?>">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger border-0 rounded-circle p-2 hover-lift"
+                                                        style="width: 36px; height: 36px;" title="Delete">
+                                                    <i class="fa-solid fa-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    <?php else: ?>
+                                        <span class="badge bg-light text-muted"><i class="fa-solid fa-lock me-1"></i> Read Only</span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
 
-<div class="glass-panel p-0 overflow-hidden">
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="bg-light">
-                <tr>
-                    <th class="ps-4">Description</th>
-                    <th>Category</th>
-                    <th>Amount</th>
-                    <th class="text-end pe-4">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if (empty($records)): ?>
-                    <tr>
-                        <td colspan="4" class="text-center py-5 text-muted">
-                            <i class="fa-solid fa-heart fa-3x mb-3 d-block opacity-25"></i>
-                            No sadaqa entries recorded for this period.
-                        </td>
-                    </tr>
-                <?php else: ?>
-                    <?php foreach ($records as $r): ?>
-                        <tr>
-                            <td class="ps-4 fw-bold">
-                                <?php echo htmlspecialchars($r['title']); ?>
-                            </td>
-                            <td>
-                                <span class="badge bg-light text-dark border">
-                                    <?php echo htmlspecialchars($r['category'] ?? 'General'); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <span class="fw-bold text-success">AED
-                                    <?php echo number_format($r['amount'], 2); ?>
-                                </span>
-                            </td>
-                            <td class="text-end pe-4">
-                                <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-                                    <button class="btn btn-sm btn-outline-danger border-0"
-                                        onclick="confirmDelete(<?php echo $r['id']; ?>, '<?php echo addslashes(htmlspecialchars($r['title'])); ?>', '<?php echo $r['amount']; ?>')">
-                                        <i class="fa-solid fa-trash"></i>
-                                    </button>
-                                <?php else: ?>
-                                    <i class="fa-solid fa-lock text-muted small" title="Read Only"></i>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<!-- Add Sadaqa Modal -->
+<?php if ($can_edit): ?>
+<!-- Add / Edit Sadaqa Modal -->
 <div class="modal fade" id="addSadaqaModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content glass-panel border-0">
-            <div class="modal-header border-0">
-                <h5 class="modal-title fw-bold">Add New Sadaqa</h5>
+        <div class="modal-content glass-panel-premium border-0 shadow-lg p-0">
+            <div class="modal-header border-bottom border-light p-4">
+                <h5 class="modal-title fw-bold text-dark" id="sadaqaModalTitle">Add Voluntary Sadaqa</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <form method="POST">
+            <div class="modal-body p-4">
+                <form method="POST" id="sadaqaForm">
                     <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
-                    <input type="hidden" name="action" value="add_sadaqa">
-                    <input type="hidden" name="month" value="<?php echo $month; ?>">
-                    <input type="hidden" name="year" value="<?php echo $year; ?>">
+                    <input type="hidden" name="action" id="sadaqaAction" value="add_sadaqa">
+                    <input type="hidden" name="id" id="sadaqaId" value="">
+                    <input type="hidden" name="month" value="<?php echo (int) $month; ?>">
+                    <input type="hidden" name="year" value="<?php echo (int) $year; ?>">
 
                     <div class="mb-3">
-                        <label for="sadaqaTitle" class="form-label">Description <span
-                                class="text-danger">*</span></label>
-                        <input type="text" name="title" id="sadaqaTitle" class="form-control"
-                            placeholder="e.g. Masjid Donation" required>
+                        <label for="sadaqaTitle" class="form-label fw-bold text-muted small">Description <span class="text-danger">*</span></label>
+                        <input type="text" name="title" id="sadaqaTitle" class="form-control rounded-pill px-3"
+                            placeholder="e.g. Masjid Donation" maxlength="255" required>
                     </div>
                     <div class="mb-3">
-                        <label for="sadaqaCategory" class="form-label">Category</label>
-                        <select name="category" id="sadaqaCategory" class="form-select">
-                            <option value="General">General</option>
-                            <option value="Masjid">Masjid</option>
-                            <option value="Education">Education</option>
-                            <option value="Poor/Needy">Poor/Needy</option>
-                            <option value="Family">Family</option>
-                            <option value="Emergency">Emergency</option>
+                        <label for="sadaqaCategory" class="form-label fw-bold text-muted small">Category</label>
+                        <select name="category" id="sadaqaCategory" class="form-select rounded-pill px-3">
+                            <?php foreach ($sadaqa_categories as $cat): ?>
+                                <option value="<?php echo Html::e($cat); ?>"><?php echo Html::e($cat); ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label for="sadaqaAmount" class="form-label">Amount (AED) <span
-                                class="text-danger">*</span></label>
-                        <input type="number" step="0.01" name="amount" id="sadaqaAmount" class="form-control"
-                            placeholder="0.00" required>
+                        <label for="sadaqaDate" class="form-label fw-bold text-muted small">Date <span class="text-danger">*</span></label>
+                        <input type="date" name="sadaqa_date" id="sadaqaDate" class="form-control rounded-pill px-3"
+                            value="<?php echo Html::e($default_date); ?>" required>
                     </div>
-                    <div class="d-grid mt-4">
-                        <button type="submit" class="btn btn-primary fw-bold py-2">Save Sadaqa</button>
+                    <div class="mb-4">
+                        <label for="sadaqaAmount" class="form-label fw-bold text-muted small">Amount (AED) <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light text-muted border-end-0" style="border-top-left-radius: 20px; border-bottom-left-radius: 20px;">AED</span>
+                            <input type="number" step="0.01" min="0.01" name="amount" id="sadaqaAmount" class="form-control border-start-0"
+                                   placeholder="0.00" style="border-top-right-radius: 20px; border-bottom-right-radius: 20px;" required>
+                        </div>
                     </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Bulk Action Floating Bar -->
-<div id="bulkActionBar"
-    class="position-fixed bottom-0 start-50 translate-middle-x mb-4 glass-panel p-3 border shadow-lg d-none"
-    style="z-index: 1050; min-width: 400px;">
-    <div class="d-flex align-items-center justify-content-between">
-        <div class="me-3">
-            <span id="selectedCount" class="badge bg-primary rounded-pill me-2">0</span>
-            <span class="fw-bold">Selected</span>
-        </div>
-        <div class="d-flex gap-2">
-            <div class="dropdown">
-                <button class="btn btn-sm btn-outline-primary dropdown-toggle rounded-pill" type="button"
-                    data-bs-toggle="dropdown">
-                    Change Category
-                </button>
-                <ul class="dropdown-menu border-0 shadow">
-                    <li><button class="dropdown-item" type="button" onclick="submitBulkChange('Masjid')">Masjid</button>
-                    </li>
-                    <li><button class="dropdown-item" type="button"
-                            onclick="submitBulkChange('Poor/Needy')">Poor/Needy</button></li>
-                    <li><button class="dropdown-item" type="button" onclick="submitBulkChange('Family')">Family</button>
-                    </li>
-                    <li><button class="dropdown-item" type="button"
-                            onclick="submitBulkChange('General')">General</button></li>
-                </ul>
-            </div>
-            <button type="button" class="btn btn-sm btn-light rounded-pill px-3"
-                onclick="clearSelection()">Cancel</button>
-        </div>
-    </div>
-</div>
-
-<!-- Delete Confirmation Modal -->
-<div class="modal fade" id="deleteSadaqaModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-sm">
-        <div class="modal-content glass-panel border-0">
-            <div class="modal-body p-4 text-center">
-                <i class="fa-solid fa-circle-exclamation text-danger fa-3x mb-3"></i>
-                <h5 class="fw-bold mb-2">Delete Entry?</h5>
-                <p class="text-muted small" id="deleteSadaqaMsg"></p>
-                <form method="POST">
-                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
-                    <input type="hidden" name="action" value="delete_sadaqa">
-                    <input type="hidden" name="month" value="<?php echo $month; ?>">
-                    <input type="hidden" name="year" value="<?php echo $year; ?>">
-                    <input type="hidden" name="id" id="deleteSadaqaId">
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-light w-100" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-danger w-100">Delete</button>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary fw-bold py-2.5 rounded-pill shadow-sm hover-lift" id="sadaqaSubmitBtn">
+                            Save Sadaqa <i class="fa-solid fa-check ms-1"></i>
+                        </button>
                     </div>
                 </form>
             </div>
@@ -264,11 +308,28 @@ $total_sadaqa = array_sum(array_column($records, 'amount'));
 </div>
 
 <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
-    function confirmDelete(id, title, amount) {
-        document.getElementById('deleteSadaqaId').value = id;
-        document.getElementById('deleteSadaqaMsg').innerHTML = `Delete <strong>${title}</strong> (AED ${amount})? <br><span class="text-danger small">This cannot be undone.</span>`;
-        new bootstrap.Modal(document.getElementById('deleteSadaqaModal')).show();
+    const sadaqaDefaultDate = <?php echo Html::json($default_date); ?>;
+
+    function openEditSadaqa(id, title, amount, category, date) {
+        document.getElementById('sadaqaModalTitle').textContent = 'Edit Sadaqa';
+        document.getElementById('sadaqaAction').value = 'edit_sadaqa';
+        document.getElementById('sadaqaId').value = id;
+        document.getElementById('sadaqaTitle').value = title;
+        document.getElementById('sadaqaAmount').value = amount;
+        document.getElementById('sadaqaCategory').value = category;
+        document.getElementById('sadaqaDate').value = date;
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('addSadaqaModal')).show();
     }
+
+    // Reset the modal to "add" mode when it closes
+    document.getElementById('addSadaqaModal').addEventListener('hidden.bs.modal', function () {
+        document.getElementById('sadaqaForm').reset();
+        document.getElementById('sadaqaModalTitle').textContent = 'Add Voluntary Sadaqa';
+        document.getElementById('sadaqaAction').value = 'add_sadaqa';
+        document.getElementById('sadaqaId').value = '';
+        document.getElementById('sadaqaDate').value = sadaqaDefaultDate;
+    });
 </script>
+<?php endif; ?>
 
 <?php Layout::footer(); ?>

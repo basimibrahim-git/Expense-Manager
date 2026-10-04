@@ -1,8 +1,9 @@
-﻿<?php
+<?php
 $page_title = "Advanced Reports";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\Layout;
+use App\Helpers\Html;
 
 Bootstrap::init();
 
@@ -10,7 +11,7 @@ Layout::header();
 Layout::sidebar();
 
 $user_id = $_SESSION['user_id'];
-$year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT) ?? date('Y');
+$year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]) ?: (int) date('Y');
 $prev_year = $year - 1;
 
 // 1. Fetch YoY Category Data
@@ -210,17 +211,17 @@ foreach ($heatmap_month_dow as $row) {
     new Chart(yoyCtx, {
         type: 'bar',
         data: {
-            labels: <?php echo json_encode(array_column($yoy_data, 'category')); ?>,
+            labels: <?php echo Html::json(array_column($yoy_data, 'category')); ?>,
             datasets: [
                 {
-                    label: '<?php echo $prev_year; ?>',
-                    data: <?php echo json_encode(array_column($yoy_data, 'previous_year')); ?>,
+                    label: '<?php echo (int) $prev_year; ?>',
+                    data: <?php echo Html::json(array_column($yoy_data, 'previous_year')); ?>,
                     backgroundColor: 'rgba(108, 117, 125, 0.5)',
                     borderRadius: 4
                 },
                 {
-                    label: '<?php echo $year; ?>',
-                    data: <?php echo json_encode(array_column($yoy_data, 'current_year')); ?>,
+                    label: '<?php echo (int) $year; ?>',
+                    data: <?php echo Html::json(array_column($yoy_data, 'current_year')); ?>,
                     backgroundColor: 'rgba(13, 110, 253, 0.8)',
                     borderRadius: 4
                 }

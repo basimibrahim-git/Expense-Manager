@@ -2,7 +2,13 @@
 /**
  * Database Configuration
  */
-define('BASE_URL', '/expenses/');
+if (PHP_SAPI === 'cli') {
+    define('BASE_URL', '/expenses/');
+} else {
+    $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+    define('BASE_URL', (strpos($scriptName, '/expenses/') === 0) ? '/expenses/' : '/');
+}
+
 
 // Load .env variables
 $envFile = __DIR__ . '/.env';
@@ -19,7 +25,12 @@ if (file_exists($envFile)) {
         }
         $name = trim($parts[0]);
         $value = trim($parts[1]);
-        $value = trim($value, "\"'");
+        if ($value !== '' && ($value[0] === '"' || $value[0] === "'")) {
+            $value = trim($value, "\"'");
+        } else {
+            // Unquoted values may carry an inline comment: KEY=value   # comment
+            $value = trim(preg_replace('/\s+#.*$/', '', $value));
+        }
         if ($name === '') {
             continue;
         }
@@ -131,7 +142,7 @@ if (isset($_SESSION['user_id'])) {
         session_unset();
         session_destroy();
         if (PHP_SAPI !== 'cli' && !headers_sent()) {
-            header('Location: index.php?error=' . urlencode('Session expired'));
+            header('Location: ' . BASE_URL . 'index.php?error=' . urlencode('Session expired'));
             exit();
         }
     } else {
@@ -139,6 +150,35 @@ if (isset($_SESSION['user_id'])) {
     }
 }
 
+
+// Keep the session in sync with the account: role/permission changes made by an admin
+// apply immediately, and a password change, reset or revoke elsewhere signs this session out.
+if (isset($_SESSION['user_id'])) {
+    try {
+        $acctStmt = $pdo->prepare("SELECT name, role, permission, tenant_id, password FROM users WHERE id = ?");
+        $acctStmt->execute([$_SESSION['user_id']]);
+        $acct = $acctStmt->fetch();
+        $pwFingerprint = $acct ? hash('sha256', $acct['password']) : '';
+
+        if (!$acct || (isset($_SESSION['pw_fp']) && !hash_equals($_SESSION['pw_fp'], $pwFingerprint))) {
+            session_unset();
+            session_destroy();
+            if (PHP_SAPI !== 'cli' && !headers_sent()) {
+                header('Location: ' . BASE_URL . 'index.php?error=' . urlencode('Your password was changed. Please sign in again.'));
+                exit();
+            }
+        } else {
+            $_SESSION['pw_fp']      = $pwFingerprint;
+            $_SESSION['user_name']  = $acct['name'];
+            $_SESSION['role']       = $acct['role'];
+            $_SESSION['permission'] = $acct['permission'];
+            $_SESSION['tenant_id']  = $acct['tenant_id'];
+        }
+        unset($acctStmt, $acct, $pwFingerprint);
+    } catch (\PDOException $e) {
+        error_log("Session account check failed: " . $e->getMessage());
+    }
+}
 
 // Load Composer Autoloader
 require_once __DIR__ . '/autoload.php';
