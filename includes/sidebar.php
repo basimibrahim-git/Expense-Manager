@@ -57,7 +57,7 @@
 
         <!-- Tools & Analysis Group -->
         <?php
-        $tool_pages = ['reminders.php', 'search.php', 'reports_advanced.php'];
+        $tool_pages = ['expense_presets.php', 'reminders.php', 'search.php', 'reports_advanced.php'];
         $is_tools_active = in_array($current_page, $tool_pages);
         ?>
         <button type="button"
@@ -69,6 +69,10 @@
         </button>
         <div class="collapse <?php echo $is_tools_active ? 'show' : ''; ?>" id="toolsMenu">
             <div class="ps-3 border-start ms-3 border-2 mb-2">
+                <a href="<?php echo BASE_URL; ?>expense_presets.php"
+                    class="nav-link py-1 <?php echo $current_page == 'expense_presets.php' ? $activeClass : 'text-muted'; ?>">
+                    Saved Spends
+                </a>
                 <a href="<?php echo BASE_URL; ?>reminders.php"
                     class="nav-link py-1 <?php echo $current_page == 'reminders.php' ? $activeClass : 'text-muted'; ?>">
                     Reminders

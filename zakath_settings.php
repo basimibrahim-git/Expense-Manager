@@ -132,7 +132,7 @@ Layout::sidebar();
     <?php if (!empty($settings['_missing'])): ?>
         <div class="alert alert-warning rounded-4 border-0 shadow-sm">
             <i class="fa-solid fa-database me-2"></i>The Zakath database update hasn't been run yet
-            (migrations/2026_10_05_zakath.sql). Settings can't be saved until it is.
+            (migrations/2026_10_05_feature_release.sql). Settings can't be saved until it is.
         </div>
     <?php endif; ?>
 

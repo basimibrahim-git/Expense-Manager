@@ -111,7 +111,7 @@ function expenseReverseBalances(PDO $pdo, int $tenantId, int $userId, array $ids
     }
 }
 
-/** True once migrations/2026_10_05_family_split.sql has been run. Call outside a transaction. */
+/** True once migrations/2026_10_05_feature_release.sql has been run. Call outside a transaction. */
 function expenseSplitReady(PDO $pdo): bool
 {
     static $ready = null;

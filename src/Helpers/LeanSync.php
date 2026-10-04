@@ -8,7 +8,7 @@ use DomainException;
 
 /**
  * Open-banking sync between Lean (see LeanClient) and the app's tables:
- * lean_customers / lean_entities / lean_accounts / lean_transactions (migrations/2026_10_05_lean.sql).
+ * lean_customers / lean_entities / lean_accounts / lean_transactions (migrations/2026_10_05_feature_release.sql).
  *
  * - Balances: for every Lean account linked to a row in `banks`, an absolute snapshot is
  *   inserted into bank_balances (dated today) only when it differs from the latest one.

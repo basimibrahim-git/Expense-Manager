@@ -138,7 +138,7 @@ try {
     $eStmt->execute([$tenant_id, $start, $end, $tenant_id]);
     $month_expenses = $eStmt->fetchAll();
 } catch (PDOException $e) {
-    $ready = false; // migrations/2026_10_05_family_split.sql not run yet
+    $ready = false; // migrations/2026_10_05_feature_release.sql not run yet
     error_log('Family split load: ' . $e->getMessage());
 }
 
@@ -210,7 +210,7 @@ Layout::sidebar();
 <?php if (!$ready): ?>
     <div class="alert alert-warning border-0 rounded-4 shadow-sm">
         <i class="fa-solid fa-triangle-exclamation me-2"></i>
-        Family split is not set up yet. Run <code>migrations/2026_10_05_family_split.sql</code> in phpMyAdmin first.
+        Family split is not set up yet. Run <code>migrations/2026_10_05_feature_release.sql</code> in phpMyAdmin first.
     </div>
 <?php else: ?>
 

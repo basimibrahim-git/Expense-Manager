@@ -96,7 +96,7 @@ class ZakathHelper
                 }
             }
         } catch (Throwable $e) {
-            error_log('ZakathHelper: settings read failed (run migrations/2026_10_05_zakath.sql?): ' . $e->getMessage());
+            error_log('ZakathHelper: settings read failed (run migrations/2026_10_05_feature_release.sql?): ' . $e->getMessage());
             $settings['_missing'] = true;
         }
 
