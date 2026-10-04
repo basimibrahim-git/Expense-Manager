@@ -5,10 +5,12 @@ use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
 use App\Helpers\BalanceHelper;
 use App\Helpers\ExchangeRateHelper;
+use App\Helpers\Flash;
+use App\Helpers\Categories;
+use App\Helpers\SplitHelper;
 
 Bootstrap::init();
 
-const EXPENSE_CATEGORIES = ['Grocery', 'Medical', 'Food', 'Utilities', 'Transport', 'Shopping', 'Entertainment', 'Travel', 'Education', 'Other'];
 const EXPENSE_CURRENCIES = ['AED', 'USD', 'INR', 'EUR', 'GBP'];
 const PAYMENT_METHODS    = ['Cash', 'Card']; // expenses.payment_method ENUM
 
@@ -109,6 +111,115 @@ function expenseReverseBalances(PDO $pdo, int $tenantId, int $userId, array $ids
     }
 }
 
+/** True once migrations/2026_10_05_family_split.sql has been run. Call outside a transaction. */
+function expenseSplitReady(PDO $pdo): bool
+{
+    static $ready = null;
+    if ($ready === null) {
+        try {
+            $pdo->query("SELECT 1 FROM expense_splits LIMIT 0");
+            $ready = true;
+        } catch (PDOException $e) {
+            $ready = false;
+        }
+    }
+    return $ready;
+}
+
+/**
+ * Read the "Split with family" fields of the add/edit forms.
+ * Returns null when splitting is off, an error string when invalid, or
+ * ['mode' => 'equal'|'custom', 'users' => int[], 'amounts' => array<int, float>].
+ * Custom amounts are typed in the expense's entry currency.
+ *
+ * @return array|string|null
+ */
+function expenseParseSplit(PDO $pdo, int $tenantId)
+{
+    if (($_POST['split_enabled'] ?? '') !== '1') {
+        return null;
+    }
+    if (!expenseSplitReady($pdo)) {
+        return 'Family split is not set up yet (database migration pending)';
+    }
+    $mode = ($_POST['split_mode'] ?? 'equal') === 'custom' ? 'custom' : 'equal';
+    $ids  = array_values(array_unique(array_filter(
+        array_map('intval', (array) ($_POST['split_users'] ?? [])),
+        fn($v) => $v > 0
+    )));
+    if (empty($ids)) {
+        return 'Pick the family members to split with';
+    }
+    if (count($ids) > 50) {
+        return 'Too many split members';
+    }
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE tenant_id = ? AND id IN ($placeholders)");
+    $stmt->execute(array_merge([$tenantId], $ids));
+    if (count($stmt->fetchAll(PDO::FETCH_COLUMN)) !== count($ids)) {
+        return 'Split members must belong to your family';
+    }
+
+    $amounts = [];
+    if ($mode === 'custom') {
+        $raw = (array) ($_POST['split_amounts'] ?? []);
+        foreach ($ids as $uid) {
+            $v = trim((string) ($raw[$uid] ?? ''));
+            if ($v === '') {
+                $v = '0';
+            }
+            if (!is_numeric($v) || (float) $v < 0 || (float) $v > 1e12) {
+                return 'Split amounts must be zero or more';
+            }
+            $amounts[$uid] = round((float) $v, 2);
+        }
+    }
+    return ['mode' => $mode, 'users' => $ids, 'amounts' => $amounts];
+}
+
+/**
+ * AED shares for one expense, or an error string.
+ * $entered is the amount in the entry currency (what custom amounts must add up to),
+ * $aed the stored AED amount the shares are expressed in.
+ *
+ * @return array<int, float>|string
+ */
+function expenseSplitShares(array $split, float $entered, float $aed, int $payerId, string $desc)
+{
+    if ($split['mode'] === 'custom') {
+        if (!SplitHelper::customSumMatches($split['amounts'], $entered)) {
+            return 'Custom split amounts for "' . $desc . '" must add up to ' . number_format($entered, 2)
+                . ' (they add up to ' . number_format(array_sum($split['amounts']), 2) . ')';
+        }
+        $shares = SplitHelper::scaleShares($split['amounts'], $aed, $payerId);
+    } else {
+        $shares = SplitHelper::equalShares($aed, $split['users'], $payerId);
+    }
+    foreach ($shares as $uid => $amt) {
+        if ($uid !== $payerId && $amt > 0) {
+            return $shares;
+        }
+    }
+    return 'A split needs at least one family member other than the person who paid';
+}
+
+/** Store the shares of one expense (replacing any previous ones). Call inside the expense's transaction. */
+function expenseWriteSplits(PDO $pdo, int $tenantId, int $expenseId, ?array $shares, bool $replace): void
+{
+    if ($replace) {
+        $pdo->prepare("DELETE FROM expense_splits WHERE expense_id = ? AND tenant_id = ?")->execute([$expenseId, $tenantId]);
+    }
+    if (!$shares) {
+        return;
+    }
+    $ins = $pdo->prepare("INSERT INTO expense_splits (tenant_id, expense_id, user_id, share_amount) VALUES (?, ?, ?, ?)");
+    foreach ($shares as $uid => $amt) {
+        if ($amt > 0) {
+            $ins->execute([$tenantId, $expenseId, (int) $uid, $amt]);
+        }
+    }
+}
+
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
     exit();
@@ -122,9 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Permission Check: Read-Only users cannot perform POST actions
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
         $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'dashboard.php');
-
-        header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "error=Unauthorized: Read-only access");
-        exit();
+        Flash::redirect($redirect, 'error', 'Unauthorized: Read-only access');
     }
 }
 
@@ -132,6 +241,9 @@ $tenant_id = $_SESSION['tenant_id'];
 
 if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $user_id = $_SESSION['user_id'];
+    $addMonth = filter_input(INPUT_POST, 'month', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]) ?: (int) date('n');
+    $addYear  = filter_input(INPUT_POST, 'year',  FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]) ?: (int) date('Y');
+    $addUrl   = "add_expense.php?month=$addMonth&year=$addYear";
 
     // --- Shared fields ---
     // Fallback date used only when a row does not carry its own date
@@ -139,21 +251,18 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
     $method = trim($_POST['payment_method'] ?? '');
     if (!in_array($method, PAYMENT_METHODS, true)) {
-        header("Location: add_expense.php?error=Invalid payment method");
-        exit();
+        Flash::redirect($addUrl, 'error', 'Invalid payment method');
     }
     $currency = strtoupper(trim($_POST['currency'] ?? 'AED'));
     if (!in_array($currency, EXPENSE_CURRENCIES, true)) {
-        header("Location: add_expense.php?error=Invalid currency");
-        exit();
+        Flash::redirect($addUrl, 'error', 'Invalid currency');
     }
     $exchange_rate = 1.0;
     if ($currency !== 'AED') {
         $rateRaw = trim((string) ($_POST['exchange_rate'] ?? ''));
         $exchange_rate = $rateRaw === '' ? ExchangeRateHelper::getRate($currency, 'AED', $pdo) : floatval($rateRaw);
         if ($exchange_rate <= 0) {
-            header("Location: add_expense.php?error=" . urlencode("Please enter a valid exchange rate for $currency"));
-            exit();
+            Flash::redirect($addUrl, 'error', "Please enter a valid exchange rate for $currency");
         }
     }
     $deduct = isset($_POST['deduct_balance']) && $_POST['deduct_balance'] == '1';
@@ -167,11 +276,16 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $spent_by = $user_id;
     }
 
+    // --- Optional family split (applies to every row) ---
+    $split = expenseParseSplit($pdo, (int) $tenant_id);
+    if (is_string($split)) {
+        Flash::redirect($addUrl, 'error', $split);
+    }
+
     // --- Per-row expense data ---
     $rows = $_POST['expenses'] ?? [];
     if (empty($rows) || !is_array($rows)) {
-        header("Location: add_expense.php?error=No expenses to save");
-        exit();
+        Flash::redirect($addUrl, 'error', 'No expenses to save');
     }
 
     // Preload this tenant's cards so each row's card can be validated without a query per row
@@ -200,16 +314,14 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         // Skip blank/incomplete rows entirely
         if ($amount <= 0 || $desc === '' || $category === '') continue;
 
-        if (!in_array($category, EXPENSE_CATEGORIES, true)) {
-            header("Location: add_expense.php?error=" . urlencode("Invalid category on \"$desc\""));
-            exit();
+        if (!Categories::isExpense($category)) {
+            Flash::redirect($addUrl, 'error', "Invalid category on \"$desc\"");
         }
 
         // Per-row date (fall back to the shared default)
         $rowDate = $validateDate($row['date'] ?? $defaultDateRaw);
         if ($rowDate === null) {
-            header("Location: add_expense.php?error=" . urlencode("Invalid or missing date on \"$desc\""));
-            exit();
+            Flash::redirect($addUrl, 'error', "Invalid or missing date on \"$desc\"");
         }
 
         // Per-row card (only when paying by card)
@@ -217,8 +329,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($method === 'Card') {
             $row_card_id = filter_var($row['card_id'] ?? null, FILTER_VALIDATE_INT);
             if (!$row_card_id || !isset($cardMap[$row_card_id])) {
-                header("Location: add_expense.php?error=" . urlencode("Please select a valid card for \"$desc\""));
-                exit();
+                Flash::redirect($addUrl, 'error', "Please select a valid card for \"$desc\"");
             }
         }
 
@@ -227,6 +338,15 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($currency !== 'AED') {
             $original_amount = $amount;
             $final_amount    = round($amount * $exchange_rate, 2);
+        }
+
+        // Split shares (AED) for this row; equal splits are computed per row
+        $shares = null;
+        if ($split !== null) {
+            $shares = expenseSplitShares($split, $amount, $final_amount, (int) $spent_by, $desc);
+            if (is_string($shares)) {
+                Flash::redirect($addUrl, 'error', $shares);
+            }
         }
 
         $prepared[] = [
@@ -240,12 +360,12 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             'cashback'        => floatval($row['cashback_earned'] ?? 0),
             'date'            => $rowDate,
             'card_id'         => $row_card_id,
+            'shares'          => $shares,
         ];
     }
 
     if (empty($prepared)) {
-        header("Location: add_expense.php?error=No valid expenses to save");
-        exit();
+        Flash::redirect($addUrl, 'error', 'No valid expenses to save');
     }
 
     try {
@@ -279,27 +399,32 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             }
 
             $stmt->execute([$user_id, $tenant_id, $spent_by, $p['amount'], $p['desc'], $p['category'], $method, $p['card_id'], $balance_bank_id, $p['date'], $p['is_sub'], $currency, $p['original_amount'], $p['tags'], $p['cashback'], $p['is_fixed']]);
+            if ($p['shares']) {
+                expenseWriteSplits($pdo, (int) $tenant_id, (int) $pdo->lastInsertId(), $p['shares'], false);
+            }
             $saved++;
         }
 
         if ($saved === 0) {
             $pdo->rollBack();
-            header("Location: add_expense.php?error=No valid expenses to save");
-            exit();
+            Flash::redirect($addUrl, 'error', 'No valid expenses to save');
         }
 
         $pdo->commit();
-        AuditHelper::log($pdo, 'add_expense', "Added $saved expense(s)");
-        $month = filter_input(INPUT_POST, 'month', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]) ?: (int) date('n');
-        $year  = filter_input(INPUT_POST, 'year',  FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]) ?: (int) date('Y');
-        header("Location: add_expense.php?added=$saved&month=$month&year=$year");
+        AuditHelper::log($pdo, 'add_expense', "Added $saved expense(s)" . ($split !== null ? ' (split with family)' : ''));
+        try {
+            if (class_exists(\App\Helpers\BudgetAlertHelper::class)) { \App\Helpers\BudgetAlertHelper::checkTenant($pdo, (int) $tenant_id); }
+        } catch (Throwable $e) {
+            error_log("Budget alert check: " . $e->getMessage());
+        }
+        // ?added= drives the "add more?" modal on add_expense.php (a count, not a message)
+        header("Location: add_expense.php?added=$saved&month=$addMonth&year=$addYear");
         exit();
 
     } catch (PDOException $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         error_log("Bulk expense insert: " . $e->getMessage());
-        header("Location: add_expense.php?error=System error occurred during expense processing.");
-        exit();
+        Flash::redirect($addUrl, 'error', 'System error occurred during expense processing.');
     }
 } elseif ($action == 'delete_expense' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['id'])) {
     $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
@@ -316,12 +441,10 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         } catch (PDOException $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             error_log("Delete expense: " . $e->getMessage());
-            header("Location: expenses.php?error=System error occurred while deleting.");
-            exit();
+            Flash::redirect('expenses.php', 'error', 'System error occurred while deleting.');
         }
     }
-    header("Location: expenses.php?success=Deleted");
-    exit();
+    Flash::redirect('expenses.php', 'success', 'Deleted');
 } elseif ($action == 'delete_auto_expense' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['id'])) {
     // "Stop Tracking" just removes the subscription flag, keeping the expense records.
     // Subscriptions are grouped by description (see subscriptions.php), so clear the flag on
@@ -336,8 +459,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt->execute([$tenant_id, $subDesc]);
         }
     }
-    header("Location: subscriptions.php?success=Subscription removed");
-    exit();
+    Flash::redirect('subscriptions.php', 'success', 'Subscription removed');
 } elseif ($action == 'log_subscription' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['template_id'])) {
     $template_id = filter_input(INPUT_POST, 'template_id', FILTER_VALIDATE_INT);
     $user_id = $_SESSION['user_id'];
@@ -412,14 +534,12 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
                 AuditHelper::log($pdo, 'log_subscription', "Auto-Drafted Subscription: $desc ($amount AED)");
                 $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'subscriptions.php');
 
-                header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Logged successfully");
-                exit();
+                Flash::redirect($redirect, 'success', 'Logged successfully');
             }
         } catch (Exception $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             error_log("Auto-Draft Error: " . $e->getMessage());
-            header("Location: subscriptions.php?error=System error during auto-draft.");
-            exit();
+            Flash::redirect('subscriptions.php', 'error', 'System error during auto-draft.');
         }
     }
     header("Location: subscriptions.php");
@@ -428,8 +548,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $ids = array_slice(array_map('intval', (array)($_POST['ids'] ?? [])), 0, 500);
     if (empty($ids)) {
         $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'expenses.php');
-        header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "error=No valid IDs provided");
-        exit();
+        Flash::redirect($redirect, 'error', 'No valid IDs provided');
     }
     $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'expenses.php');
     $placeholders = str_repeat('?,', count($ids) - 1) . '?';
@@ -443,20 +562,17 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     } catch (PDOException $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         error_log("Bulk delete expenses: " . $e->getMessage());
-        header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "error=System error occurred while deleting.");
-        exit();
+        Flash::redirect($redirect, 'error', 'System error occurred while deleting.');
     }
     AuditHelper::log($pdo, 'bulk_delete_expenses', "Bulk Deleted " . count($ids) . " Expenses. IDs: " . implode(',', $ids));
 
-    header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Bulk deleted");
-    exit();
+    Flash::redirect($redirect, 'success', 'Bulk deleted');
 } elseif ($action == 'bulk_change_category' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ids']) && is_array($_POST['ids'])) {
     $ids = array_slice(array_filter(array_map('intval', $_POST['ids'])), 0, 500);
     $category = trim((string) ($_POST['category'] ?? ''));
-    if (!in_array($category, EXPENSE_CATEGORIES, true)) {
+    if (!Categories::isExpense($category)) {
         $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'expenses.php');
-        header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "error=Invalid category");
-        exit();
+        Flash::redirect($redirect, 'error', 'Invalid category');
     }
     if (!empty($ids)) {
         $placeholders = str_repeat('?,', count($ids) - 1) . '?';
@@ -466,29 +582,25 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     }
     $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'expenses.php');
 
-    header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Bulk category updated");
-    exit();
+    Flash::redirect($redirect, 'success', 'Bulk category updated');
 } elseif ($action == 'update_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $user_id = $_SESSION['user_id'];
     $expense_id = filter_input(INPUT_POST, 'expense_id', FILTER_VALIDATE_INT);
 
     if (!$expense_id) {
-        header("Location: expenses.php?error=Invalid expense");
-        exit();
+        Flash::redirect('expenses.php', 'error', 'Invalid expense');
     }
 
     $editUrl = "edit_expense.php?id=$expense_id";
     $fail = function (string $msg) use ($editUrl) {
-        header("Location: $editUrl&error=" . urlencode($msg));
-        exit();
+        Flash::redirect($editUrl, 'error', $msg);
     };
 
-    $oldStmt = $pdo->prepare("SELECT category, balance_bank_id FROM expenses WHERE id = ? AND tenant_id = ?");
+    $oldStmt = $pdo->prepare("SELECT category, balance_bank_id, user_id, spent_by_user_id FROM expenses WHERE id = ? AND tenant_id = ?");
     $oldStmt->execute([$expense_id, $tenant_id]);
     $old = $oldStmt->fetch();
     if (!$old) {
-        header("Location: expenses.php?error=Expense not found");
-        exit();
+        Flash::redirect('expenses.php', 'error', 'Expense not found');
     }
 
     $amount = floatval($_POST['amount'] ?? 0);
@@ -516,7 +628,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $fail("Description is required");
     }
     // Allow the standard categories, or keeping the expense's existing (legacy) category
-    if (!in_array($category, EXPENSE_CATEGORIES, true) && $category !== $old['category']) {
+    if (!Categories::isExpense($category) && $category !== $old['category']) {
         $fail("Invalid category");
     }
     if (!in_array($method, PAYMENT_METHODS, true)) {
@@ -556,6 +668,23 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
 
+    // Family split: the form carries split_present when it showed the split controls, so an
+    // unticked "Split with family" clears the splits while older forms leave them untouched.
+    $writeSplits = ($_POST['split_present'] ?? '') === '1' && expenseSplitReady($pdo);
+    $shares = null;
+    $split = expenseParseSplit($pdo, (int) $tenant_id);
+    if (is_string($split)) {
+        $fail($split);
+    }
+    if ($split !== null) {
+        $payerId = (int) ($old['spent_by_user_id'] ?? $old['user_id']);
+        $shares = expenseSplitShares($split, $amount, $final_amount, $payerId, $desc);
+        if (is_string($shares)) {
+            $fail($shares);
+        }
+        $writeSplits = true;
+    }
+
     try {
         // If this expense moved a bank balance, prepare the FX rates before the transaction
         $newBankId = null;
@@ -571,8 +700,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $current = $rowStmt->fetch(PDO::FETCH_ASSOC);
         if (!$current) {
             $pdo->rollBack();
-            header("Location: expenses.php?error=Expense not found");
-            exit();
+            Flash::redirect('expenses.php', 'error', 'Expense not found');
         }
 
         // Reverse the original deduction, then deduct the new amount from the (debit) card's bank.
@@ -611,17 +739,24 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             $tenant_id
         ]);
 
+        if ($writeSplits) {
+            expenseWriteSplits($pdo, (int) $tenant_id, (int) $expense_id, $shares, true);
+        }
+
         $pdo->commit();
 
         AuditHelper::log($pdo, 'update_expense', "Updated Expense: $desc ($final_amount AED) - ID: $expense_id");
-        header("Location: edit_expense.php?id=$expense_id&success=Expense updated successfully");
-        exit();
+        try {
+            if (class_exists(\App\Helpers\BudgetAlertHelper::class)) { \App\Helpers\BudgetAlertHelper::checkTenant($pdo, (int) $tenant_id); }
+        } catch (Throwable $e) {
+            error_log("Budget alert check: " . $e->getMessage());
+        }
+        Flash::redirect($editUrl, 'success', 'Expense updated successfully');
 
     } catch (PDOException $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         error_log("Update expense: " . $e->getMessage());
-        header("Location: edit_expense.php?id=$expense_id&error=System error occurred during update.");
-        exit();
+        Flash::redirect($editUrl, 'error', 'System error occurred during update.');
     }
 }
 

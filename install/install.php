@@ -460,6 +460,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pdo->exec($sql);
                 }
 
+                // Bring the base schema up to date with every release migration, oldest first
+                // (they are idempotent: IF NOT EXISTS everywhere). Keeps fresh installs identical
+                // to upgraded ones without copying each table definition here.
+                foreach (glob($rootDir . '/migrations/20*.sql') ?: [] as $migration) {
+                    $migrationSql = preg_replace('/^\s*--.*$/m', '', (string) file_get_contents($migration));
+                    foreach (array_filter(array_map('trim', explode(';', $migrationSql))) as $statement) {
+                        $pdo->exec($statement);
+                    }
+                }
+
                 $step = 4; // Move to Account Creation
 
             } catch (Exception $e) {

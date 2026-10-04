@@ -113,13 +113,8 @@ class PasswordResetHelper
      */
     public static function url(string $token): string
     {
-        $appUrl = rtrim($_ENV['APP_URL'] ?? '', '/');
-        if ($appUrl !== '') {
-            $path = parse_url($appUrl, PHP_URL_PATH);
-            $root = ($path === null || $path === '' || $path === '/') ? $appUrl . BASE_URL : $appUrl . '/';
-        } else {
-            $root = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . BASE_URL;
-        }
-        return $root . 'reset_password.php?token=' . $token;
+        // APP_URL is the app root (including any sub-folder), independent of which
+        // address (subdomain or /expenses/) the request came in on.
+        return Notifier::appUrl('reset_password.php?token=' . $token);
     }
 }

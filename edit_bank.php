@@ -5,14 +5,14 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
 use App\Helpers\Html;
+use App\Helpers\Flash;
 
 Bootstrap::init();
 
 $bank_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 
 if (!$bank_id) {
-    header("Location: my_banks.php?error=" . urlencode("Invalid bank"));
-    exit();
+    Flash::redirect('my_banks.php', 'error', 'Invalid bank');
 }
 
 // Fetch bank
@@ -21,8 +21,7 @@ $stmt->execute([$bank_id, $_SESSION['tenant_id']]);
 $bank = $stmt->fetch();
 
 if (!$bank) {
-    header("Location: my_banks.php?error=" . urlencode("Bank not found"));
-    exit();
+    Flash::redirect('my_banks.php', 'error', 'Bank not found');
 }
 
 Layout::header();
@@ -38,20 +37,6 @@ Layout::sidebar();
         <h1 class="h3 fw-bold mb-1 text-dark">Edit Bank Account</h1>
         <p class="text-muted mb-0">Modify configuration parameters for <strong><?php echo Html::e($bank['bank_name']); ?></strong></p>
     </div>
-
-    <?php if (isset($_GET['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show rounded-4 border-0 shadow-sm p-3 mb-4" role="alert">
-            <i class="fa-solid fa-check-circle me-2 text-success"></i> <?php echo Html::e($_GET['success']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    <?php endif; ?>
-
-    <?php if (isset($_GET['error'])): ?>
-        <div class="alert alert-danger alert-dismissible fade show rounded-4 border-0 shadow-sm p-3 mb-4" role="alert">
-            <i class="fa-solid fa-exclamation-circle me-2 text-danger"></i> <?php echo Html::e($_GET['error']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    <?php endif; ?>
 
     <div class="row justify-content-center">
         <div class="col-lg-6 col-md-8">

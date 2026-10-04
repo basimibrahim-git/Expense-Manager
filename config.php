@@ -142,10 +142,11 @@ if (session_status() === PHP_SESSION_NONE) {
 // Server-side session idle timeout (1 hour)
 if (isset($_SESSION['user_id'])) {
     if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > 3600) {
-        session_unset();
-        session_destroy();
+        $_SESSION = [];
         if (PHP_SAPI !== 'cli' && !headers_sent()) {
-            header('Location: ' . BASE_URL . 'index.php?error=' . urlencode('Session expired'));
+            session_regenerate_id(true);
+            $_SESSION['_flash'][] = ['type' => 'warning', 'message' => 'Your session expired. Please sign in again.'];
+            header('Location: ' . BASE_URL . 'index.php');
             exit();
         }
     } else {
@@ -164,10 +165,11 @@ if (isset($_SESSION['user_id'])) {
         $pwFingerprint = $acct ? hash('sha256', $acct['password']) : '';
 
         if (!$acct || (isset($_SESSION['pw_fp']) && !hash_equals($_SESSION['pw_fp'], $pwFingerprint))) {
-            session_unset();
-            session_destroy();
+            $_SESSION = [];
             if (PHP_SAPI !== 'cli' && !headers_sent()) {
-                header('Location: ' . BASE_URL . 'index.php?error=' . urlencode('Your password was changed. Please sign in again.'));
+                session_regenerate_id(true);
+                $_SESSION['_flash'][] = ['type' => 'warning', 'message' => 'Your password was changed. Please sign in again.'];
+                header('Location: ' . BASE_URL . 'index.php');
                 exit();
             }
         } else {

@@ -3,6 +3,7 @@ require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
+use App\Helpers\Flash;
 
 Bootstrap::init();
 
@@ -19,10 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Permission Check: Read-Only users cannot perform POST actions
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'dashboard.php');
-
-        header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "error=Unauthorized: Read-only access");
-        exit();
+        Flash::redirect(SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'my_banks.php'), 'error', 'Unauthorized: Read-only access');
     }
 }
 
@@ -43,8 +41,7 @@ if ($action == 'add_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     if (empty($bank_name)) {
-        header("Location: add_bank.php?error=" . urlencode("Bank name is required"));
-        exit();
+        Flash::redirect('add_bank.php', 'error', 'Bank name is required');
     }
 
     try {
@@ -60,16 +57,14 @@ if ($action == 'add_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $pdo->commit();
         AuditHelper::log($pdo, 'add_bank', "Added Bank: $bank_name ($currency)");
-        header("Location: my_banks.php?success=Bank added successfully");
-        exit();
+        Flash::redirect('my_banks.php', 'success', 'Bank added successfully');
 
     } catch (PDOException $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
         error_log("Add Bank Error: " . $e->getMessage());
-        header("Location: add_bank.php?error=" . urlencode("Failed to add bank."));
-        exit();
+        Flash::redirect('add_bank.php', 'error', 'Failed to add bank.');
     }
 }
 
@@ -78,8 +73,7 @@ elseif ($action == 'update_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $bank_id = filter_input(INPUT_POST, 'bank_id', FILTER_VALIDATE_INT);
 
     if (!$bank_id) {
-        header("Location: my_banks.php?error=Invalid bank");
-        exit();
+        Flash::redirect('my_banks.php', 'error', 'Invalid bank');
     }
 
     $bank_name = trim($_POST['bank_name'] ?? '');
@@ -94,8 +88,7 @@ elseif ($action == 'update_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     if ($bank_name === '') {
-        header("Location: edit_bank.php?id=$bank_id&error=" . urlencode("Bank name is required"));
-        exit();
+        Flash::redirect("edit_bank.php?id=$bank_id", 'error', 'Bank name is required');
     }
 
     try {
@@ -107,8 +100,7 @@ elseif ($action == 'update_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $old_name = $own->fetchColumn();
         if ($old_name === false) {
             $pdo->rollBack();
-            header("Location: my_banks.php?error=" . urlencode("Bank not found"));
-            exit();
+            Flash::redirect('my_banks.php', 'error', 'Bank not found');
         }
 
         // If setting as default, clear other banks' default status
@@ -127,16 +119,14 @@ elseif ($action == 'update_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $pdo->commit();
         AuditHelper::log($pdo, 'update_bank', "Updated Bank: $bank_name (ID: $bank_id)");
-        header("Location: edit_bank.php?id=$bank_id&success=" . urlencode("Bank updated successfully"));
-        exit();
+        Flash::redirect("edit_bank.php?id=$bank_id", 'success', 'Bank updated successfully');
 
     } catch (PDOException $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
         error_log("Update Bank Error: " . $e->getMessage());
-        header("Location: edit_bank.php?id=$bank_id&error=" . urlencode("Failed to update bank."));
-        exit();
+        Flash::redirect("edit_bank.php?id=$bank_id", 'error', 'Failed to update bank.');
     }
 }
 
@@ -166,16 +156,17 @@ elseif ($action == 'delete' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_P
                 $pdo->rollBack();
             }
             error_log("Delete Bank Error: " . $e->getMessage());
-            header("Location: my_banks.php?error=" . urlencode("Failed to delete bank."));
-            exit();
+            Flash::redirect('my_banks.php', 'error', 'Failed to delete bank.');
         }
     }
 
     if ($deleted) {
         AuditHelper::log($pdo, 'delete_bank', "Deleted Bank ID: $bank_id");
-        header("Location: my_banks.php?success=" . urlencode("Bank deleted"));
+        Flash::success('Bank deleted');
+        header("Location: my_banks.php");
     } else {
-        header("Location: my_banks.php?error=" . urlencode("Bank not found"));
+        Flash::error('Bank not found');
+        header("Location: my_banks.php");
     }
     exit();
 }

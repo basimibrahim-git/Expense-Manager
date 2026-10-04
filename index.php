@@ -16,13 +16,6 @@ Layout::authHeader('Login');
                 <h2 class="auth-title text-center">Welcome Back</h2>
                 <p class="auth-subtitle text-center">Please enter your details to sign in.</p>
 
-                <?php if (isset($_GET['error'])): ?>
-                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                        <?php echo Html::e($_GET['error']); ?>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                <?php endif; ?>
-
                 <form action="auth.php" method="POST">
                     <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                     <div class="form-floating mb-3">

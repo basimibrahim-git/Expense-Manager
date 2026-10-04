@@ -4,6 +4,7 @@ require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\Layout;
 use App\Helpers\ExchangeRateHelper;
+use App\Helpers\Html;
 
 Bootstrap::init();
 
@@ -12,31 +13,24 @@ Layout::sidebar();
 
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]) ?: (int) date('Y');
 
-// Get total income per month for the selected year, converted to AED (income is stored in its entered currency)
+// Total income (converted to AED; income is stored in its entered currency) and deposit count per month
+// for the selected year, in one query
 $stmt = $pdo->prepare("
-    SELECT MONTH(income_date) as month, COALESCE(currency, 'AED') as currency, SUM(amount) as total
+    SELECT MONTH(income_date) as month, COALESCE(currency, 'AED') as currency, SUM(amount) as total, COUNT(*) as tx_count
     FROM income
-    WHERE tenant_id = :tenant_id AND YEAR(income_date) = :year
+    WHERE tenant_id = :tenant_id AND income_date >= :from_date AND income_date < :to_date
     GROUP BY MONTH(income_date), COALESCE(currency, 'AED')
 ");
-$stmt->execute(['tenant_id' => $_SESSION['tenant_id'], 'year' => $year]);
+$stmt->execute(['tenant_id' => $_SESSION['tenant_id'], 'from_date' => $year . '-01-01', 'to_date' => ($year + 1) . '-01-01']);
 $monthly_totals = [];
+$monthly_counts = [];
 $rates = ['AED' => 1.0];
 foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
     $cur = strtoupper($row['currency']);
     $rates[$cur] = $rates[$cur] ?? ExchangeRateHelper::getRate($cur, 'AED', $pdo);
     $monthly_totals[(int) $row['month']] = ($monthly_totals[(int) $row['month']] ?? 0) + (float) $row['total'] * $rates[$cur];
+    $monthly_counts[(int) $row['month']] = ($monthly_counts[(int) $row['month']] ?? 0) + (int) $row['tx_count'];
 }
-
-// Get transaction counts per month
-$count_stmt = $pdo->prepare("
-    SELECT MONTH(income_date) as month, COUNT(*) as tx_count
-    FROM income
-    WHERE tenant_id = :tenant_id AND YEAR(income_date) = :year
-    GROUP BY MONTH(income_date)
-");
-$count_stmt->execute(['tenant_id' => $_SESSION['tenant_id'], 'year' => $year]);
-$monthly_counts = $count_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
 $months = [
     1 => 'January',
@@ -146,7 +140,7 @@ $current_year = date('Y');
 </div>
 
 <!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
 
 <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     document.addEventListener('DOMContentLoaded', function () {
@@ -160,10 +154,10 @@ $current_year = date('Y');
         new Chart(ctx, {
             type: 'line',
             data: {
-                labels: <?php echo json_encode(array_values($months)); ?>,
+                labels: <?php echo Html::json(array_values($months)); ?>,
                 datasets: [{
                     label: 'Monthly Income',
-                    data: <?php echo json_encode($trend_data); ?>,
+                    data: <?php echo Html::json($trend_data); ?>,
                     borderColor: '#10b981',
                     backgroundColor: gradient,
                     borderWidth: 3,

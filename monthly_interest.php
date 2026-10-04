@@ -5,6 +5,7 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
 use App\Helpers\Html;
+use App\Helpers\Flash;
 use App\Helpers\Layout;
 
 Bootstrap::init();
@@ -22,8 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        header("Location: $back&error=" . urlencode('Unauthorized: Read-only access'));
-        exit();
+        Flash::redirect($back, 'error', 'Unauthorized: Read-only access');
     }
 
     $action = $_POST['action'] ?? '';
@@ -37,8 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $date_ok = $d && $d->format('Y-m-d') === $date && (int) $d->format('Y') >= 2000 && (int) $d->format('Y') <= 2100;
 
         if ($title === '' || mb_strlen($title) > 255 || $amount === false || $amount <= 0 || $amount > 99999999.99 || !$date_ok) {
-            header("Location: $back&error=" . urlencode('Please enter a description, an amount greater than zero and a valid date.'));
-            exit();
+            Flash::redirect($back, 'error', 'Please enter a description, an amount greater than zero and a valid date.');
         }
 
         $signed = $type === 'payment' ? -abs($amount) : abs($amount);
@@ -46,8 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $title, $signed, $date]);
 
         AuditHelper::log($pdo, 'interest_entry', "Added $type: $title (AED $amount)");
-        header("Location: monthly_interest.php?month=" . (int) $d->format('n') . "&year=" . (int) $d->format('Y') . "&success=" . urlencode('Record added'));
-        exit();
+        Flash::redirect('monthly_interest.php?month=' . (int) $d->format('n') . '&year=' . (int) $d->format('Y'), 'success', 'Record added');
     } elseif ($action === 'delete_record') {
         $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
         if ($id) {
@@ -55,8 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt->execute([$id, $_SESSION['tenant_id']]);
             AuditHelper::log($pdo, 'interest_delete', "Deleted interest record ID: $id");
         }
-        header("Location: $back&success=" . urlencode('Record deleted'));
-        exit();
+        Flash::redirect($back, 'success', 'Record deleted');
     }
 
     header("Location: $back");
@@ -92,18 +89,6 @@ $can_edit = ($_SESSION['permission'] ?? 'edit') !== 'read_only';
 ?>
 
 <div class="container-fluid py-4">
-    <?php if (!empty($_GET['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show rounded-4" role="alert">
-            <?php echo Html::e($_GET['success']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    <?php endif; ?>
-    <?php if (!empty($_GET['error'])): ?>
-        <div class="alert alert-danger alert-dismissible fade show rounded-4" role="alert">
-            <?php echo Html::e($_GET['error']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    <?php endif; ?>
 
     <!-- Header with Filter -->
     <div class="row align-items-center mb-4 g-3">

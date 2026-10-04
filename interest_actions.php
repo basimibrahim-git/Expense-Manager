@@ -3,6 +3,7 @@ require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
+use App\Helpers\Flash;
 
 Bootstrap::init();
 
@@ -11,8 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        header("Location: interest_tracker.php?error=" . urlencode('Unauthorized: Read-only access'));
-        exit();
+        Flash::redirect('interest_tracker.php', 'error', 'Unauthorized: Read-only access');
     }
 
     $action = $_POST['action'] ?? '';
@@ -26,8 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $pay = DateTime::createFromFormat('!Y-m-d', $date);
         if (!$pay || $pay->format('Y-m-d') !== $date || (int) $pay->format('Y') < 2000 || (int) $pay->format('Y') > 2100) {
-            header("Location: interest_tracker.php?error=" . urlencode('Please enter a valid payment date.'));
-            exit();
+            Flash::redirect('interest_tracker.php', 'error', 'Please enter a valid payment date.');
         }
 
         // The payment is booked in the month it pays for, so it offsets that month's interest.
@@ -37,8 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($target_month_year !== '') {
             $target = DateTime::createFromFormat('!Y-m', $target_month_year);
             if (!$target || $target->format('Y-m') !== $target_month_year || (int) $target->format('Y') < 2000 || (int) $target->format('Y') > 2100) {
-                header("Location: interest_tracker.php?error=" . urlencode('Please choose a valid month to pay for.'));
-                exit();
+                Flash::redirect('interest_tracker.php', 'error', 'Please choose a valid month to pay for.');
             }
             if ($pay->format('Y-m') !== $target_month_year) {
                 $day = min((int) $pay->format('j'), (int) $target->format('t'));
@@ -53,12 +51,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $title, $final_amount, $interest_date]);
 
             AuditHelper::log($pdo, 'interest_payment', "Recorded Interest Payment: " . abs($amount) . " on $date for " . ($target_month_year ?: $interest_date));
-            header("Location: interest_tracker.php?year=" . (int) substr($interest_date, 0, 4) . "&success=" . urlencode('Payment Recorded'));
-            exit;
+            Flash::redirect('interest_tracker.php?year=' . (int) substr($interest_date, 0, 4), 'success', 'Payment Recorded');
         }
 
-        header("Location: interest_tracker.php?error=" . urlencode('Please enter a description and an amount greater than zero.'));
-        exit;
+        Flash::redirect('interest_tracker.php', 'error', 'Please enter a description and an amount greater than zero.');
     }
 }
 

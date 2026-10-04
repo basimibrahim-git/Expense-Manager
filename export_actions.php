@@ -1,13 +1,15 @@
 <?php
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
+use App\Helpers\Flash;
+use App\Helpers\SecurityHelper;
 
 Bootstrap::init();
 
 const CONTENT_TYPE_CSV = 'Content-Type: text/csv';
 const CSV_EXTENSION = '.csv';
 const PHP_OUTPUT = 'php://output';
-const SYSTEM_ERROR_MSG = "❌ A system error occurred during export. Please try again or check the logs.";
+const SYSTEM_ERROR_MSG = "A system error occurred during export. Please try again or check the logs.";
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
@@ -26,6 +28,21 @@ function csv_row($handle, array $fields): void
         }
     }
     fputcsv($handle, $fields);
+}
+
+/**
+ * Log an export failure and send the user back to the page they came from with a flash message.
+ * Falls back to a plain message when part of the CSV has already been sent.
+ */
+function export_fail(Throwable $e): void
+{
+    error_log('[Export] ' . $e->getMessage());
+    if (headers_sent()) {
+        die(SYSTEM_ERROR_MSG);
+    }
+    header_remove('Content-Type');
+    header_remove('Content-Disposition');
+    Flash::redirect(SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'dashboard.php'), 'error', SYSTEM_ERROR_MSG);
 }
 
 /** Validated month / year from the query string (convention: invalid values fall back to now). */
@@ -134,8 +151,7 @@ AND YEAR(e.expense_date) = :year";
         fclose($output);
         exit();
     } catch (Exception $e) {
-        error_log($e->getMessage());
-        die(SYSTEM_ERROR_MSG);
+        export_fail($e);
     }
 
 } elseif ($action == 'export_income') {
@@ -193,8 +209,7 @@ AND YEAR(e.expense_date) = :year";
         fclose($output);
         exit();
     } catch (Exception $e) {
-        error_log($e->getMessage());
-        die(SYSTEM_ERROR_MSG);
+        export_fail($e);
     }
 } elseif ($action == 'export_sadaqa') {
     $month = export_month();
@@ -224,8 +239,7 @@ AND YEAR(e.expense_date) = :year";
         fclose($output);
         exit();
     } catch (Exception $e) {
-        error_log($e->getMessage());
-        die(SYSTEM_ERROR_MSG);
+        export_fail($e);
     }
 } elseif ($action == 'export_incentives') {
     $month = export_month();
@@ -255,8 +269,7 @@ AND YEAR(e.expense_date) = :year";
         fclose($output);
         exit();
     } catch (Exception $e) {
-        error_log($e->getMessage());
-        die(SYSTEM_ERROR_MSG);
+        export_fail($e);
     }
 } elseif ($action == 'export_interest') {
     $month = export_month();
@@ -291,8 +304,7 @@ AND YEAR(e.expense_date) = :year";
         fclose($output);
         exit();
     } catch (Exception $e) {
-        error_log($e->getMessage());
-        die(SYSTEM_ERROR_MSG);
+        export_fail($e);
     }
 } elseif ($action == 'export_zakath') {
     $query = "SELECT * FROM zakath_calculations WHERE tenant_id = :tenant_id ORDER BY created_at DESC LIMIT 50000";
@@ -336,8 +348,7 @@ AND YEAR(e.expense_date) = :year";
         fclose($output);
         exit();
     } catch (Exception $e) {
-        error_log($e->getMessage());
-        die(SYSTEM_ERROR_MSG);
+        export_fail($e);
     }
 } elseif ($action == 'export_reminders') {
     $query = "SELECT alert_date, title, recurrence_type FROM reminders WHERE tenant_id = :tenant_id ORDER BY alert_date ASC LIMIT 50000";
@@ -363,8 +374,7 @@ AND YEAR(e.expense_date) = :year";
         fclose($output);
         exit();
     } catch (Exception $e) {
-        error_log($e->getMessage());
-        die(SYSTEM_ERROR_MSG);
+        export_fail($e);
     }
 } elseif ($action == 'export_lending') {
     $query = "SELECT * FROM lending_tracker WHERE tenant_id = :tenant_id ORDER BY lent_date DESC LIMIT 50000";
@@ -398,8 +408,7 @@ AND YEAR(e.expense_date) = :year";
         fclose($output);
         exit();
     } catch (Exception $e) {
-        error_log($e->getMessage());
-        die(SYSTEM_ERROR_MSG);
+        export_fail($e);
     }
 }
 

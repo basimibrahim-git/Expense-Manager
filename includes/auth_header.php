@@ -31,3 +31,4 @@ header('Referrer-Policy: no-referrer'); // reset links carry a token in the URL
                         <i class="fa-solid fa-wallet"></i> ExpenseMngr
                     </div>
                 </div>
+                <?php echo App\Helpers\Flash::render(); ?>

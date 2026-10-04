@@ -5,36 +5,31 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
 use App\Helpers\Html;
+use App\Helpers\Flash;
+use App\Helpers\Categories;
+use App\Helpers\SplitHelper;
 
 Bootstrap::init();
 
 $expense_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 
 if (!$expense_id) {
-    header("Location: expenses.php?error=Invalid expense");
-    exit();
+    Flash::redirect('expenses.php', 'error', 'Invalid expense');
 }
 
 // Fetch expense
-$stmt = $pdo->prepare("SELECT id, expense_date, currency, original_amount, amount, description, category, tags, payment_method, card_id, cashback_earned, is_fixed, is_subscription FROM expenses WHERE id = ? AND tenant_id = ?");
+$stmt = $pdo->prepare("SELECT id, user_id, spent_by_user_id, expense_date, currency, original_amount, amount, description, category, tags, payment_method, card_id, cashback_earned, is_fixed, is_subscription FROM expenses WHERE id = ? AND tenant_id = ?");
 $stmt->execute([$expense_id, $_SESSION['tenant_id']]);
 $expense = $stmt->fetch();
 
 if (!$expense) {
-    header("Location: expenses.php?error=Expense not found");
-    exit();
+    Flash::redirect('expenses.php', 'error', 'Expense not found');
 }
 
 // Fetch cards for dropdown
 $cStmt = $pdo->prepare("SELECT id, bank_name, card_name, card_type FROM cards WHERE tenant_id = ? ORDER BY card_name");
 $cStmt->execute([$_SESSION['tenant_id']]);
 $cards = $cStmt->fetchAll();
-
-$categories = ['Grocery', 'Food', 'Transport', 'Shopping', 'Utilities', 'Travel', 'Medical', 'Entertainment', 'Education', 'Other'];
-// Keep a legacy category selectable so saving the form does not silently change it
-if ($expense['category'] !== '' && !in_array($expense['category'], $categories, true)) {
-    $categories[] = $expense['category'];
-}
 
 // Amount is edited in the entry currency; amount / original_amount gives the rate used to reach AED.
 // Rows with a foreign currency but no original amount (legacy) only have a trustworthy AED value.
@@ -49,6 +44,49 @@ $entry_rate = $has_original ? round((float) $expense['amount'] / (float) $expens
 
 $expense_ts = strtotime($expense['expense_date']);
 
+// ---- Family split (needs the family_split migration and at least two members) ----
+$family_members = [];
+$split_ready = false;
+$splits = [];             // user id => stored AED share
+$payer_id = (int) ($expense['spent_by_user_id'] ?? $expense['user_id']);
+try {
+    $mStmt = $pdo->prepare("SELECT id, name FROM users WHERE tenant_id = ? ORDER BY name ASC");
+    $mStmt->execute([$_SESSION['tenant_id']]);
+    $family_members = $mStmt->fetchAll();
+    if (count($family_members) > 1) {
+        $sStmt = $pdo->prepare("SELECT user_id, share_amount FROM expense_splits WHERE expense_id = ? AND tenant_id = ?");
+        $sStmt->execute([$expense_id, $_SESSION['tenant_id']]);
+        foreach ($sStmt->fetchAll() as $s) {
+            $splits[(int) $s['user_id']] = (float) $s['share_amount'];
+        }
+        $split_ready = true;
+    }
+} catch (PDOException $e) {
+    $split_ready = false; // migration not run yet
+}
+$split_on = !empty($splits);
+$split_mode = ($split_on && !SplitHelper::isEqualSplit($splits, (float) $expense['amount'], $payer_id)) ? 'custom' : 'equal';
+$payer_name = 'the person who paid';
+foreach ($family_members as $m) {
+    if ((int) $m['id'] === $payer_id) {
+        $payer_name = $m['name'];
+    }
+}
+
+// Custom amounts are edited in the entry currency; convert the stored AED shares back and let
+// the payer (or the largest share) absorb the rounding so the prefill adds up exactly.
+$split_prefill = [];
+if ($split_on) {
+    foreach ($splits as $uid => $aed) {
+        $split_prefill[$uid] = $has_original ? round($aed / (float) $entry_rate, 2) : $aed;
+    }
+    $diff = round((float) $entry_amount - array_sum($split_prefill), 2);
+    if ($diff != 0.0) {
+        $absorb = isset($split_prefill[$payer_id]) ? $payer_id : array_keys($split_prefill, max($split_prefill))[0];
+        $split_prefill[$absorb] = round($split_prefill[$absorb] + $diff, 2);
+    }
+}
+
 Layout::header();
 Layout::sidebar();
 ?>
@@ -62,24 +100,10 @@ Layout::sidebar();
     </div>
 </div>
 
-<?php if (isset($_GET['success'])): ?>
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="fa-solid fa-check-circle me-2"></i> <?php echo Html::e($_GET['success']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-<?php endif; ?>
-
-<?php if (isset($_GET['error'])): ?>
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="fa-solid fa-exclamation-circle me-2"></i> <?php echo Html::e($_GET['error']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-<?php endif; ?>
-
 <div class="row justify-content-center">
     <div class="col-md-8 col-lg-6">
         <div class="glass-panel p-4">
-            <form action="expense_actions.php" method="POST">
+            <form action="expense_actions.php" method="POST" id="editExpenseForm">
                 <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
                 <input type="hidden" name="action" value="update_expense">
                 <input type="hidden" name="expense_id" value="<?php echo (int) $expense['id']; ?>">
@@ -130,11 +154,8 @@ Layout::sidebar();
                 <div class="mb-3">
                     <label class="form-label" for="category">Category <span class="text-danger">*</span></label>
                     <select name="category" id="category" class="form-select form-select-lg" required>
-                        <?php foreach ($categories as $cat): ?>
-                            <option value="<?php echo Html::e($cat); ?>" <?php echo $expense['category'] === $cat ? 'selected' : ''; ?>>
-                                <?php echo Html::e($cat); ?>
-                            </option>
-                        <?php endforeach; ?>
+                        <?php // A legacy category stays selectable so saving does not silently change it ?>
+                        <?php echo Categories::expenseOptions($expense['category']); ?>
                     </select>
                 </div>
 
@@ -192,6 +213,55 @@ Layout::sidebar();
                     <label class="form-check-label" for="isSub">This is a monthly recurring subscription</label>
                 </div>
 
+                <?php if ($split_ready): ?>
+                <!-- Split with family -->
+                <input type="hidden" name="split_present" value="1">
+                <div class="border rounded-3 p-3 mb-4">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" name="split_enabled" id="splitEnabled"
+                            value="1" data-onchange="toggleSplit" <?php echo $split_on ? 'checked' : ''; ?>>
+                        <label class="form-check-label fw-bold" for="splitEnabled">
+                            <i class="fa-solid fa-people-arrows me-1 text-primary"></i> Split with family
+                        </label>
+                    </div>
+                    <div class="form-text mt-1">Paid by <?php echo Html::e($payer_name); ?>, who is owed the other members' shares.</div>
+
+                    <div id="splitPanel" class="mt-3" style="<?php echo $split_on ? '' : 'display:none;'; ?>">
+                        <div class="btn-group btn-group-sm mb-3" role="group" aria-label="Split mode">
+                            <input type="radio" class="btn-check" name="split_mode" id="splitModeEqual" value="equal"
+                                <?php echo $split_mode === 'equal' ? 'checked' : ''; ?> data-onchange="updateSplitPreview">
+                            <label class="btn btn-outline-primary" for="splitModeEqual">Equal</label>
+                            <input type="radio" class="btn-check" name="split_mode" id="splitModeCustom" value="custom"
+                                <?php echo $split_mode === 'custom' ? 'checked' : ''; ?> data-onchange="updateSplitPreview">
+                            <label class="btn btn-outline-primary" for="splitModeCustom">Custom amounts</label>
+                        </div>
+
+                        <?php foreach ($family_members as $member):
+                            $mid = (int) $member['id'];
+                            $checked = $split_on ? isset($splits[$mid]) : true; ?>
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <div class="form-check mb-0 flex-grow-1">
+                                    <input class="form-check-input split-user" type="checkbox" name="split_users[]"
+                                        id="splitUser<?php echo $mid; ?>" value="<?php echo $mid; ?>"
+                                        <?php echo $checked ? 'checked' : ''; ?> data-onchange="updateSplitPreview">
+                                    <label class="form-check-label" for="splitUser<?php echo $mid; ?>">
+                                        <?php echo Html::e($member['name']); ?>
+                                        <?php if ($mid === $payer_id): ?><span class="badge bg-success-subtle text-success ms-1">paid</span><?php endif; ?>
+                                    </label>
+                                </div>
+                                <input type="number" name="split_amounts[<?php echo $mid; ?>]"
+                                    class="form-control form-control-sm split-amount" style="max-width:140px;"
+                                    data-user="<?php echo $mid; ?>" step="0.01" min="0" placeholder="0.00"
+                                    value="<?php echo isset($split_prefill[$mid]) ? Html::e(number_format($split_prefill[$mid], 2, '.', '')) : ''; ?>"
+                                    aria-label="<?php echo Html::e('Share for ' . $member['name']); ?>"
+                                    data-oninput="updateSplitPreview">
+                            </div>
+                        <?php endforeach; ?>
+                        <div class="small text-muted" id="splitHint"></div>
+                    </div>
+                </div>
+                <?php endif; ?>
+
                 <!-- Submit -->
                 <div class="d-grid gap-2 mb-3">
                     <button type="submit" class="btn btn-primary btn-lg fw-bold">
@@ -228,6 +298,72 @@ function toggleRateField() {
     document.getElementById('rateCurrency').textContent = currency;
     document.getElementById('exchangeRate').value = currency === STORED_CURRENCY ? STORED_RATE : '';
 }
+
+// ---- Split with family ----
+function splitOn() {
+    return !!document.getElementById('splitEnabled')?.checked;
+}
+
+function toggleSplit() {
+    const panel = document.getElementById('splitPanel');
+    if (panel) panel.style.display = splitOn() ? 'block' : 'none';
+    updateSplitPreview();
+}
+
+function customSplitSum() {
+    let sum = 0;
+    document.querySelectorAll('.split-amount').forEach(inp => {
+        const cb = document.getElementById('splitUser' + inp.dataset.user);
+        if (cb && cb.checked) sum += parseFloat(inp.value) || 0;
+    });
+    return Math.round(sum * 100) / 100;
+}
+
+function updateSplitPreview() {
+    const hint = document.getElementById('splitHint');
+    if (!hint) return;
+    const custom = !!document.getElementById('splitModeCustom')?.checked;
+    document.querySelectorAll('.split-amount').forEach(inp => {
+        const cb = document.getElementById('splitUser' + inp.dataset.user);
+        inp.style.display = custom ? '' : 'none';
+        inp.disabled = !custom || !(cb && cb.checked);
+    });
+    const people = document.querySelectorAll('.split-user:checked').length;
+    const amount = parseFloat(document.getElementById('amount').value) || 0;
+    hint.classList.remove('text-danger');
+    if (!splitOn()) {
+        hint.textContent = '';
+    } else if (people === 0) {
+        hint.textContent = 'Tick at least one family member.';
+        hint.classList.add('text-danger');
+    } else if (!custom) {
+        hint.textContent = 'About ' + (amount / people).toFixed(2) + ' each between ' + people + ' member(s); any rounding cent goes to the payer.';
+    } else {
+        const sum = customSplitSum();
+        const remaining = Math.round((amount - sum) * 100) / 100;
+        hint.textContent = 'Assigned ' + sum.toFixed(2) + ' of ' + amount.toFixed(2)
+            + (Math.abs(remaining) > 0.01 ? ', ' + remaining.toFixed(2) + ' left to assign.' : ' (adds up).');
+        if (Math.abs(remaining) > 0.01) hint.classList.add('text-danger');
+    }
+}
+
+document.getElementById('amount')?.addEventListener('input', updateSplitPreview);
+document.getElementById('editExpenseForm')?.addEventListener('submit', function (e) {
+    if (!splitOn() || !document.getElementById('splitHint')) return;
+    if (document.querySelectorAll('.split-user:checked').length === 0) {
+        e.preventDefault();
+        alert('Tick at least one family member to split with, or turn the split off.');
+        return;
+    }
+    if (document.getElementById('splitModeCustom')?.checked) {
+        const amount = parseFloat(document.getElementById('amount').value) || 0;
+        if (Math.abs(Math.round(amount * 100) - Math.round(customSplitSum() * 100)) > 1) {
+            e.preventDefault();
+            alert('Custom split amounts must add up to the expense amount.');
+        }
+    }
+});
+updateSplitPreview();
 </script>
 
 <?php Layout::footer(); ?>

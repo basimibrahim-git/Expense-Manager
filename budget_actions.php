@@ -4,6 +4,9 @@ require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
+use App\Helpers\Flash;
+use App\Helpers\Categories;
+use App\Helpers\BudgetAlertHelper;
 
 Bootstrap::init();
 
@@ -20,24 +23,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Permission Check: Read-Only users cannot perform POST actions
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'dashboard.php');
-
-        header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "error=Unauthorized: Read-only access");
-        exit();
+        Flash::redirect('budget.php', 'error', 'Unauthorized: Read-only access');
     }
 }
 
-$tenant_id = $_SESSION['tenant_id'];
-
-// Budget categories = the expense categories offered in add_expense.php / manage_budgets.php
-const BUDGET_CATEGORIES = ['Grocery', 'Food', 'Medical', 'Shopping', 'Utilities', 'Transport', 'Travel', 'Entertainment', 'Education', 'Other'];
+$tenant_id = (int) $_SESSION['tenant_id'];
 
 if ($action == 'save_budgets' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $month = filter_input(INPUT_POST, 'month', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]);
     $year = filter_input(INPUT_POST, 'year', FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]);
     if (!$month || !$year) {
-        header("Location: manage_budgets.php?error=Invalid month or year");
-        exit();
+        Flash::redirect('manage_budgets.php', 'error', 'Invalid month or year');
     }
     $budgets = $_POST['budgets'] ?? [];
     if (!is_array($budgets)) {
@@ -54,7 +50,7 @@ if ($action == 'save_budgets' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
         foreach ($budgets as $category => $amount) {
             $category = (string) $category;
-            if (!in_array($category, BUDGET_CATEGORIES, true)) {
+            if (!Categories::isExpense($category)) {
                 continue; // only known categories (they are displayed on the budget pages)
             }
             $amount = is_scalar($amount) ? floatval($amount) : 0;
@@ -68,18 +64,52 @@ if ($action == 'save_budgets' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $pdo->commit();
         AuditHelper::log($pdo, 'save_budgets', "Updated Budgets for $month/$year. Categories: " . count($budgets));
+
+        // A lowered target may already be exceeded this month: alert now (never throws).
+        if ($month === (int) date('n') && $year === (int) date('Y')) {
+            BudgetAlertHelper::checkTenant($pdo, $tenant_id);
+        }
+
         $month_name = date('F', mktime(0, 0, 0, $month, 1, $year));
-        header("Location: manage_budgets.php?month=$month&year=$year&success=Budgets saved for $month_name $year");
-        exit();
+        Flash::redirect("manage_budgets.php?month=$month&year=$year", 'success', "Budgets saved for $month_name $year");
 
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
         error_log("Save Budgets Error: " . $e->getMessage());
-        header("Location: manage_budgets.php?month=$month&year=$year&error=Failed to save budgets");
-        exit();
+        Flash::redirect("manage_budgets.php?month=$month&year=$year", 'error', 'Failed to save budgets');
     }
+}
+
+if ($action == 'save_alert_settings' && $_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (!in_array($_SESSION['role'] ?? '', ['family_admin', 'root_admin'], true)) {
+        Flash::redirect('manage_budgets.php#alerts', 'error', 'Only the family admin can change budget alerts.');
+    }
+
+    $enabled  = !empty($_POST['enabled']);
+    $instant  = !empty($_POST['instant']);
+    $warn_pct = filter_input(INPUT_POST, 'warn_pct', FILTER_VALIDATE_INT);
+    $over_pct = filter_input(INPUT_POST, 'over_pct', FILTER_VALIDATE_INT);
+
+    if ($warn_pct === false || $warn_pct === null || $over_pct === false || $over_pct === null) {
+        Flash::redirect('manage_budgets.php#alerts', 'error', 'Please enter whole-number percentages for both thresholds.');
+    }
+    $error = BudgetAlertHelper::validate($warn_pct, $over_pct);
+    if ($error !== null) {
+        Flash::redirect('manage_budgets.php#alerts', 'error', $error);
+    }
+
+    try {
+        BudgetAlertHelper::saveSettings($pdo, $tenant_id, $enabled, $warn_pct, $over_pct, $instant);
+        AuditHelper::log($pdo, 'save_budget_alerts', 'Budget alerts ' . ($enabled ? 'on' : 'off')
+            . ", warn $warn_pct%, over $over_pct%, instant " . ($instant ? 'on' : 'off'));
+    } catch (Exception $e) {
+        error_log("Save Budget Alerts Error: " . $e->getMessage());
+        Flash::redirect('manage_budgets.php#alerts', 'error', 'Failed to save alert settings');
+    }
+
+    Flash::redirect('manage_budgets.php#alerts', 'success', 'Budget alert settings saved');
 }
 
 header("Location: budget.php");

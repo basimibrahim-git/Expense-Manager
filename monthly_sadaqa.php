@@ -5,6 +5,7 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
 use App\Helpers\Html;
+use App\Helpers\Flash;
 use App\Helpers\Layout;
 
 Bootstrap::init();
@@ -31,8 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        header("Location: $back&error=" . urlencode('Unauthorized: Read-only access'));
-        exit();
+        Flash::redirect($back, 'error', 'Unauthorized: Read-only access');
     }
 
     $action = $_POST['action'] ?? '';
@@ -44,8 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $date     = sadaqa_valid_date((string) ($_POST['sadaqa_date'] ?? ''));
 
         if ($title === '' || mb_strlen($title) > 255 || $amount === false || $amount <= 0 || $amount > 99999999.99 || $date === null) {
-            header("Location: $back&error=" . urlencode('Please enter a description, an amount greater than zero and a valid date.'));
-            exit();
+            Flash::redirect($back, 'error', 'Please enter a description, an amount greater than zero and a valid date.');
         }
 
         // Show the month the entry was saved in
@@ -56,8 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $title, $amount, $category, $date]);
 
             AuditHelper::log($pdo, 'add_sadaqa', "Added sadaqa: $title (AED $amount)");
-            header("Location: $back&success=" . urlencode('Sadaqa added'));
-            exit();
+            Flash::redirect($back, 'success', 'Sadaqa added');
         }
 
         $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
@@ -66,8 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt->execute([$title, $amount, $category, $date, $id, $_SESSION['tenant_id']]);
             AuditHelper::log($pdo, 'edit_sadaqa', "Updated sadaqa ID: $id");
         }
-        header("Location: $back&success=" . urlencode('Sadaqa updated'));
-        exit();
+        Flash::redirect($back, 'success', 'Sadaqa updated');
     }
 
     if ($action === 'delete_sadaqa') {
@@ -77,8 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt->execute([$id, $_SESSION['tenant_id']]);
             AuditHelper::log($pdo, 'delete_sadaqa', "Deleted sadaqa ID: $id");
         }
-        header("Location: $back&success=" . urlencode('Sadaqa deleted'));
-        exit();
+        Flash::redirect($back, 'success', 'Sadaqa deleted');
     }
 
     header("Location: $back");
@@ -104,18 +100,6 @@ $can_edit = ($_SESSION['permission'] ?? 'edit') !== 'read_only';
 ?>
 
 <div class="container-fluid py-4">
-    <?php if (!empty($_GET['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show rounded-4" role="alert">
-            <?php echo Html::e($_GET['success']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    <?php endif; ?>
-    <?php if (!empty($_GET['error'])): ?>
-        <div class="alert alert-danger alert-dismissible fade show rounded-4" role="alert">
-            <?php echo Html::e($_GET['error']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    <?php endif; ?>
 
     <!-- Header row with Filter -->
     <div class="row align-items-center mb-4 g-3">

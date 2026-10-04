@@ -4,7 +4,10 @@ require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\Layout;
 use App\Helpers\SecurityHelper;
-use App\Helpers\AuditHelper;
+use App\Helpers\Html;
+use App\Helpers\Flash;
+use App\Helpers\Categories;
+use App\Helpers\BudgetAlertHelper;
 
 Bootstrap::init();
 
@@ -15,8 +18,7 @@ if (!isset($_SESSION['user_id'])) {
 
 // Permission Check
 if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-    header("Location: budget.php?error=Unauthorized: Read-only access");
-    exit();
+    Flash::redirect('budget.php', 'error', 'Unauthorized: Read-only access');
 }
 
 $tenant_id = $_SESSION['tenant_id'];
@@ -52,19 +54,12 @@ if ($copy_month && $copy_year) {
     }
 }
 
-// predefined categories for easy setup
-$categories = [
-    'Grocery',
-    'Food',
-    'Medical',
-    'Shopping',
-    'Utilities',
-    'Transport',
-    'Travel',
-    'Entertainment',
-    'Education',
-    'Other'
-];
+// Budgetable categories = the expense categories
+$categories = Categories::EXPENSE;
+
+// Budget alert settings (family_admin / root_admin can change them)
+$alert_settings = BudgetAlertHelper::settings($pdo, (int) $tenant_id);
+$can_edit_alerts = in_array($_SESSION['role'] ?? '', ['family_admin', 'root_admin'], true);
 
 Layout::header();
 Layout::sidebar();
@@ -136,7 +131,7 @@ Layout::sidebar();
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($categories as $cat): ?>
+                                    <?php foreach ($categories as $cat => $cat_label): ?>
                                         <tr style="border-bottom: 1px solid rgba(0,0,0,0.03);">
                                             <td class="py-3">
                                                 <div class="d-flex align-items-center">
@@ -158,16 +153,16 @@ Layout::sidebar();
                                                         ?>"></i>
                                                     </div>
                                                     <span class="fw-bold text-dark-emphasis">
-                                                        <?php echo $cat; ?>
+                                                        <?php echo Html::e($cat_label); ?>
                                                     </span>
                                                 </div>
                                             </td>
                                             <td>
                                                 <div class="input-group">
                                                     <span class="input-group-text bg-light text-muted border-end-0" style="border-top-left-radius: 12px; border-bottom-left-radius: 12px;">AED</span>
-                                                    <input type="number" step="0.01" name="budgets[<?php echo $cat; ?>]"
+                                                    <input type="number" step="0.01" name="budgets[<?php echo Html::e($cat); ?>]"
                                                            class="form-control bg-white" placeholder="0.00" style="border-top-right-radius: 12px; border-bottom-right-radius: 12px;"
-                                                           value="<?php echo $existing_budgets[$cat]['amount'] ?? ''; ?>">
+                                                           value="<?php echo Html::e($existing_budgets[$cat]['amount'] ?? ''); ?>">
                                                 </div>
                                             </td>
                                             <td class="text-end">
@@ -196,6 +191,75 @@ Layout::sidebar();
                     </form>
                 </div>
             </div>
+
+            <!-- Budget alerts -->
+            <div id="alerts" class="glass-panel-premium shadow-sm border-0 rounded-4 overflow-hidden mb-4 p-0">
+                <div class="p-4 border-bottom border-light bg-light bg-opacity-50 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <h5 class="mb-1 fw-bold text-dark"><i class="fa-solid fa-bell me-2 text-primary"></i>Budget Alerts</h5>
+                        <p class="text-muted small mb-0">Email the family when a category reaches its warning or over-budget threshold (once per category per month).</p>
+                    </div>
+                    <?php if ($alert_settings['enabled']): ?>
+                        <span class="badge bg-success-subtle text-success px-3 py-2 rounded-pill fw-bold"><i class="fa-solid fa-bell me-1"></i> On</span>
+                    <?php else: ?>
+                        <span class="badge bg-light text-muted px-3 py-2 rounded-pill fw-bold"><i class="fa-solid fa-bell-slash me-1"></i> Off</span>
+                    <?php endif; ?>
+                </div>
+
+                <div class="p-4">
+                    <?php if ($can_edit_alerts): ?>
+                        <form action="budget_actions.php" method="POST" id="alertSettingsForm">
+                            <input type="hidden" name="action" value="save_alert_settings">
+                            <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
+
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="alertEnabled" name="enabled" value="1" <?php echo $alert_settings['enabled'] ? 'checked' : ''; ?>>
+                                        <label class="form-check-label fw-semibold" for="alertEnabled">Send budget alert emails</label>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="alertInstant" name="instant" value="1" <?php echo $alert_settings['instant'] ? 'checked' : ''; ?>>
+                                        <label class="form-check-label fw-semibold" for="alertInstant">Instant alerts</label>
+                                        <div class="form-text">Send as soon as an expense crosses a threshold. When off, alerts go out with the daily 9 AM check.</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="warnPct" class="form-label small fw-semibold text-muted text-uppercase">Warn at</label>
+                                    <div class="input-group mb-3">
+                                        <input type="number" class="form-control" id="warnPct" name="warn_pct" required
+                                               min="<?php echo BudgetAlertHelper::WARN_MIN; ?>" max="<?php echo BudgetAlertHelper::WARN_MAX; ?>" step="1"
+                                               value="<?php echo (int) $alert_settings['warn_pct']; ?>" data-oninput="checkAlertThresholds">
+                                        <span class="input-group-text">% of budget</span>
+                                    </div>
+                                    <label for="overPct" class="form-label small fw-semibold text-muted text-uppercase">Over budget at</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="overPct" name="over_pct" required
+                                               min="<?php echo BudgetAlertHelper::OVER_MIN; ?>" max="<?php echo BudgetAlertHelper::OVER_MAX; ?>" step="1"
+                                               value="<?php echo (int) $alert_settings['over_pct']; ?>" data-oninput="checkAlertThresholds">
+                                        <span class="input-group-text">% of budget</span>
+                                    </div>
+                                    <div class="form-text">Warning: <?php echo BudgetAlertHelper::WARN_MIN; ?>–<?php echo BudgetAlertHelper::WARN_MAX; ?>%. Over budget: <?php echo BudgetAlertHelper::OVER_MIN; ?>–<?php echo BudgetAlertHelper::OVER_MAX; ?>%, and higher than the warning.</div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 pt-3 border-top d-flex justify-content-end">
+                                <button type="submit" class="btn btn-primary rounded-pill px-5 fw-bold shadow-sm hover-lift">
+                                    Save Alerts <i class="fa-solid fa-floppy-disk ms-2"></i>
+                                </button>
+                            </div>
+                        </form>
+                    <?php else: ?>
+                        <p class="mb-2">
+                            Alerts are <strong><?php echo $alert_settings['enabled'] ? 'on' : 'off'; ?></strong><?php if ($alert_settings['enabled']): ?>:
+                            warning at <strong><?php echo (int) $alert_settings['warn_pct']; ?>%</strong>,
+                            over budget at <strong><?php echo (int) $alert_settings['over_pct']; ?>%</strong>,
+                            instant alerts <strong><?php echo $alert_settings['instant'] ? 'on' : 'off'; ?></strong><?php endif; ?>.
+                        </p>
+                        <p class="text-muted small mb-0"><i class="fa-solid fa-lock me-1"></i> Only the family admin can change alert settings.</p>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -207,6 +271,16 @@ Layout::sidebar();
             const copyYear  = <?php echo $month == 1 ? $year - 1 : $year; ?>;
             window.location.href = `manage_budgets.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>&copy_month=${copyMonth}&copy_year=${copyYear}`;
         }
+    }
+
+    // Budget alerts: the warning threshold must stay below the over-budget threshold.
+    function checkAlertThresholds() {
+        const warn = document.getElementById('warnPct');
+        const over = document.getElementById('overPct');
+        if (!warn || !over) return;
+        const w = parseInt(warn.value, 10);
+        const o = parseInt(over.value, 10);
+        over.setCustomValidity(!isNaN(w) && !isNaN(o) && w >= o ? 'Must be higher than the warning threshold.' : '');
     }
 </script>
 

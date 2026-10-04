@@ -4,6 +4,7 @@ require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Html;
+use App\Helpers\Flash;
 use App\Helpers\Layout;
 
 Bootstrap::init();
@@ -28,16 +29,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        header("Location: reminders.php?error=" . urlencode('Unauthorized: Read-only access'));
-        exit();
+        Flash::redirect('reminders.php', 'error', 'Unauthorized: Read-only access');
     }
 
     if ($_POST['action'] == 'add_reminder' || $_POST['action'] == 'update_reminder') {
         $title = trim((string) ($_POST['title'] ?? ''));
         $date = reminder_datetime($_POST['alert_date'] ?? '', $_POST['alert_time'] ?? '');
         if ($title === '' || mb_strlen($title) > 255 || $date === null) {
-            header("Location: reminders.php?error=" . urlencode('Please enter a title and a valid date/time.'));
-            exit;
+            Flash::redirect('reminders.php', 'error', 'Please enter a title and a valid date/time.');
         }
     }
 
@@ -48,8 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $stmt = $pdo->prepare("INSERT INTO reminders (user_id, tenant_id, title, alert_date, recurrence_type, color) VALUES (?, ?, ?, ?, ?, ?)");
         $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $title, $date, $recur_type, $color]);
 
-        header("Location: reminders.php?success=Reminder Added");
-        exit;
+        Flash::redirect('reminders.php', 'success', 'Reminder Added');
     } elseif ($_POST['action'] == 'update_reminder') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
         $recur_type = in_array($_POST['recurrence_type'] ?? 'none', $allowed_recurrence, true) ? $_POST['recurrence_type'] : 'none';
@@ -58,16 +56,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             $stmt = $pdo->prepare("UPDATE reminders SET title=?, alert_date=?, recurrence_type=? WHERE id=? AND tenant_id=?");
             $stmt->execute([$title, $date, $recur_type, $id, $_SESSION['tenant_id']]);
         }
-        header("Location: reminders.php?success=Reminder Updated");
-        exit;
+        Flash::redirect('reminders.php', 'success', 'Reminder Updated');
     } elseif ($_POST['action'] == 'delete_reminder') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
         if ($id) {
             $stmt = $pdo->prepare("DELETE FROM reminders WHERE id = ? AND tenant_id = ?");
             $stmt->execute([$id, $_SESSION['tenant_id']]);
         }
-        header("Location: reminders.php?deleted=1");
-        exit;
+        Flash::redirect('reminders.php', 'success', 'Reminder deleted');
     }
 }
 
@@ -80,18 +76,6 @@ $stmt->execute([$_SESSION['tenant_id']]);
 $reminders = $stmt->fetchAll();
 ?>
 
-<?php if (!empty($_GET['success'])): ?>
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <?php echo Html::e($_GET['success']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
-<?php if (!empty($_GET['error'])): ?>
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <?php echo Html::e($_GET['error']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 fw-bold mb-0">My Reminders</h1>

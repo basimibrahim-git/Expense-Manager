@@ -5,11 +5,34 @@ use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
 use App\Helpers\BalanceHelper;
 use App\Helpers\ExchangeRateHelper;
+use App\Helpers\Categories;
+use App\Helpers\Flash;
 
 Bootstrap::init();
 
-const INCOME_CATEGORIES = ['Salary', 'Incentives', 'Business', 'Bonus', 'Investment', 'Freelance', 'Gift', 'Other'];
 const INCOME_CURRENCIES = ['AED', 'INR'];
+
+/**
+ * A referer-based redirect target without legacy message params (?success= / ?error= / ?msg=),
+ * so an old bookmarked URL does not show a stale message next to the flash.
+ */
+function incomeCleanUrl(string $url): string
+{
+    $qPos = strpos($url, '?');
+    if ($qPos === false) {
+        return $url;
+    }
+    $fragment = '';
+    $hashPos = strpos($url, '#', $qPos);
+    if ($hashPos !== false) {
+        $fragment = substr($url, $hashPos);
+        $url = substr($url, 0, $hashPos);
+    }
+    parse_str(substr($url, $qPos + 1), $query);
+    unset($query['success'], $query['error'], $query['msg']);
+    $base = substr($url, 0, $qPos);
+    return ($query ? $base . '?' . http_build_query($query) : $base) . $fragment;
+}
 
 /**
  * Rate from $cur to AED, cached per request.
@@ -100,8 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
         $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'dashboard.php');
 
-        header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "error=Unauthorized: Read-only access");
-        exit();
+        Flash::redirect(incomeCleanUrl($redirect), 'error', 'Unauthorized: Read-only access');
     }
 }
 
@@ -112,18 +134,15 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $amount = floatval($_POST['amount'] ?? 0);
     $currency = strtoupper(trim((string) ($_POST['currency'] ?? 'AED')));
     if (!in_array($currency, INCOME_CURRENCIES, true)) {
-        header("Location: add_income.php?error=Invalid currency");
-        exit();
+        Flash::redirect('add_income.php', 'error', 'Invalid currency');
     }
     $dateRaw = (string) ($_POST['income_date'] ?? '');
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateRaw) || !strtotime($dateRaw)) {
-        header("Location: add_income.php?error=Invalid date format");
-        exit();
+        Flash::redirect('add_income.php', 'error', 'Invalid date format');
     }
     $year_check = (int)substr($dateRaw, 0, 4);
     if ($year_check < 2000 || $year_check > 2100) {
-        header("Location: add_income.php?error=Invalid year");
-        exit();
+        Flash::redirect('add_income.php', 'error', 'Invalid year');
     }
     $date = $dateRaw;
     $desc = trim((string) ($_POST['description'] ?? ''));
@@ -137,12 +156,10 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     if ($amount <= 0 || empty($desc)) {
-        header("Location: add_income.php?error=Invalid input");
-        exit();
+        Flash::redirect('add_income.php', 'error', 'Invalid input');
     }
-    if (!in_array($category, INCOME_CATEGORIES, true)) {
-        header("Location: add_income.php?error=Invalid category");
-        exit();
+    if (!Categories::isIncome($category)) {
+        Flash::redirect('add_income.php', 'error', 'Invalid category');
     }
     $recurrence_day = $recurrence_day ? max(1, min(31, (int) $recurrence_day)) : null;
 
@@ -150,8 +167,7 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $add_to_balance = isset($_POST['add_to_balance']) && $_POST['add_to_balance'] == '1';
     $bank_id = $add_to_balance ? filter_input(INPUT_POST, 'bank_id', FILTER_VALIDATE_INT) : null;
     if ($bank_id && !BalanceHelper::bank($pdo, (int) $tenant_id, $bank_id)) {
-        header("Location: add_income.php?error=Invalid bank selected");
-        exit();
+        Flash::redirect('add_income.php', 'error', 'Invalid bank selected');
     }
 
     try {
@@ -179,13 +195,11 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $year = date('Y', strtotime($date));
         AuditHelper::log($pdo, 'add_income', "Added Income: $desc ($amount $currency)");
         $msg = $balance_bank_id ? 'Income recorded and balance updated' : 'Income recorded';
-        header("Location: monthly_income.php?month=$month&year=$year&success=" . urlencode($msg));
-        exit();
+        Flash::redirect("monthly_income.php?month=$month&year=$year", 'success', $msg);
     } catch (PDOException $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         error_log("Add income: " . $e->getMessage());
-        header("Location: add_income.php?error=System error occurred during income processing.");
-        exit();
+        Flash::redirect('add_income.php', 'error', 'System error occurred during income processing.');
     }
 
 } elseif ($action == 'delete_income' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['id'])) {
@@ -205,23 +219,18 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         } catch (PDOException $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             error_log("Delete income: " . $e->getMessage());
-            header("Location: income.php?error=System error occurred while deleting.");
-            exit();
+            Flash::redirect('income.php', 'error', 'System error occurred while deleting.');
         }
     }
     if ($month && $year) {
-        header("Location: monthly_income.php?month=$month&year=$year&success=Income deleted");
-    } else {
-        // Try to return to where they were
-        header("Location: income.php?success=Deleted");
+        Flash::redirect("monthly_income.php?month=$month&year=$year", 'success', 'Income deleted');
     }
-    exit();
+    Flash::redirect('income.php', 'success', 'Income deleted');
 } elseif ($action == 'bulk_delete' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ids']) && is_array($_POST['ids'])) {
     $ids = array_slice(array_map('intval', (array)($_POST['ids'] ?? [])), 0, 500);
     if (empty($ids)) {
         $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'income.php');
-        header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "error=No valid IDs provided");
-        exit();
+        Flash::redirect(incomeCleanUrl($redirect), 'error', 'No valid IDs provided');
     }
     $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'income.php');
     $placeholders = str_repeat('?,', count($ids) - 1) . '?';
@@ -235,57 +244,49 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     } catch (PDOException $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         error_log("Bulk delete income: " . $e->getMessage());
-        header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "error=System error occurred while deleting.");
-        exit();
+        Flash::redirect(incomeCleanUrl($redirect), 'error', 'System error occurred while deleting.');
     }
     AuditHelper::log($pdo, 'bulk_delete_income', "Bulk Deleted " . count($ids) . " Income records. IDs: " . implode(',', $ids));
-    header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Bulk deleted");
-    exit();
+    Flash::redirect(incomeCleanUrl($redirect), 'success', 'Bulk deleted');
 } elseif ($action == 'bulk_change_category' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ids']) && is_array($_POST['ids'])) {
     $ids = array_slice(array_filter(array_map('intval', $_POST['ids'])), 0, 500);
     $category = trim((string) ($_POST['category'] ?? ''));
-    if (!empty($ids) && in_array($category, INCOME_CATEGORIES, true)) {
+    if (!empty($ids) && Categories::isIncome($category)) {
         $placeholders = str_repeat('?,', count($ids) - 1) . '?';
         $stmt = $pdo->prepare("UPDATE income SET category = ? WHERE id IN ($placeholders) AND tenant_id = ?");
         $stmt->execute(array_merge([$category], $ids, [$tenant_id]));
         AuditHelper::log($pdo, 'bulk_change_income_category', "Bulk Changed Category to $category for " . count($ids) . " Income records. IDs: " . implode(',', $ids));
     }
     $redirect = SecurityHelper::getSafeRedirect($_SERVER['HTTP_REFERER'] ?? null, 'income.php');
-    header("Location: $redirect" . (strpos($redirect, '?') === false ? '?' : '&') . "success=Bulk category updated");
-    exit();
+    Flash::redirect(incomeCleanUrl($redirect), 'success', 'Bulk category updated');
 } elseif ($action == 'update_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $user_id = $_SESSION['user_id'];
     $income_id = filter_input(INPUT_POST, 'income_id', FILTER_VALIDATE_INT);
 
     if (!$income_id) {
-        header("Location: income.php?error=Invalid income");
-        exit();
+        Flash::redirect('income.php', 'error', 'Invalid income');
     }
 
     $oldStmt = $pdo->prepare("SELECT category, currency, balance_bank_id FROM income WHERE id = ? AND tenant_id = ?");
     $oldStmt->execute([$income_id, $tenant_id]);
     $old = $oldStmt->fetch();
     if (!$old) {
-        header("Location: income.php?error=Income not found");
-        exit();
+        Flash::redirect('income.php', 'error', 'Income not found');
     }
 
     $amount = floatval($_POST['amount'] ?? 0);
     // Keep the stored currency when the form does not post one (never silently relabel INR as AED)
     $currency = strtoupper(trim((string) ($_POST['currency'] ?? ($old['currency'] ?: 'AED'))));
     if (!in_array($currency, INCOME_CURRENCIES, true) && $currency !== strtoupper((string) $old['currency'])) {
-        header("Location: edit_income.php?id=$income_id&error=Invalid currency");
-        exit();
+        Flash::redirect("edit_income.php?id=$income_id", 'error', 'Invalid currency');
     }
     $dateRaw = (string) ($_POST['income_date'] ?? '');
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateRaw) || !strtotime($dateRaw)) {
-        header("Location: edit_income.php?id=$income_id&error=Invalid date format");
-        exit();
+        Flash::redirect("edit_income.php?id=$income_id", 'error', 'Invalid date format');
     }
     $year_check = (int)substr($dateRaw, 0, 4);
     if ($year_check < 2000 || $year_check > 2100) {
-        header("Location: edit_income.php?id=$income_id&error=Invalid year");
-        exit();
+        Flash::redirect("edit_income.php?id=$income_id", 'error', 'Invalid year');
     }
     $date = $dateRaw;
     $desc = trim((string) ($_POST['description'] ?? ''));
@@ -298,13 +299,11 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     if ($amount <= 0 || empty($desc)) {
-        header("Location: edit_income.php?id=$income_id&error=Invalid input");
-        exit();
+        Flash::redirect("edit_income.php?id=$income_id", 'error', 'Invalid input');
     }
     // Allow the standard categories, or keeping the record's existing (legacy) category
-    if (!in_array($category, INCOME_CATEGORIES, true) && $category !== $old['category']) {
-        header("Location: edit_income.php?id=$income_id&error=Invalid category");
-        exit();
+    if (!Categories::isIncome($category) && $category !== $old['category']) {
+        Flash::redirect("edit_income.php?id=$income_id", 'error', 'Invalid category');
     }
     $recurrence_day = $recurrence_day ? max(1, min(31, (int) $recurrence_day)) : null;
 
@@ -320,8 +319,7 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $current = $rowStmt->fetch(PDO::FETCH_ASSOC);
         if (!$current) {
             $pdo->rollBack();
-            header("Location: income.php?error=Income not found");
-            exit();
+            Flash::redirect('income.php', 'error', 'Income not found');
         }
 
         // Reverse the original credit and re-apply the new amount to the same bank.
@@ -343,12 +341,12 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $pdo->commit();
 
         AuditHelper::log($pdo, 'update_income', "Updated Income: $desc ($amount $currency) - ID: $income_id");
-        header("Location: edit_income.php?id=$income_id&success=Income updated successfully");
-        exit();
+        Flash::redirect("edit_income.php?id=$income_id", 'success', 'Income updated successfully');
 
     } catch (PDOException $e) {
-        header("Location: edit_income.php?id=$income_id&error=System error occurred during update.");
-        exit();
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log("Update income: " . $e->getMessage());
+        Flash::redirect("edit_income.php?id=$income_id", 'error', 'System error occurred during update.');
     }
 }
 

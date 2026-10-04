@@ -4,6 +4,7 @@ require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Html;
+use App\Helpers\Flash;
 use App\Helpers\Layout;
 
 Bootstrap::init();
@@ -20,8 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        header("Location: $back&error=" . urlencode('Unauthorized: Read-only access'));
-        exit();
+        Flash::redirect($back, 'error', 'Unauthorized: Read-only access');
     }
 
     $amount = $_POST['amount'] ?? ''; // raw input to allow "0"
@@ -36,8 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             // title is NOT NULL without a default, so it must be supplied
             $stmt = $pdo->prepare("INSERT INTO company_incentives (user_id, tenant_id, title, amount, incentive_date) VALUES (?, ?, ?, ?, ?)");
             $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], 'Incentive', (float) $amount, $date]);
-            header("Location: $back&success=" . urlencode('Incentive Added'));
-            exit;
+            Flash::redirect($back, 'success', 'Incentive Added');
         }
     }
 
@@ -48,8 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         if ($id > 0 && $amount_ok) {
             $stmt = $pdo->prepare("UPDATE company_incentives SET amount = ? WHERE id = ? AND tenant_id = ?");
             $stmt->execute([(float) $amount, $id, $_SESSION['tenant_id']]);
-            header("Location: $back&success=" . urlencode('Updated'));
-            exit;
+            Flash::redirect($back, 'success', 'Updated');
         }
     }
 
@@ -60,13 +58,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         if ($id > 0) {
             $stmt = $pdo->prepare("DELETE FROM company_incentives WHERE id = ? AND tenant_id = ?");
             $stmt->execute([$id, $_SESSION['tenant_id']]);
-            header("Location: $back&success=" . urlencode('Deleted'));
-            exit;
+            Flash::redirect($back, 'success', 'Deleted');
         }
     }
 
-    header("Location: $back&error=" . urlencode('Please enter a valid amount.'));
-    exit;
+    Flash::redirect($back, 'error', 'Please enter a valid amount.');
 }
 
 Layout::header();
@@ -76,18 +72,6 @@ Layout::sidebar();
 $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]);
 ?>
 
-<?php if (!empty($_GET['success'])): ?>
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <?php echo Html::e($_GET['success']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
-<?php if (!empty($_GET['error'])): ?>
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <?php echo Html::e($_GET['error']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
 
 <?php if (!$selected_year): ?>
     <!-- VIEW 1: YEAR OVERVIEW -->

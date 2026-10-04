@@ -39,20 +39,6 @@ $all_banks = $banks_stmt->fetchAll();
         <p class="text-muted mb-0">Manually update the ending balance snapshot for a connected bank account</p>
     </div>
 
-    <?php if (isset($_GET['error'])): ?>
-        <div class="alert alert-danger alert-dismissible fade show rounded-4" role="alert">
-            <i class="fa-solid fa-exclamation-circle me-2"></i> <?php echo Html::e($_GET['error']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    <?php endif; ?>
-
-    <?php if (isset($_GET['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show rounded-4" role="alert">
-            <i class="fa-solid fa-check-circle me-2"></i> <?php echo Html::e($_GET['success']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    <?php endif; ?>
-
     <div class="row justify-content-center">
         <div class="col-lg-6 col-md-8">
             <div class="glass-panel-premium p-4 shadow-sm">

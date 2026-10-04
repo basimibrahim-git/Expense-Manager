@@ -9,6 +9,7 @@ use App\Helpers\AuditHelper;
 use App\Helpers\ExchangeRateHelper;
 use App\Helpers\BalanceHelper;
 use App\Helpers\Html;
+use App\Helpers\Flash;
 
 Bootstrap::init();
 
@@ -31,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        $_SESSION['error'] = 'Unauthorized: Read-only access.';
+        Flash::error('Unauthorized: Read-only access.');
         header("Location: net_worth.php");
         exit();
     }
@@ -49,9 +50,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("INSERT INTO net_worth_items (tenant_id, name, type, category, amount, notes) VALUES (?, ?, ?, ?, ?, ?)");
             $stmt->execute([$tenant_id, $name, $type, $category, $amount, $notes]);
             AuditHelper::log($pdo, 'add_net_worth_item', "Added $type: $name (AED $amount)");
-            $_SESSION['success'] = ucfirst($type) . ' added successfully.';
+            Flash::success(ucfirst($type) . ' added successfully.');
         } else {
-            $_SESSION['error'] = 'Invalid item data.';
+            Flash::error('Invalid item data.');
         }
         header("Location: net_worth.php");
         exit();
@@ -68,9 +69,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("UPDATE net_worth_items SET name=?, type=?, category=?, amount=?, notes=? WHERE id=? AND tenant_id=?");
             $stmt->execute([$name, $type, $category, $amount, $notes, $id, $tenant_id]);
             AuditHelper::log($pdo, 'update_net_worth_item', "Updated item ID $id: $name");
-            $_SESSION['success'] = 'Item updated successfully.';
+            Flash::success('Item updated successfully.');
         } else {
-            $_SESSION['error'] = 'Invalid item data.';
+            Flash::error('Invalid item data.');
         }
         header("Location: net_worth.php");
         exit();
@@ -81,9 +82,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("DELETE FROM net_worth_items WHERE id=? AND tenant_id=?");
             $stmt->execute([$id, $tenant_id]);
             AuditHelper::log($pdo, 'delete_net_worth_item', "Deleted item ID $id");
-            $_SESSION['success'] = 'Item deleted.';
+            Flash::success('Item deleted.');
         } else {
-            $_SESSION['error'] = 'Invalid item.';
+            Flash::error('Invalid item.');
         }
         header("Location: net_worth.php");
         exit();
@@ -124,7 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ON DUPLICATE KEY UPDATE total_assets=VALUES(total_assets), total_liabilities=VALUES(total_liabilities), net_worth=VALUES(net_worth)");
         $stmt->execute([$tenant_id, $snap_year, $snap_month, $snap_total_assets, $snap_liabilities, $snap_net_worth]);
         AuditHelper::log($pdo, 'take_net_worth_snapshot', "Snapshot for $snap_year-$snap_month: NW AED $snap_net_worth");
-        $_SESSION['success'] = 'Snapshot saved for ' . date('F Y') . '.';
+        Flash::success('Snapshot saved for ' . date('F Y') . '.');
         header("Location: net_worth.php");
         exit();
     }
@@ -183,14 +184,6 @@ foreach ($snapshots as $s) {
     $snap_values[] = (float)$s['net_worth'];
 }
 
-// Flash messages
-$flash_success = $_SESSION['success'] ?? null; unset($_SESSION['success']);
-$flash_error   = $_SESSION['error']   ?? null; unset($_SESSION['error']);
-
-// Also check GET-passed messages (legacy compat)
-if (!$flash_success && isset($_GET['success'])) $flash_success = (string) $_GET['success'];
-if (!$flash_error   && isset($_GET['error']))   $flash_error   = (string) $_GET['error'];
-
 Layout::header();
 Layout::sidebar();
 ?>
@@ -221,20 +214,6 @@ Layout::sidebar();
     </div>
     <?php endif; ?>
 </div>
-
-<!-- Flash Messages -->
-<?php if ($flash_success): ?>
-<div class="alert alert-success alert-dismissible fade show" role="alert">
-    <i class="fa-solid fa-check-circle me-2"></i><?php echo Html::e($flash_success); ?>
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
-<?php endif; ?>
-<?php if ($flash_error): ?>
-<div class="alert alert-danger alert-dismissible fade show" role="alert">
-    <i class="fa-solid fa-triangle-exclamation me-2"></i><?php echo Html::e($flash_error); ?>
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
-<?php endif; ?>
 
 <!-- ── Stat Cards ──────────────────────────────────────────────────────────── -->
 <div class="row g-4 mb-4">
@@ -614,7 +593,7 @@ Layout::sidebar();
 <?php Layout::footer(); ?>
 
 <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
-const ASSET_CATEGORIES      = ['Bank Account','Savings Goal','Investment','Property','Vehicle','Cash','Other'];
+const ASSET_CATEGORIES      = ['Bank Account','Savings Goal','Investment','Gold & Silver','Property','Vehicle','Cash','Other'];
 const LIABILITY_CATEGORIES  = ['Credit Card','Loan','Mortgage','Other'];
 
 function updateCategoryOptions(type, selected) {

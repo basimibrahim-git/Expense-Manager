@@ -4,6 +4,7 @@ require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Html;
+use App\Helpers\Flash;
 use App\Helpers\Layout;
 
 Bootstrap::init();
@@ -17,8 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        header("Location: calendar.php?error=" . urlencode('Unauthorized: Read-only access'));
-        exit();
+        Flash::redirect('calendar.php', 'error', 'Unauthorized: Read-only access');
     }
 
     $action = $_POST['action'] ?? '';
@@ -31,24 +31,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $color = in_array($_POST['color'] ?? 'primary', $allowed_colors, true) ? $_POST['color'] : 'primary';
 
         if ($title === '' || mb_strlen($title) > 255 || !$d || $d->format('Y-m-d') !== $date_in) {
-            header("Location: calendar.php?error=" . urlencode('Please enter a title and a valid date.'));
-            exit;
+            Flash::redirect('calendar.php', 'error', 'Please enter a title and a valid date.');
         }
         $date = $d->format('Y-m-d 00:00:00'); // alert_date is DATETIME; the calendar form has no time field
 
         $stmt = $pdo->prepare("INSERT INTO reminders (user_id, tenant_id, title, alert_date, recurrence_type, color) VALUES (?, ?, ?, ?, ?, ?)");
         $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $title, $date, $recur_type, $color]);
 
-        header("Location: calendar.php?success=Reminder Added");
-        exit;
+        Flash::redirect('calendar.php', 'success', 'Reminder Added');
     } elseif ($action == 'delete_reminder') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
         if ($id) {
             $stmt = $pdo->prepare("DELETE FROM reminders WHERE id = ? AND tenant_id = ?");
             $stmt->execute([$id, $_SESSION['tenant_id']]);
         }
-        header("Location: calendar.php?deleted=1");
-        exit;
+        Flash::redirect('calendar.php', 'success', 'Reminder deleted');
     }
 
     header("Location: calendar.php");

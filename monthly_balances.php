@@ -85,19 +85,6 @@ Layout::sidebar();
         </div>
     </div>
 
-    <?php if (isset($_GET['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show rounded-4" role="alert">
-            <i class="fa-solid fa-check-circle me-2"></i> <?php echo Html::e($_GET['success']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    <?php endif; ?>
-    <?php if (isset($_GET['error'])): ?>
-        <div class="alert alert-danger alert-dismissible fade show rounded-4" role="alert">
-            <i class="fa-solid fa-exclamation-circle me-2"></i> <?php echo Html::e($_GET['error']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    <?php endif; ?>
-
     <?php
     // RECONCILIATION LOGIC
     // 1. Previous month closing balance = latest balance of every bank as of last month's end

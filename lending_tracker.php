@@ -4,6 +4,7 @@ require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Html;
+use App\Helpers\Flash;
 use App\Helpers\Layout;
 use App\Helpers\ExchangeRateHelper;
 
@@ -25,8 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        header("Location: lending_tracker.php?error=" . urlencode('Unauthorized: Read-only access'));
-        exit();
+        Flash::redirect('lending_tracker.php', 'error', 'Unauthorized: Read-only access');
     }
 
     if (isset($_POST['action'])) {
@@ -41,8 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             if (!empty($name) && $amount > 0 && $lent_date !== null) {
                 $stmt = $pdo->prepare("INSERT INTO lending_tracker (user_id, tenant_id, borrower_name, amount, currency, lent_date, due_date, notes, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending')");
                 $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $name, $amount, $currency, $lent_date, $due_date, $notes]);
-                header("Location: lending_tracker.php?success=Record Added");
-                exit;
+                Flash::redirect('lending_tracker.php', 'success', 'Record Added');
             }
         } elseif ($_POST['action'] == 'edit_lending') {
             $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
@@ -56,8 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             if ($id && !empty($name) && $amount > 0 && $lent_date !== null) {
                 $stmt = $pdo->prepare("UPDATE lending_tracker SET borrower_name = ?, amount = ?, currency = ?, lent_date = ?, due_date = ?, notes = ? WHERE id = ? AND tenant_id = ?");
                 $stmt->execute([$name, $amount, $currency, $lent_date, $due_date, $notes, $id, $_SESSION['tenant_id']]);
-                header("Location: lending_tracker.php?success=Record Updated");
-                exit;
+                Flash::redirect('lending_tracker.php', 'success', 'Record Updated');
             }
         } elseif ($_POST['action'] == 'mark_paid') {
             $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
@@ -66,8 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $stmt = $pdo->prepare("UPDATE lending_tracker SET status = 'Paid' WHERE id = ? AND tenant_id = ?");
                 $stmt->execute([$id, $_SESSION['tenant_id']]);
 
-                header("Location: lending_tracker.php?success=Marked as Paid");
-                exit;
+                Flash::redirect('lending_tracker.php', 'success', 'Marked as Paid');
             }
         } elseif ($_POST['action'] == 'delete_lending') {
             $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
@@ -75,8 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $stmt = $pdo->prepare("DELETE FROM lending_tracker WHERE id = ? AND tenant_id = ?");
                 $stmt->execute([$id, $_SESSION['tenant_id']]);
 
-                header("Location: lending_tracker.php?success=Record Deleted");
-                exit;
+                Flash::redirect('lending_tracker.php', 'success', 'Record Deleted');
             }
         } elseif ($_POST['action'] == 'bulk_delete_lending') {
             if (isset($_POST['ids']) && is_array($_POST['ids'])) {
@@ -87,8 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $stmt->execute(array_merge($ids, [$_SESSION['tenant_id']]));
                 }
             }
-            header("Location: lending_tracker.php?success=Bulk Deleted");
-            exit;
+            Flash::redirect('lending_tracker.php', 'success', 'Bulk Deleted');
         } elseif ($_POST['action'] == 'bulk_paid_lending') {
             if (isset($_POST['ids']) && is_array($_POST['ids'])) {
                 $ids = array_map('intval', $_POST['ids']);
@@ -98,13 +93,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $stmt->execute(array_merge($ids, [$_SESSION['tenant_id']]));
                 }
             }
-            header("Location: lending_tracker.php?success=Records Marked as Paid");
-            exit;
+            Flash::redirect('lending_tracker.php', 'success', 'Records Marked as Paid');
         }
     }
 
-    header("Location: lending_tracker.php?error=" . urlencode('Please fill in the name, an amount greater than zero and a valid lent date.'));
-    exit;
+    Flash::redirect('lending_tracker.php', 'error', 'Please fill in the name, an amount greater than zero and a valid lent date.');
 }
 
 Layout::header();
@@ -143,18 +136,6 @@ $stmt->execute([$inr_to_aed, $inr_to_aed, $_SESSION['tenant_id']]);
 $summary = $stmt->fetch();
 ?>
 
-<?php if (!empty($_GET['success'])): ?>
-    <div class="alert alert-success alert-dismissible fade show rounded-4" role="alert">
-        <?php echo Html::e($_GET['success']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
-<?php if (!empty($_GET['error'])): ?>
-    <div class="alert alert-danger alert-dismissible fade show rounded-4" role="alert">
-        <?php echo Html::e($_GET['error']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
 
 <!-- Premium Header Banner -->
 <div class="row mb-4">

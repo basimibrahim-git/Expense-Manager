@@ -11,6 +11,7 @@ require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
+use App\Helpers\Flash;
 
 Bootstrap::init();
 
@@ -24,8 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
 
 if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-    header("Location: $back?error=" . urlencode("Unauthorized: Read-only access"));
-    exit();
+    Flash::redirect($back, 'error', 'Unauthorized: Read-only access');
 }
 
 $tenant_id = (int) $_SESSION['tenant_id'];
@@ -35,22 +35,19 @@ $action    = $_POST['action'] ?? '';
 $dateRaw = $_POST['date'] ?? '';
 $dt = DateTime::createFromFormat('!Y-m-d', $dateRaw);
 if (!$dt || $dt->format('Y-m-d') !== $dateRaw) {
-    header("Location: $back?error=" . urlencode("Invalid date"));
-    exit();
+    Flash::redirect($back, 'error', 'Invalid date');
 }
 $date = $dateRaw;
 $back .= '?month=' . (int) $dt->format('n') . '&year=' . (int) $dt->format('Y');
 
 $diffRaw = $_POST['difference'] ?? '';
 if (!is_numeric($diffRaw) || !is_finite((float) $diffRaw) || abs((float) $diffRaw) >= 1e12) {
-    header("Location: $back&error=" . urlencode("Invalid difference"));
-    exit();
+    Flash::redirect($back, 'error', 'Invalid difference');
 }
 $diff = round((float) $diffRaw, 2);
 
 if ($action !== 'auto_fix') {
-    header("Location: $back&error=" . urlencode("Unknown action"));
-    exit();
+    Flash::redirect($back, 'error', 'Unknown action');
 }
 
 if (abs($diff) < 0.01) {
@@ -73,9 +70,7 @@ try {
     AuditHelper::log($pdo, 'reconcile_auto_fix', "$desc: $diff AED");
 } catch (PDOException $e) {
     error_log("Reconcile Fix Error: " . $e->getMessage());
-    header("Location: $back&error=" . urlencode("Failed to record the adjustment."));
-    exit();
+    Flash::redirect($back, 'error', 'Failed to record the adjustment.');
 }
 
-header("Location: $back&success=" . urlencode("Adjustment recorded"));
-exit();
+Flash::redirect($back, 'success', 'Adjustment recorded');

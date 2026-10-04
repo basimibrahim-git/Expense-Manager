@@ -5,6 +5,7 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
 use App\Helpers\Html;
+use App\Helpers\Categories;
 
 Bootstrap::init();
 
@@ -27,20 +28,6 @@ $all_banks = $banks_stmt->fetchAll();
             <h1 class="h3 fw-bold mb-0 text-dark">Add New Card</h1>
         </div>
     </div>
-
-    <?php if (isset($_GET['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show rounded-4" role="alert">
-            <i class="fa-solid fa-check-circle me-2"></i> <?php echo Html::e($_GET['success']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    <?php endif; ?>
-
-    <?php if (isset($_GET['error'])): ?>
-        <div class="alert alert-danger alert-dismissible fade show rounded-4" role="alert">
-            <i class="fa-solid fa-exclamation-circle me-2"></i> <?php echo Html::e($_GET['error']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    <?php endif; ?>
 
     <div class="row g-4">
         <!-- Form Section -->
@@ -148,14 +135,14 @@ $all_banks = $banks_stmt->fetchAll();
 
                     <div class="row g-3 mb-4">
                         <div class="col-md-6">
-                            <label class="form-label fw-bold text-muted small" for="billDayInput">Bill Generation Day</label>
-                            <input type="number" name="bill_day" id="billDayInput" class="form-control rounded-pill px-3" placeholder="e.g. 15" min="1" max="31">
-                            <div class="form-text text-muted x-small ps-1 mt-1">Calendar date for monthly bill issuance.</div>
+                            <label class="form-label fw-bold text-muted small" for="statementDayInput">Statement Day</label>
+                            <input type="number" name="statement_day" id="statementDayInput" class="form-control rounded-pill px-3" placeholder="e.g. 14" min="1" max="31">
+                            <div class="form-text text-muted x-small ps-1 mt-1">Day of the month the statement closes (31 = last day of the month). Credit cards only.</div>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-bold text-muted small" for="statementDayInput">Statement Closing Day</label>
-                            <input type="number" name="statement_day" id="statementDayInput" class="form-control rounded-pill px-3" placeholder="e.g. 14" min="1" max="31">
-                            <div class="form-text text-muted x-small ps-1 mt-1">Calendar date when statement closes.</div>
+                            <label class="form-label fw-bold text-muted small" for="billDayInput">Payment Due Day</label>
+                            <input type="number" name="bill_day" id="billDayInput" class="form-control rounded-pill px-3" placeholder="e.g. 8" min="1" max="31">
+                            <div class="form-text text-muted x-small ps-1 mt-1">Day the payment is due. If it is on or before the statement day, it falls in the following month.</div>
                         </div>
                     </div>
 
@@ -163,84 +150,19 @@ $all_banks = $banks_stmt->fetchAll();
                     <div class="mb-4">
                         <label class="form-label fw-bold text-muted small"><i class="fa-solid fa-percent text-primary me-2"></i>Cashback Category Matrix %</label>
                         <div class="p-3 bg-light rounded-4 border border-light">
-                            <div class="row g-2 mb-2">
-                                <div class="col-6 col-md-3">
-                                    <label class="x-small text-muted fw-bold mb-1" for="cbGrocery">Grocery</label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="number" name="cb_Grocery" id="cbGrocery" class="form-control" step="0.1" value="0">
-                                        <span class="input-group-text">%</span>
-                                    </div>
-                                </div>
-                                <div class="col-6 col-md-3">
-                                    <label class="x-small text-muted fw-bold mb-1" for="cbFood">Dining/Food</label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="number" name="cb_Food" id="cbFood" class="form-control" step="0.1" value="0">
-                                        <span class="input-group-text">%</span>
-                                    </div>
-                                </div>
-                                <div class="col-6 col-md-3">
-                                    <label class="x-small text-muted fw-bold mb-1" for="cbTransport">Transport</label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="number" name="cb_Transport" id="cbTransport" class="form-control" step="0.1" value="0">
-                                        <span class="input-group-text">%</span>
-                                    </div>
-                                </div>
-                                <div class="col-6 col-md-3">
-                                    <label class="x-small text-muted fw-bold mb-1" for="cbShopping">Shopping</label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="number" name="cb_Shopping" id="cbShopping" class="form-control" step="0.1" value="0">
-                                        <span class="input-group-text">%</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row g-2 mb-2">
-                                <div class="col-6 col-md-3">
-                                    <label class="x-small text-muted fw-bold mb-1" for="cbUtilities">Utilities</label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="number" name="cb_Utilities" id="cbUtilities" class="form-control" step="0.1" value="0">
-                                        <span class="input-group-text">%</span>
-                                    </div>
-                                </div>
-                                <div class="col-6 col-md-3">
-                                    <label class="x-small text-muted fw-bold mb-1" for="cbTravel">Travel</label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="number" name="cb_Travel" id="cbTravel" class="form-control" step="0.1" value="0">
-                                        <span class="input-group-text">%</span>
-                                    </div>
-                                </div>
-                                <div class="col-6 col-md-3">
-                                    <label class="x-small text-muted fw-bold mb-1" for="cbMedical">Medical</label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="number" name="cb_Medical" id="cbMedical" class="form-control" step="0.1" value="0">
-                                        <span class="input-group-text">%</span>
-                                    </div>
-                                </div>
-                                <div class="col-6 col-md-3">
-                                    <label class="x-small text-muted fw-bold mb-1" for="cbEntertainment">Entmt.</label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="number" name="cb_Entertainment" id="cbEntertainment" class="form-control" step="0.1" value="0">
-                                        <span class="input-group-text">%</span>
-                                    </div>
-                                </div>
-                            </div>
                             <div class="row g-2">
-                                <div class="col-6 col-md-3">
-                                    <label class="x-small text-muted fw-bold mb-1" for="cbEducation">Education</label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="number" name="cb_Education" id="cbEducation" class="form-control" step="0.1" value="0">
-                                        <span class="input-group-text">%</span>
+                                <?php foreach (Categories::EXPENSE as $cbKey => $cbLabel): ?>
+                                    <div class="col-6 col-md-3">
+                                        <label class="x-small text-muted fw-bold mb-1 text-truncate d-block" for="cb<?php echo Html::e($cbKey); ?>" title="<?php echo Html::e($cbLabel); ?>"><?php echo Html::e($cbLabel); ?></label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="number" name="cb_<?php echo Html::e($cbKey); ?>" id="cb<?php echo Html::e($cbKey); ?>" class="form-control" step="0.1" min="0" max="100" value="0">
+                                            <span class="input-group-text">%</span>
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="col-6 col-md-3">
-                                    <label class="x-small text-muted fw-bold mb-1" for="cbOther">Other/Gen.</label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="number" name="cb_Other" id="cbOther" class="form-control" step="0.1" value="0">
-                                        <span class="input-group-text">%</span>
-                                    </div>
-                                </div>
+                                <?php endforeach; ?>
                             </div>
                         </div>
-                        <div class="form-text text-muted x-small ps-1 mt-1">Points/cashback matrices will automatically assign reward amounts to expenses.</div>
+                        <div class="form-text text-muted x-small ps-1 mt-1">Rates are applied to new card expenses by category ("Other" is used for categories without a rate).</div>
                     </div>
 
                     <!-- Offers & Features -->

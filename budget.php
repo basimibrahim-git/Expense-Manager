@@ -5,6 +5,8 @@ use App\Core\Bootstrap;
 use App\Helpers\Layout;
 use App\Helpers\Html;
 use App\Helpers\ExchangeRateHelper;
+use App\Helpers\Categories;
+use App\Helpers\BudgetAlertHelper;
 
 Bootstrap::init();
 
@@ -30,14 +32,14 @@ $stmt->execute([$_SESSION['tenant_id'], $month, $year]);
 $expenses = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
 // 3. Define Buckets
-$needs_cats = ['Grocery', 'Medical', 'Utilities', 'Transport', 'Education'];
-$wants_cats = ['Food', 'Shopping', 'Entertainment', 'Travel', 'Other'];
+$needs_cats = Categories::NEEDS;
+$wants_cats = Categories::WANTS;
 
 $total_needs = 0;
 $total_wants = 0;
 
 foreach ($expenses as $cat => $amount) {
-    if (in_array($cat, $needs_cats)) {
+    if (in_array($cat, $needs_cats, true)) {
         $total_needs += $amount;
     } else {
         $total_wants += $amount; // Default to wants if unknown
@@ -68,12 +70,30 @@ $needs_color = getStatusColor($needs_pct, 50);
 $wants_color = getStatusColor($wants_pct, 30);
 $savings_color = getStatusColor($savings_pct, 20, true);
 
+// Budget alert thresholds (manage_budgets.php#alerts)
+$alert_settings = BudgetAlertHelper::settings($pdo, (int) $_SESSION['tenant_id']);
+$warn_pct = $alert_settings['warn_pct'];
+$over_pct = $alert_settings['over_pct'];
+$can_edit = ($_SESSION['permission'] ?? 'edit') !== 'read_only';
+
 // Helper for SVG circular progress offset
 function getCircleOffset($pct) {
     $clamped = max(0, min($pct, 100));
     return 314.16 - (314.16 * ($clamped / 100));
 }
 ?>
+
+<style>
+    .budget-track { position: relative; }
+    .budget-marker {
+        position: absolute; top: -3px; width: 2px; height: 14px;
+        transform: translateX(-1px); border-radius: 1px;
+    }
+    .budget-marker-warn { background: #d97706; }
+    .budget-marker-over { background: #dc2626; }
+    .budget-alert-pill { font-size: 0.75rem; }
+    a.budget-alert-pill:hover { filter: brightness(0.95); }
+</style>
 
 <!-- SVG Gradients Definition -->
 <svg width="0" height="0" style="position: absolute;">
@@ -263,16 +283,33 @@ function getCircleOffset($pct) {
             <h5 class="fw-bold mb-1">Category Budgets vs Actuals</h5>
             <p class="text-muted small mb-0">Live trackers matching your actual category spending with defined constraints</p>
         </div>
-        <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
-            <a href="manage_budgets.php" class="btn btn-primary btn-sm rounded-pill px-4 shadow-sm hover-lift">
-                <i class="fa-solid fa-sliders me-1"></i> Manage Targets
-            </a>
-        <?php endif; ?>
+        <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+            <?php
+            $alert_pill_text = $alert_settings['enabled']
+                ? "Alerts: on — warn at {$warn_pct}%, over at {$over_pct}%"
+                : 'Alerts: off';
+            $alert_pill_class = $alert_settings['enabled'] ? 'bg-primary-subtle text-primary' : 'bg-light text-muted';
+            $alert_pill_icon = $alert_settings['enabled'] ? 'fa-bell' : 'fa-bell-slash';
+            ?>
+            <?php if ($can_edit): ?>
+                <a href="manage_budgets.php#alerts" class="badge rounded-pill <?php echo $alert_pill_class; ?> px-3 py-2 fw-semibold text-decoration-none budget-alert-pill" title="Budget alert settings">
+                    <i class="fa-solid <?php echo $alert_pill_icon; ?> me-1"></i><?php echo Html::e($alert_pill_text); ?>
+                </a>
+                <a href="manage_budgets.php" class="btn btn-primary btn-sm rounded-pill px-4 shadow-sm hover-lift">
+                    <i class="fa-solid fa-sliders me-1"></i> Manage Targets
+                </a>
+            <?php else: ?>
+                <span class="badge rounded-pill <?php echo $alert_pill_class; ?> px-3 py-2 fw-semibold budget-alert-pill">
+                    <i class="fa-solid <?php echo $alert_pill_icon; ?> me-1"></i><?php echo Html::e($alert_pill_text); ?>
+                </span>
+            <?php endif; ?>
+        </div>
     </div>
 
     <?php
     // Fetch specifically defined budgets
-    $stmt = $pdo->prepare("SELECT category, amount FROM budgets WHERE tenant_id = ? AND month = ? AND year = ?");
+    // ORDER BY id: if legacy data holds several rows per category, the latest one wins
+    $stmt = $pdo->prepare("SELECT category, amount FROM budgets WHERE tenant_id = ? AND month = ? AND year = ? ORDER BY id");
     $stmt->execute([$_SESSION['tenant_id'], $month, $year]);
     $cat_budgets = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
     ?>
@@ -290,16 +327,23 @@ function getCircleOffset($pct) {
     <?php else: ?>
         <div class="row g-4">
             <?php foreach ($cat_budgets as $cat => $limit):
-                $spent = $expenses[$cat] ?? 0;
+                $spent = (float) ($expenses[$cat] ?? 0);
+                $limit = (float) $limit;
                 $pct = $limit > 0 ? ($spent / $limit) * 100 : 0;
                 $var = $limit - $spent;
+                // Same thresholds as the alert emails
                 $color = 'success';
-                if ($pct > 80) {
+                if ($pct >= $warn_pct) {
                     $color = 'warning';
                 }
-                if ($pct > 100) {
+                if ($pct >= $over_pct) {
                     $color = 'danger';
                 }
+                // The bar spans 0..max(100%, over threshold) so both markers fit
+                $scale = max(100, $over_pct);
+                $bar_width = min($pct, $scale) / $scale * 100;
+                $warn_pos = $warn_pct / $scale * 100;
+                $over_pos = $over_pct / $scale * 100;
                 ?>
                 <div class="col-md-6 col-lg-4">
                     <div class="p-4 rounded-4 border border-light bg-white bg-opacity-50 shadow-sm hover-lift transition-all">
@@ -322,18 +366,25 @@ function getCircleOffset($pct) {
                                     };
                                     ?>"></i>
                                 </div>
-                                <span class="fw-bold text-dark"><?php echo Html::e($cat); ?></span>
+                                <span class="fw-bold text-dark"><?php echo Html::e(Categories::EXPENSE[$cat] ?? $cat); ?></span>
                             </div>
                             <span class="badge rounded-pill bg-<?php echo $color; ?>-subtle text-<?php echo $color; ?> px-2 py-1 small fw-bold">
                                 <?php echo number_format($pct, 0); ?>%
                             </span>
                         </div>
                         
-                        <!-- Premium Custom Progress Bar -->
-                        <div class="progress rounded-pill mb-2" style="height: 8px; background: rgba(0,0,0,0.05);">
-                            <div class="progress-bar rounded-pill bg-<?php echo $color; ?>" role="progressbar" 
-                                 style="width: <?php echo min($pct, 100); ?>%; transition: width 0.6s ease-in-out;" 
-                                 aria-valuenow="<?php echo min($pct, 100); ?>" aria-valuemin="0" aria-valuemax="100"></div>
+                        <!-- Progress bar with alert threshold markers -->
+                        <div class="budget-track mb-2">
+                            <div class="progress rounded-pill" style="height: 8px; background: rgba(0,0,0,0.05);">
+                                <div class="progress-bar rounded-pill bg-<?php echo $color; ?>" role="progressbar"
+                                     style="width: <?php echo round($bar_width, 2); ?>%; transition: width 0.6s ease-in-out;"
+                                     aria-label="<?php echo Html::e($cat); ?> budget used"
+                                     aria-valuenow="<?php echo round($pct); ?>" aria-valuemin="0" aria-valuemax="<?php echo $scale; ?>"></div>
+                            </div>
+                            <span class="budget-marker budget-marker-warn" style="left: <?php echo round($warn_pos, 2); ?>%;" title="Warning at <?php echo $warn_pct; ?>%"></span>
+                            <?php if ($over_pct > 100): ?>
+                                <span class="budget-marker budget-marker-over" style="left: <?php echo round($over_pos, 2); ?>%;" title="Over budget at <?php echo $over_pct; ?>%"></span>
+                            <?php endif; ?>
                         </div>
 
                         <div class="d-flex justify-content-between small text-muted mb-2">

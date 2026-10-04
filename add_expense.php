@@ -5,6 +5,7 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
 use App\Helpers\Html;
+use App\Helpers\Categories;
 
 Bootstrap::init();
 
@@ -44,6 +45,17 @@ if ($tenant_id) {
     }
 }
 
+// "Split with family" needs the family_split migration and at least two members
+$split_ready = false;
+if (count($family_members) > 1) {
+    try {
+        $pdo->query("SELECT 1 FROM expense_splits LIMIT 0");
+        $split_ready = true;
+    } catch (PDOException $e) {
+        $split_ready = false;
+    }
+}
+
 $pre_month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]) ?: null;
 $pre_year  = filter_input(INPUT_GET, 'year',  FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]) ?: null;
 $default_date = date('Y-m-d');
@@ -72,13 +84,6 @@ Layout::sidebar();
 $saved_count  = isset($_GET['added']) ? intval($_GET['added']) : 0;
 $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&year=' . ($pre_year ?? date('Y'));
 ?>
-
-<?php if (isset($_GET['error'])): ?>
-    <div class="alert alert-danger alert-dismissible fade show">
-        <i class="fa-solid fa-circle-exclamation me-2"></i><?php echo htmlspecialchars($_GET['error']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-<?php endif; ?>
 
 <form action="expense_actions.php" method="POST" id="bulkExpenseForm" novalidate>
     <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
@@ -130,7 +135,7 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
             <!-- Spent By -->
             <div class="col-md-4 col-6">
                 <label class="form-label small fw-bold" for="spentByUser">Spent By</label>
-                <select name="spent_by_user_id" id="spentByUser" class="form-select">
+                <select name="spent_by_user_id" id="spentByUser" class="form-select" data-onchange="updateSplitPreview">
                     <?php foreach ($family_members as $member): ?>
                         <option value="<?php echo (int) $member['id']; ?>"
                             <?php echo $member['id'] == $family_admin_id ? 'selected' : ''; ?>>
@@ -181,6 +186,58 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
                     </label>
                 </div>
             </div>
+
+            <?php if ($split_ready): ?>
+            <!-- Split with family (off by default; applies to every row) -->
+            <div class="col-12">
+                <div class="border rounded-3 p-3">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" name="split_enabled" id="splitEnabled"
+                            value="1" data-onchange="toggleSplit">
+                        <label class="form-check-label small fw-bold" for="splitEnabled">
+                            <i class="fa-solid fa-people-arrows me-1 text-primary"></i> Split with family
+                        </label>
+                        <span class="text-muted x-small ms-1">(the person in "Spent By" is owed the other members' shares)</span>
+                    </div>
+
+                    <div id="splitPanel" class="mt-3" style="display:none;">
+                        <div class="btn-group btn-group-sm mb-3" role="group" aria-label="Split mode">
+                            <input type="radio" class="btn-check" name="split_mode" id="splitModeEqual" value="equal" checked
+                                data-onchange="updateSplitPreview">
+                            <label class="btn btn-outline-primary" for="splitModeEqual">Equal</label>
+                            <input type="radio" class="btn-check" name="split_mode" id="splitModeCustom" value="custom"
+                                data-onchange="updateSplitPreview">
+                            <label class="btn btn-outline-primary" for="splitModeCustom">Custom amounts</label>
+                        </div>
+
+                        <div class="row g-2">
+                            <?php foreach ($family_members as $member): ?>
+                                <div class="col-md-4 col-sm-6">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="form-check mb-0 flex-grow-1">
+                                            <input class="form-check-input split-user" type="checkbox" name="split_users[]"
+                                                id="splitUser<?php echo (int) $member['id']; ?>"
+                                                value="<?php echo (int) $member['id']; ?>" checked
+                                                data-onchange="updateSplitPreview">
+                                            <label class="form-check-label small" for="splitUser<?php echo (int) $member['id']; ?>">
+                                                <?php echo Html::e($member['name']); ?>
+                                            </label>
+                                        </div>
+                                        <input type="number" name="split_amounts[<?php echo (int) $member['id']; ?>]"
+                                            class="form-control form-control-sm split-amount" style="max-width:120px; display:none;"
+                                            data-user="<?php echo (int) $member['id']; ?>" disabled
+                                            step="0.01" min="0" placeholder="0.00"
+                                            aria-label="<?php echo Html::e('Share for ' . $member['name']); ?>"
+                                            data-oninput="updateSplitPreview">
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <div class="small text-muted mt-2" id="splitHint"></div>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -240,16 +297,7 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
                 <select name="expenses[IDX][category]" class="form-select form-select-sm row-category" required
                     data-onchange="calcRowReward" data-args="<?php echo Html::args('$this'); ?>">
                     <option value="" disabled selected>Category *</option>
-                    <option value="Grocery">Grocery & Supermarkets</option>
-                    <option value="Medical">Medical & Healthcare</option>
-                    <option value="Food">Food & Dining</option>
-                    <option value="Utilities">Bills & Utilities</option>
-                    <option value="Transport">Transport & Fuel</option>
-                    <option value="Shopping">Shopping & Apparel</option>
-                    <option value="Entertainment">Entertainment</option>
-                    <option value="Travel">Travel</option>
-                    <option value="Education">Education</option>
-                    <option value="Other">Other</option>
+                    <?php echo Categories::expenseOptions(); ?>
                 </select>
             </div>
             <!-- Per-row Card -->
@@ -349,6 +397,80 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
             total += parseFloat(inp.value) || 0;
         });
         document.getElementById('grandTotal').textContent = total.toFixed(2);
+        updateSplitPreview();
+    }
+
+    // ---- Split with family ----
+    function splitOn() {
+        return !!document.getElementById('splitEnabled')?.checked;
+    }
+
+    function splitCustom() {
+        return !!document.getElementById('splitModeCustom')?.checked;
+    }
+
+    function toggleSplit() {
+        const panel = document.getElementById('splitPanel');
+        if (panel) panel.style.display = splitOn() ? 'block' : 'none';
+        updateSplitPreview();
+    }
+
+    // Amounts of the complete rows (description, amount, category)
+    function completeRowAmounts() {
+        const amounts = [];
+        document.querySelectorAll('.expense-row').forEach(row => {
+            const desc = row.querySelector('input[type="text"]')?.value.trim();
+            const amt  = parseFloat(row.querySelector('.row-amount')?.value) || 0;
+            const cat  = row.querySelector('.row-category')?.value;
+            if (desc && amt > 0 && cat) amounts.push(amt);
+        });
+        return amounts;
+    }
+
+    function selectedSplitUsers() {
+        return Array.from(document.querySelectorAll('.split-user:checked')).map(cb => cb.value);
+    }
+
+    function customSplitSum() {
+        let sum = 0;
+        document.querySelectorAll('.split-amount').forEach(inp => {
+            const cb = document.getElementById('splitUser' + inp.dataset.user);
+            if (cb && cb.checked) sum += parseFloat(inp.value) || 0;
+        });
+        return Math.round(sum * 100) / 100;
+    }
+
+    function updateSplitPreview() {
+        const hint = document.getElementById('splitHint');
+        if (!hint) return;
+        const custom = splitCustom();
+        document.querySelectorAll('.split-amount').forEach(inp => {
+            const cb = document.getElementById('splitUser' + inp.dataset.user);
+            inp.style.display = custom ? '' : 'none';
+            inp.disabled = !custom || !(cb && cb.checked);
+        });
+        if (!splitOn()) { hint.textContent = ''; return; }
+
+        const people = selectedSplitUsers().length;
+        const total = parseFloat(document.getElementById('grandTotal').textContent) || 0;
+        hint.classList.remove('text-danger');
+        if (people === 0) {
+            hint.textContent = 'Tick at least one family member.';
+            hint.classList.add('text-danger');
+        } else if (!custom) {
+            hint.textContent = 'Each row is split equally between ' + people + ' member(s)'
+                + (total > 0 ? ', about ' + (total / people).toFixed(2) + ' each for the total of ' + total.toFixed(2) : '')
+                + '. Any rounding cent goes to the person who paid.';
+        } else {
+            const sum = customSplitSum();
+            const rows = completeRowAmounts();
+            const target = rows.length ? rows[0] : total;
+            const remaining = Math.round((target - sum) * 100) / 100;
+            hint.textContent = 'Assigned ' + sum.toFixed(2) + ' of ' + target.toFixed(2)
+                + (Math.abs(remaining) > 0.01 ? ', ' + remaining.toFixed(2) + ' left to assign.' : ' (adds up).')
+                + (rows.length > 1 ? ' Custom amounts apply to every row, so every row needs this same amount.' : '');
+            if (Math.abs(remaining) > 0.01) hint.classList.add('text-danger');
+        }
     }
 
     function calcRowReward(triggerEl) {
@@ -470,6 +592,22 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
         if (missing) {
             e.preventDefault();
             alert('Every expense row needs a date' + (isCardMethod() ? ' and a card' : '') + '.');
+            return;
+        }
+        if (splitOn()) {
+            if (selectedSplitUsers().length === 0) {
+                e.preventDefault();
+                alert('Tick at least one family member to split with.');
+                return;
+            }
+            if (splitCustom()) {
+                const sum = customSplitSum();
+                const bad = completeRowAmounts().some(a => Math.abs(Math.round(a * 100) - Math.round(sum * 100)) > 1);
+                if (bad) {
+                    e.preventDefault();
+                    alert('Custom split amounts must add up to the expense amount (' + sum.toFixed(2) + ' assigned so far).');
+                }
+            }
         }
     });
 

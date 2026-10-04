@@ -4,6 +4,7 @@ $current_page = 'admin/manage_tenants.php';
 require_once __DIR__ . '/../autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\Html;
+use App\Helpers\Flash;
 use App\Helpers\Layout;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
@@ -71,10 +72,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $success = "User '" . $name . "' added to the family!"; // escaped when displayed
                 AuditHelper::log($pdo, 'add_member_admin', "Added User $email to Tenant ID $tenantId");
 
-                // Set session message and redirect to prevent resubmission + clear URL
-                $_SESSION['success_msg'] = $success;
-                header("Location: manage_tenants.php");
-                exit();
+                // Flash the message and redirect to prevent resubmission
+                Flash::redirect('manage_tenants.php', 'success', $success);
             } catch (PDOException $e) {
                 error_log("Add user admin failed: " . $e->getMessage());
                 $error = "Failed to add user: A system error occurred.";
@@ -89,21 +88,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 }
 
-// Handle Rename Success Redirect
+// Handle Rename Success Redirect (the layout shows the flashed message)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'rename_tenant' && $success) {
-    $_SESSION['success_msg'] = $success;
-    header("Location: manage_tenants.php");
-    exit();
-}
-
-// Read and Clear Session Messages
-if (isset($_SESSION['success_msg'])) {
-    $success = $_SESSION['success_msg'];
-    unset($_SESSION['success_msg']);
-}
-if (isset($_SESSION['error_msg'])) {
-    $error = $_SESSION['error_msg'];
-    unset($_SESSION['error_msg']);
+    Flash::redirect('manage_tenants.php', 'success', $success);
 }
 
 // Fetch users for specific tenant if requested
@@ -159,12 +146,6 @@ try {
         <?php if ($error): ?>
             <div class="alert alert-danger shadow-sm border-0 rounded-pill px-4 animate__animated animate__shakeX">
                 <i class="fa-solid fa-circle-exclamation me-2"></i><?php echo htmlspecialchars($error); ?>
-            </div>
-        <?php endif; ?>
-
-        <?php if ($success): ?>
-            <div class="alert alert-success shadow-sm border-0 rounded-pill px-4 animate__animated animate__fadeIn">
-                <i class="fa-solid fa-circle-check me-2"></i><?php echo htmlspecialchars($success); ?>
             </div>
         <?php endif; ?>
 

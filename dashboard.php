@@ -5,7 +5,7 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
 use App\Helpers\ExchangeRateHelper;
-use App\Helpers\BalanceHelper;
+use App\Helpers\DashboardStats;
 use App\Helpers\Html;
 
 Bootstrap::init();
@@ -31,29 +31,69 @@ $currency_label = $base_currency;
 // INR income is converted to AED when summed
 $income_aed_sql = ExchangeRateHelper::aedSql($pdo);
 
-// 1. Fetch Summary Stats (Current Month)
-// Total Income
-$stmt = $pdo->prepare("SELECT SUM(" . $income_aed_sql . ") FROM income WHERE tenant_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ?");
-$stmt->execute([$tenant_id, $curr_month, $curr_year]);
-$income_now = $stmt->fetchColumn() ?: 0;
+// Month boundaries. Ranges (date >= first day AND date < first day of next month) select exactly
+// the same rows as MONTH(col) = m AND YEAR(col) = y on these DATE columns, and can use an index.
+$month_start_ts = function (int $monthsBack): int {
+    return mktime(0, 0, 0, (int) date('n') - $monthsBack, 1, (int) date('Y'));
+};
+$curr_key        = DashboardStats::monthKey($month_start_ts(0));
+$curr_from       = date('Y-m-d', $month_start_ts(0));
+$next_month_from = date('Y-m-d', $month_start_ts(-1));
+$chart_from      = date('Y-m-d', $month_start_ts(5));           // first day of the 6-month chart
+$interest_from   = date('Y-m-d', $month_start_ts(11));          // first day of the 12-month interest chart
+$year_from       = date('Y-01-01');
+$next_year_from  = ((int) $curr_year + 1) . '-01-01';
 
-// Total Expenses
-$stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
-$stmt->execute([$tenant_id, $curr_month, $curr_year]);
-$expense_now = $stmt->fetchColumn() ?: 0;
+// 1. Income per month for the 6-month chart (includes the current month). One query.
+$stmt = $pdo->prepare("SELECT YEAR(income_date) AS y, MONTH(income_date) AS m, SUM(" . $income_aed_sql . ") AS total
+                       FROM income
+                       WHERE tenant_id = ? AND income_date >= ? AND income_date < ?
+                       GROUP BY YEAR(income_date), MONTH(income_date)");
+$stmt->execute([$tenant_id, $chart_from, $next_month_from]);
+$income_by_month = DashboardStats::byMonth($stmt->fetchAll(PDO::FETCH_ASSOC));
+
+// Expenses per month, from the earlier of (6-month chart start, 1 Jan) up to the end of this year
+// (the cashback figure counts the whole calendar year, including future-dated rows). One query.
+$stmt = $pdo->prepare("SELECT YEAR(expense_date) AS y, MONTH(expense_date) AS m,
+                              SUM(amount) AS total,
+                              SUM(CASE WHEN payment_method = 'Card' THEN amount END) AS card_total,
+                              SUM(CASE WHEN is_fixed = 1 THEN amount END) AS fixed_total,
+                              SUM(CASE WHEN is_fixed = 0 THEN amount END) AS var_total,
+                              SUM(cashback_earned) AS cashback
+                       FROM expenses
+                       WHERE tenant_id = ? AND expense_date >= ? AND expense_date < ?
+                       GROUP BY YEAR(expense_date), MONTH(expense_date)");
+$stmt->execute([$tenant_id, min($chart_from, $year_from), $next_year_from]);
+$expense_by_month = DashboardStats::byMonth($stmt->fetchAll(PDO::FETCH_ASSOC));
+$expense_curr = $expense_by_month[$curr_key] ?? [];
+
+// Summary Stats (Current Month)
+$income_now  = ($income_by_month[$curr_key]['total'] ?? 0) ?: 0;
+$expense_now = ($expense_curr['total'] ?? 0) ?: 0;
+
+// Bank balances (AED) as of today, every month end of the last 12 months, and the same month
+// last year: one query instead of 14 BalanceHelper::totalAed() calls (see DashboardStats).
+$wealth_month_ends = [];
+for ($i = 11; $i >= 0; $i--) {
+    $wealth_month_ends[] = date('Y-m-t', $month_start_ts($i));
+}
+$last_year_month_end = date('Y-m-t', mktime(0, 0, 0, (int) date('n'), 1, (int) date('Y') - 1));
+$today = date('Y-m-d');
+$balance_totals = DashboardStats::balanceTotalsAed($pdo, $tenant_id, array_merge([$today, $last_year_month_end], $wealth_month_ends));
 
 // Total Net Worth (current balance of every bank, in AED)
-$net_worth = BalanceHelper::totalAed($pdo, $tenant_id);
+$net_worth = $balance_totals[$today] ?? 0.0;
+
+// Cards (credit limit, smart-swap alerts, liquidity alerts)
+$stmt = $pdo->prepare("SELECT * FROM cards WHERE tenant_id = ?");
+$stmt->execute([$tenant_id]);
+$roi_cards = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Total Credit Limit
-$stmt = $pdo->prepare("SELECT SUM(limit_amount) FROM cards WHERE tenant_id = ?");
-$stmt->execute([$tenant_id]);
-$total_limit = $stmt->fetchColumn() ?: 0;
+$total_limit = DashboardStats::sumMoney(array_column($roi_cards, 'limit_amount'));
 
-// Credit Utilization Logic
-$stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND payment_method = 'Card' AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
-$stmt->execute([$tenant_id, $curr_month, $curr_year]);
-$total_card_spend = $stmt->fetchColumn() ?: 0;
+// Card spend this month
+$total_card_spend = ($expense_curr['card_total'] ?? 0) ?: 0;
 
 // Credit Utilization Logic
 $utilization = ($total_limit > 0) ? ($total_card_spend / $total_limit) * 100 : 0;
@@ -61,8 +101,8 @@ $savings_rate = ($income_now > 0) ? (($income_now - $expense_now) / $income_now)
 $savings_rate = max($savings_rate, 0); // No negative savings rate visually
 
 // 1.5 PHASE 8: Wealth Journey (Snapshot Comparison)
-// Get Net Worth Last Year (Same Month): balances as of the end of that month
-$last_year_net_worth = BalanceHelper::totalAed($pdo, $tenant_id, date('Y-m-t', mktime(0, 0, 0, (int) date('n'), 1, (int) date('Y') - 1)));
+// Net Worth Last Year (Same Month): balances as of the end of that month
+$last_year_net_worth = $balance_totals[$last_year_month_end] ?? 0.0;
 
 $wealth_growth_abs = $net_worth - $last_year_net_worth;
 $wealth_growth_pct = ($last_year_net_worth > 0) ? ($wealth_growth_abs / $last_year_net_worth) * 100 : 100;
@@ -70,63 +110,70 @@ $wealth_growth_pct = ($last_year_net_worth > 0) ? ($wealth_growth_abs / $last_ye
 // Wealth Chart Data (Last 12 Months Net Worth Trend)
 $wealth_months = [];
 $wealth_data = [];
-for ($i = 11; $i >= 0; $i--) {
-    $date_cursor = mktime(0, 0, 0, (int) date('n') - $i, 1, (int) date('Y')); // 1st of that month
-    $wealth_months[] = date('M Y', $date_cursor);
-    $month_end_date = date('Y-m-t', $date_cursor); // End of that month
-
-    $wealth_data[] = round(BalanceHelper::totalAed($pdo, $tenant_id, $month_end_date), 2);
+foreach ($wealth_month_ends as $i => $month_end_date) {
+    $wealth_months[] = date('M Y', $month_start_ts(11 - $i));
+    $wealth_data[] = round($balance_totals[$month_end_date] ?? 0.0, 2);
 }
 
-
-// 2. Fetch Chart Data (Last 6 Months)
+// 2. Chart Data (Last 6 Months); months without rows are 0
 $months = [];
 $income_data = [];
 $expense_data = [];
-
 for ($i = 5; $i >= 0; $i--) {
-    $month_ts = mktime(0, 0, 0, (int) date('n') - $i, 1, (int) date('Y'));
-    $m = date('n', $month_ts);
-    $y = date('Y', $month_ts);
+    $month_ts = $month_start_ts($i);
+    $key = DashboardStats::monthKey($month_ts);
     $months[] = date('M', $month_ts);
-
-    // Income
-    $stmt = $pdo->prepare("SELECT SUM(" . $income_aed_sql . ") FROM income WHERE tenant_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ?");
-    $stmt->execute([$tenant_id, $m, $y]);
-    $income_data[] = $stmt->fetchColumn() ?: 0;
-
-    // Expense
-    $stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
-    $stmt->execute([$tenant_id, $m, $y]);
-    $expense_data[] = $stmt->fetchColumn() ?: 0;
+    $income_data[] = ($income_by_month[$key]['total'] ?? 0) ?: 0;
+    $expense_data[] = ($expense_by_month[$key]['total'] ?? 0) ?: 0;
 }
 
-// 3. Category Data (Current Month)
-$stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category");
-$stmt->execute([$tenant_id, $curr_month, $curr_year]);
-$cat_results = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+// 3. Category Data (Current Month) + 7. Lifestyle Creep base (same month last year): one query.
+// ORDER BY category = the implicit GROUP BY order MariaDB used before (keeps the doughnut colours).
+$ly_ts = strtotime('-1 year');
+$ly_from = date('Y-m-01', $ly_ts);
+$ly_to = date('Y-m-d', mktime(0, 0, 0, (int) date('n', $ly_ts) + 1, 1, (int) date('Y', $ly_ts)));
+$stmt = $pdo->prepare("SELECT category,
+                              SUM(CASE WHEN expense_date >= ? AND expense_date < ? THEN amount END) AS now_total,
+                              SUM(CASE WHEN expense_date >= ? AND expense_date < ? THEN amount END) AS ly_total
+                       FROM expenses
+                       WHERE tenant_id = ?
+                         AND ((expense_date >= ? AND expense_date < ?) OR (expense_date >= ? AND expense_date < ?))
+                       GROUP BY category
+                       ORDER BY category");
+$stmt->execute([$curr_from, $next_month_from, $ly_from, $ly_to, $tenant_id, $curr_from, $next_month_from, $ly_from, $ly_to]);
+$cat_results = [];
+$last_year_cats = [];
+foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+    // amount is NOT NULL, so a non-NULL sum means the category has rows in that month
+    if ($row['now_total'] !== null) {
+        $cat_results[$row['category']] = $row['now_total'];
+    }
+    if ($row['ly_total'] !== null) {
+        $last_year_cats[$row['category']] = $row['ly_total'];
+    }
+}
 $cat_labels = array_keys($cat_results);
 $cat_values = array_values($cat_results);
 
 // 5. ROI & Anatomy Stats
-$stmt = $pdo->prepare("SELECT SUM(cashback_earned) FROM expenses WHERE tenant_id = ? AND YEAR(expense_date) = ?");
-$stmt->execute([$tenant_id, $curr_year]);
-$total_cashback = $stmt->fetchColumn() ?: 0;
+// Cashback earned this calendar year (exact cent sum of the per-month SUM()s)
+$total_cashback = DashboardStats::sumMoney(array_map(
+    fn($r) => (int) $r['y'] === (int) $curr_year ? $r['cashback'] : null,
+    $expense_by_month
+));
 
-$stmt = $pdo->prepare("SELECT is_fixed, SUM(amount) as total FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY is_fixed");
-$stmt->execute([$tenant_id, $curr_month, $curr_year]);
-$anatomy = $stmt->fetchAll(PDO::FETCH_KEY_PAIR); // [0 => 'Discretionary', 1 => 'Fixed']
-
-$fixed_cost = $anatomy[1] ?? 0;
-$var_cost = $anatomy[0] ?? 0;
+$fixed_cost = $expense_curr['fixed_total'] ?? 0;
+$var_cost = $expense_curr['var_total'] ?? 0;
 $total_cost = $fixed_cost + $var_cost;
 $fixed_pct = ($total_cost > 0) ? ($fixed_cost / $total_cost) * 100 : 0;
 
-// 6. Emergency Runway (Avg Expense Last 3 Months)
-// Note: We use 3 months prior to current month for stability
-$stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND expense_date BETWEEN DATE_SUB(NOW(), INTERVAL 3 MONTH) AND NOW()");
+// 6. Emergency Runway (Avg Expense Last 3 Months) + 9. fixed spend over the same window: one query
+$stmt = $pdo->prepare("SELECT SUM(amount) AS total, SUM(CASE WHEN is_fixed = 1 THEN amount END) AS fixed_total
+                       FROM expenses
+                       WHERE tenant_id = ? AND expense_date BETWEEN DATE_SUB(NOW(), INTERVAL 3 MONTH) AND NOW()");
 $stmt->execute([$tenant_id]);
-$last_3m_spend = $stmt->fetchColumn() ?: 0;
+$last_3m = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+$last_3m_spend = ($last_3m['total'] ?? 0) ?: 0;
 $avg_monthly_spend = $last_3m_spend / 3;
 $runway_months = ($avg_monthly_spend > 0) ? $net_worth / $avg_monthly_spend : 0;
 
@@ -139,12 +186,6 @@ $total_budgeted = array_sum($dash_budgets);
 $budget_utilization = ($total_budgeted > 0) ? ($expense_now / $total_budgeted) * 100 : 0;
 
 // 7. Lifestyle Creep (YoY Category Comparison)
-$last_year_month = date('n', strtotime('-1 year'));
-$last_year_year = date('Y', strtotime('-1 year'));
-$stmt = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ? GROUP BY category");
-$stmt->execute([$tenant_id, $last_year_month, $last_year_year]);
-$last_year_cats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
-
 $creep_alerts = [];
 foreach ($cat_results as $cat => $amount) {
     if (isset($last_year_cats[$cat]) && $last_year_cats[$cat] > 0) {
@@ -167,9 +208,10 @@ $stmt = $pdo->prepare("SELECT " . $income_aed_sql . " AS amount, recurrence_day 
 $stmt->execute([$tenant_id]);
 $recurring_incomes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch Recurring Expenses (Subscriptions): one row per template (latest entry per description)
+// Subscription templates: one row per template (latest entry per description).
+// Used by the projection below and by the Upcoming Bills list (section 12).
 $stmt = $pdo->prepare("
-    SELECT e1.amount, DAY(e1.expense_date) as day
+    SELECT e1.*
     FROM expenses e1
     JOIN (
         SELECT MAX(id) as max_id
@@ -179,7 +221,15 @@ $stmt = $pdo->prepare("
     ) e2 ON e1.id = e2.max_id
 ");
 $stmt->execute([$tenant_id]);
-$recurring_expenses = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$templates = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$recurring_expenses = [];
+foreach ($templates as $tpl) {
+    $recurring_expenses[] = [
+        'amount' => $tpl['amount'],
+        'day' => (int) date('j', strtotime($tpl['expense_date'])), // = DAY(expense_date)
+    ];
+}
 
 $projected_dates = [];
 $projected_balance = [];
@@ -209,26 +259,13 @@ for ($i = 0; $i <= 30; $i++) {
 }
 
 // 8.5 PHASE 4: ROI & Liquidity (Restored)
-// Fetch Cards for Smart Engine
-$stmt = $pdo->prepare("SELECT * FROM cards WHERE tenant_id = ?");
-$stmt->execute([$tenant_id]);
-$roi_cards = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-// True Liquidity: Net Worth - Unbilled Card Spends
-$stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND payment_method = 'Card' AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
-$stmt->execute([$tenant_id, $curr_month, $curr_year]);
-$unbilled_card_spend = $stmt->fetchColumn() ?: 0; // Approx using current month spend
+// True Liquidity: Net Worth - Unbilled Card Spends (approx using this month's card spend)
+$unbilled_card_spend = $total_card_spend;
 $true_liquidity = $net_worth - $unbilled_card_spend;
 
 // 9. PHASE 6: Safe-to-Spend Logic
 // Estimate Monthly Fixed Cost (Avg of last 3 months fixed spend)
-$stmt = $pdo->prepare("
-    SELECT SUM(amount) FROM expenses
-    WHERE tenant_id = ? AND is_fixed = 1
-    AND expense_date BETWEEN DATE_SUB(NOW(), INTERVAL 3 MONTH) AND NOW()
-");
-$stmt->execute([$tenant_id]);
-$avg_fixed_cost = ($stmt->fetchColumn() ?: 0) / 3;
+$avg_fixed_cost = (($last_3m['fixed_total'] ?? 0) ?: 0) / 3;
 $remaining_fixed = max(0, $avg_fixed_cost - $fixed_cost);
 $savings_target = $income_now * 0.20; // 20% Goal
 
@@ -328,43 +365,32 @@ $interest_months = [];
 $interest_accrued_data = [];
 $interest_paid_data = [];
 
+// Interest Accrued (sum of positive amounts) and Payments Made (sum of negative amounts as
+// positive values) per month: one query, months without rows are 0
+$stmt = $pdo->prepare("SELECT YEAR(interest_date) AS y, MONTH(interest_date) AS m,
+                              SUM(CASE WHEN amount > 0 THEN amount END) AS accrued,
+                              SUM(CASE WHEN amount < 0 THEN ABS(amount) END) AS paid
+                       FROM interest_tracker
+                       WHERE tenant_id = ? AND interest_date >= ? AND interest_date < ?
+                       GROUP BY YEAR(interest_date), MONTH(interest_date)");
+$stmt->execute([$tenant_id, $interest_from, $next_month_from]);
+$interest_by_month = DashboardStats::byMonth($stmt->fetchAll(PDO::FETCH_ASSOC));
+
 for ($i = 11; $i >= 0; $i--) {
-    $month_ts = mktime(0, 0, 0, (int) date('n') - $i, 1, (int) date('Y'));
-    $m = date('n', $month_ts);
-    $y = date('Y', $month_ts);
+    $month_ts = $month_start_ts($i);
+    $key = DashboardStats::monthKey($month_ts);
     $interest_months[] = date('M Y', $month_ts);
-
-    // Interest Accrued (Sum of positive amounts)
-    $stmt = $pdo->prepare("SELECT SUM(amount) FROM interest_tracker WHERE tenant_id = ? AND amount > 0 AND MONTH(interest_date) = ? AND YEAR(interest_date) = ?");
-    $stmt->execute([$tenant_id, $m, $y]);
-    $interest_accrued_data[] = $stmt->fetchColumn() ?: 0;
-
-    // Payments Made (Sum of negative amounts -> convert to positive for chart)
-    $stmt = $pdo->prepare("SELECT SUM(ABS(amount)) FROM interest_tracker WHERE tenant_id = ? AND amount < 0 AND MONTH(interest_date) = ? AND YEAR(interest_date) = ?");
-    $stmt->execute([$tenant_id, $m, $y]);
-    $interest_paid_data[] = $stmt->fetchColumn() ?: 0;
+    $interest_accrued_data[] = ($interest_by_month[$key]['accrued'] ?? 0) ?: 0;
+    $interest_paid_data[] = ($interest_by_month[$key]['paid'] ?? 0) ?: 0;
 }
 
 // 12. Upcoming Bills & Pending Auto-Drafts
 $upcoming_bills = [];
-$curr_month_logged = $pdo->prepare("SELECT description FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
-$curr_month_logged->execute([$tenant_id, $curr_month, $curr_year]);
+$curr_month_logged = $pdo->prepare("SELECT description FROM expenses WHERE tenant_id = ? AND expense_date >= ? AND expense_date < ?");
+$curr_month_logged->execute([$tenant_id, $curr_from, $next_month_from]);
 $logged_subs = $curr_month_logged->fetchAll(PDO::FETCH_COLUMN);
 
-// Fetch Unique Subscription Templates
-$stmt = $pdo->prepare("
-    SELECT e1.*
-    FROM expenses e1
-    JOIN (
-        SELECT MAX(id) as max_id
-        FROM expenses
-        WHERE tenant_id = ? AND is_subscription = 1
-        GROUP BY description
-    ) e2 ON e1.id = e2.max_id
-");
-$stmt->execute([$tenant_id]);
-$templates = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
+// $templates (unique subscription templates) was fetched in section 8
 foreach ($templates as $sb) {
     $day = date('d', strtotime($sb['expense_date']));
     $is_logged = in_array($sb['description'], $logged_subs);
@@ -506,6 +532,103 @@ $user_display_name = htmlspecialchars($_SESSION['user_name'] ?? 'User');
         </div>
     </div>
 </div>
+
+<?php
+// ── Feature widgets: card dues, Zakath, family split (each hides itself when not relevant
+//    and never breaks the dashboard, e.g. before its migration has been run) ──
+$widget_card_dues = [];
+$widget_hawl = null;
+$widget_split_net = null;
+try {
+    $widget_card_dues = array_slice(\App\Helpers\CardCycleHelper::upcoming($pdo, (int) $tenant_id, 10), 0, 3);
+} catch (Throwable $e) {
+    error_log('Dashboard card dues widget: ' . $e->getMessage());
+}
+try {
+    $zs = \App\Helpers\ZakathHelper::settings($pdo, (int) $tenant_id);
+    $widget_hawl = \App\Helpers\ZakathHelper::hawl($zs['hawl_start_date'] ?? null);
+} catch (Throwable $e) {
+    error_log('Dashboard zakath widget: ' . $e->getMessage());
+}
+try {
+    $wsStmt = $pdo->prepare("SELECT s.user_id, s.share_amount AS share, COALESCE(e.spent_by_user_id, e.user_id) AS payer_id
+                             FROM expense_splits s
+                             JOIN expenses e ON e.id = s.expense_id AND e.tenant_id = s.tenant_id
+                             WHERE s.tenant_id = ?");
+    $wsStmt->execute([$tenant_id]);
+    $wsRows = $wsStmt->fetchAll();
+    if ($wsRows) {
+        $wtStmt = $pdo->prepare("SELECT from_user_id, to_user_id, amount FROM settlements WHERE tenant_id = ?");
+        $wtStmt->execute([$tenant_id]);
+        $wsNet = \App\Helpers\SplitHelper::netBalances($wsRows, $wtStmt->fetchAll());
+        $widget_split_net = $wsNet[(int) $_SESSION['user_id']] ?? 0.0;
+    }
+} catch (Throwable $e) {
+    // expense_splits/settlements not created yet — no widget
+}
+$show_hawl  = $widget_hawl !== null && $widget_hawl['days_left'] <= 60;
+$show_split = $widget_split_net !== null && abs($widget_split_net) >= 0.01;
+?>
+<?php if ($widget_card_dues || $show_hawl || $show_split): ?>
+<div class="row g-4 mb-4">
+    <?php if ($widget_card_dues): ?>
+        <div class="col-12 col-lg">
+            <div class="glass-panel p-4 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold mb-0"><i class="fa-solid fa-credit-card text-primary me-2"></i>Card payments due</h6>
+                    <a href="my_cards.php" class="small text-decoration-none">All cards</a>
+                </div>
+                <?php foreach ($widget_card_dues as $due): ?>
+                    <div class="d-flex justify-content-between align-items-center py-2 border-bottom border-light">
+                        <div>
+                            <div class="fw-bold small"><?php echo Html::e($due['bank_name'] . ' ' . $due['card_name']); ?></div>
+                            <span class="badge bg-<?php echo Html::e(\App\Helpers\CardCycleHelper::statusColor($due['status'])); ?>">
+                                <?php echo Html::e(\App\Helpers\CardCycleHelper::dueLabel($due['days_to_due'])); ?>
+                            </span>
+                            <span class="text-muted small ms-1"><?php echo Html::e(date('d M', strtotime($due['last_statement_due_date']))); ?></span>
+                        </div>
+                        <div class="text-end">
+                            <div class="fw-bold blur-sensitive">AED <?php echo number_format($due['due_remaining'], 2); ?></div>
+                            <a href="pay_card.php?card_id=<?php echo (int) $due['card_id']; ?>" class="small text-decoration-none">Pay</a>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($show_hawl): ?>
+        <div class="col-12 col-md-6 col-lg-3">
+            <a href="zakath_tracker.php" class="text-decoration-none">
+                <div class="glass-panel p-4 h-100 hover-lift">
+                    <h6 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-hand-holding-heart text-success me-2"></i>Zakath due</h6>
+                    <h3 class="fw-bold mb-1 <?php echo $widget_hawl['days_left'] <= 7 ? 'text-danger' : 'text-success'; ?>">
+                        <?php echo $widget_hawl['days_left'] <= 0 ? 'Today' : (int) $widget_hawl['days_left'] . ' days'; ?>
+                    </h3>
+                    <div class="small text-muted">
+                        <?php echo Html::e(date('d M Y', strtotime($widget_hawl['due']))); ?>
+                        <?php if (!empty($widget_hawl['due_hijri'])): ?> · <?php echo Html::e($widget_hawl['due_hijri']); ?><?php endif; ?>
+                    </div>
+                </div>
+            </a>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($show_split): ?>
+        <div class="col-12 col-md-6 col-lg-3">
+            <a href="family_split.php" class="text-decoration-none">
+                <div class="glass-panel p-4 h-100 hover-lift">
+                    <h6 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-people-arrows text-primary me-2"></i>Family split</h6>
+                    <h3 class="fw-bold mb-1 blur-sensitive <?php echo $widget_split_net > 0 ? 'text-success' : 'text-danger'; ?>">
+                        AED <?php echo number_format(abs($widget_split_net), 2); ?>
+                    </h3>
+                    <div class="small text-muted"><?php echo $widget_split_net > 0 ? 'Owed to you' : 'You owe'; ?></div>
+                </div>
+            </a>
+        </div>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <!-- Proactive Alerts -->
 <?php if (!empty($alerts)): ?>

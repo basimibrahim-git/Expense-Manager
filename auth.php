@@ -4,9 +4,9 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
 use App\Helpers\MailHelper;
+use App\Helpers\Flash;
 
 Bootstrap::init();
-const REDIRECT_ERROR = "Location: index.php?error=";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // CSRF Check — verifyCsrfToken() exits with 403 on failure; no return value
@@ -16,13 +16,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $password = (string) ($_POST['password'] ?? '');
 
     if (!$email || empty($password)) {
-        header(REDIRECT_ERROR . urlencode("Please fill in all fields correctly"));
+        Flash::redirect('index.php', 'error', "Please fill in all fields correctly");
         exit();
     }
 
     try {
         if (!isset($pdo)) {
-            header(REDIRECT_ERROR . urlencode("Database connection failed"));
+            Flash::redirect('index.php', 'error', "Database connection failed");
             exit();
         }
 
@@ -63,7 +63,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if ($blocked = $blockedUser->fetch()) {
                 AuditHelper::logFor($pdo, (int) $blocked['id'], $blocked['tenant_id'], 'login_blocked', "Rate-limited login attempt for $email from $ip (Email fails: $failedEmailCount, IP fails: $failedIpCount)");
             }
-            header(REDIRECT_ERROR . urlencode("Too many failed attempts. Try again in 15 minutes."));
+            Flash::redirect('index.php', 'error', "Too many failed attempts. Try again in 15 minutes.");
             exit();
         }
 
@@ -115,13 +115,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if ($user) {
                 AuditHelper::logFor($pdo, (int) $user['id'], $user['tenant_id'], 'login_failed', "Failed login: $email from $ip");
             }
-            header(REDIRECT_ERROR . urlencode("Invalid credentials"));
+            Flash::redirect('index.php', 'error', "Invalid credentials");
             exit();
         }
     } catch (Exception $e) {
         // Log the actual error internally
         error_log("Auth Error: " . $e->getMessage());
-        header(REDIRECT_ERROR . urlencode("An error occurred"));
+        Flash::redirect('index.php', 'error', "An error occurred");
         exit();
     }
 } else {

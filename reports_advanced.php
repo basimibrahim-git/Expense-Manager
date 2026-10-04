@@ -28,26 +28,7 @@ $stmt = $pdo->prepare("
 $stmt->execute([$year, $prev_year, $_SESSION['tenant_id'], $year, $prev_year]);
 $yoy_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// 2. Fetch Heatmap Data (Spending by Day of Week vs Week of Month)
-// This is for the current year
-$stmt = $pdo->prepare("
-    SELECT DAYOFWEEK(expense_date) as dow,
-           DAY(expense_date) as dom,
-           SUM(amount) as total
-    FROM expenses
-    WHERE tenant_id = ? AND YEAR(expense_date) = ?
-    GROUP BY dow, dom
-");
-$stmt->execute([$_SESSION['tenant_id'], $year]);
-$heatmap_raw = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-$heatmap = array_fill(1, 31, array_fill(1, 7, 0)); // Initialize 31 days x 7 days-of-week
-foreach ($heatmap_raw as $row) {
-    // We just need a simple Intensity map for the whole year by day of month
-    // Actually a better heatmap is Day of Week vs Month
-    // Let's do Day of Week (1-7) vs Month (1-12)
-}
-
+// 2. Heatmap Data: spending by Day of Week (1-7) vs Month (1-12) for the selected year
 $stmt = $pdo->prepare("
     SELECT DAYOFWEEK(expense_date) as dow,
            MONTH(expense_date) as month,
@@ -205,7 +186,7 @@ foreach ($heatmap_month_dow as $row) {
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
 <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     const yoyCtx = document.getElementById('yoyChart').getContext('2d');
     new Chart(yoyCtx, {

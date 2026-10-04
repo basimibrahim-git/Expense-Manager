@@ -4,6 +4,7 @@ require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Html;
+use App\Helpers\Flash;
 use App\Helpers\Layout;
 use App\Helpers\AuditHelper;
 
@@ -220,9 +221,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Permission Check: Read-only users cannot modify state
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        $trip_param = isset($_POST['trip_id']) ? '&trip_id=' . intval($_POST['trip_id']) : '';
-        header("Location: travel_planner.php?error=" . urlencode('Unauthorized: Read-only access') . $trip_param);
-        exit();
+        $trip_param = isset($_POST['trip_id']) ? '?trip_id=' . intval($_POST['trip_id']) : '';
+        Flash::redirect('travel_planner.php' . $trip_param, 'error', 'Unauthorized: Read-only access');
     }
 
     $action = $_POST['action'] ?? '';
@@ -238,8 +238,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         if (empty($location) || mb_strlen($location) > 255 || !tripValidDate($start_date) || !tripValidDate($end_date)
             || mb_strlen($outbound) > 100 || mb_strlen($return) > 100 || mb_strlen($outbound_time) > 50 || mb_strlen($return_time) > 50) {
-            header("Location: travel_planner.php?error=" . urlencode('Please fill in all required fields.'));
-            exit();
+            Flash::redirect('travel_planner.php', 'error', 'Please fill in all required fields.');
         }
 
         // Automatic Flight Details Fetching
@@ -288,8 +287,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         ]);
         
         AuditHelper::log($pdo, 'add_trip', "Added trip to $location");
-        header("Location: travel_planner.php?success=" . urlencode('Trip added successfully!'));
-        exit();
+        Flash::redirect('travel_planner.php', 'success', 'Trip added successfully!');
 
     } elseif ($action == 'edit_trip') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
@@ -303,8 +301,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         if (!$id || empty($location) || mb_strlen($location) > 255 || !tripValidDate($start_date) || !tripValidDate($end_date)
             || mb_strlen($outbound) > 100 || mb_strlen($return) > 100 || mb_strlen($outbound_time) > 50 || mb_strlen($return_time) > 50) {
-            header("Location: travel_planner.php?error=" . urlencode('Invalid trip details.'));
-            exit();
+            Flash::redirect('travel_planner.php', 'error', 'Invalid trip details.');
         }
 
         // Automatic Flight Details Fetching
@@ -353,8 +350,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         ]);
 
         AuditHelper::log($pdo, 'edit_trip', "Updated trip ID: $id ($location)");
-        header("Location: travel_planner.php?success=" . urlencode('Trip details updated!') . "&trip_id=" . (int) $id);
-        exit();
+        Flash::redirect('travel_planner.php?trip_id=' . (int) $id, 'success', 'Trip details updated!');
 
     } elseif ($action == 'delete_trip') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
@@ -363,8 +359,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt->execute([$id, $tenant_id]);
             AuditHelper::log($pdo, 'delete_trip', "Deleted trip ID: $id");
         }
-        header("Location: travel_planner.php?success=" . urlencode('Trip deleted.'));
-        exit();
+        Flash::redirect('travel_planner.php', 'success', 'Trip deleted.');
 
     } elseif ($action == 'add_expense') {
         $trip_id = filter_input(INPUT_POST, 'trip_id', FILTER_VALIDATE_INT);
@@ -377,24 +372,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         if (!$trip_id || empty($description) || mb_strlen($description) > 255 || $amount <= 0 || $amount > 9999999999999.99
             || !tripValidDate($expense_date) || empty($tag) || mb_strlen($tag) > 100) {
-            header("Location: travel_planner.php?error=" . urlencode('Please fill in all expense fields correctly.') . "&trip_id=" . (int) $trip_id);
-            exit();
+            Flash::redirect('travel_planner.php?trip_id=' . (int) $trip_id, 'error', 'Please fill in all expense fields correctly.');
         }
 
         // The trip must belong to this tenant
         $own = $pdo->prepare("SELECT id FROM trips WHERE id = ? AND tenant_id = ?");
         $own->execute([$trip_id, $tenant_id]);
         if (!$own->fetchColumn()) {
-            header("Location: travel_planner.php?error=" . urlencode('Trip not found.'));
-            exit();
+            Flash::redirect('travel_planner.php', 'error', 'Trip not found.');
         }
 
         $stmt = $pdo->prepare("INSERT INTO trip_expenses (trip_id, tenant_id, description, amount, expense_date, tag) VALUES (?, ?, ?, ?, ?, ?)");
         $stmt->execute([$trip_id, $tenant_id, $description, $amount, $expense_date, $tag]);
 
         AuditHelper::log($pdo, 'add_trip_expense', "Added expense of $amount for trip ID: $trip_id");
-        header("Location: travel_planner.php?success=" . urlencode('Expense added!') . "&trip_id=" . (int) $trip_id);
-        exit();
+        Flash::redirect('travel_planner.php?trip_id=' . (int) $trip_id, 'success', 'Expense added!');
 
     } elseif ($action == 'delete_expense') {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
@@ -405,8 +397,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt->execute([$id, $trip_id, $tenant_id]);
             AuditHelper::log($pdo, 'delete_trip_expense', "Deleted trip expense ID: $id");
         }
-        header("Location: travel_planner.php?success=" . urlencode('Expense deleted.') . "&trip_id=" . (int) $trip_id);
-        exit();
+        Flash::redirect('travel_planner.php?trip_id=' . (int) $trip_id, 'success', 'Expense deleted.');
 
     } elseif ($action == 'refresh_flights') {
         // Force refresh status & time & airports from APIs (POST + CSRF + edit permission, checked above)
@@ -415,8 +406,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt->execute([$trip_id, $tenant_id]);
         $trip = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$trip) {
-            header("Location: travel_planner.php?error=" . urlencode('Trip not found.'));
-            exit();
+            Flash::redirect('travel_planner.php', 'error', 'Trip not found.');
         }
 
         $out_live = getAutomaticFlightStatus($trip['outbound_flight_number'], $trip['start_date']);
@@ -460,8 +450,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $tenant_id
         ]);
 
-        header("Location: travel_planner.php?trip_id=" . (int) $trip['id'] . "&success=" . urlencode('Flight schedules and status refreshed!'));
-        exit();
+        Flash::redirect('travel_planner.php?trip_id=' . (int) $trip['id'], 'success', 'Flight schedules and status refreshed!');
     }
 
     header("Location: travel_planner.php");
@@ -721,19 +710,6 @@ Layout::sidebar();
     }
 </style>
 
-<!-- Alert Handler -->
-<?php if (isset($_GET['success'])): ?>
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="fa-solid fa-circle-check me-2"></i> <?php echo htmlspecialchars($_GET['success']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
-<?php if (isset($_GET['error'])): ?>
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="fa-solid fa-circle-xmark me-2"></i> <?php echo htmlspecialchars($_GET['error']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
 
 <?php if ($selected_trip): ?>
     <?php

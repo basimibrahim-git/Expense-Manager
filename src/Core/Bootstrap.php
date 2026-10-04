@@ -18,6 +18,7 @@ class Bootstrap
         'forgot_password.php',
         'reset_password.php',
         'cron/reminder_emails.php', // protected by CRON_SECRET / CLI
+        'lean_webhook.php',         // protected by the lean-signature HMAC
     ];
 
     /**

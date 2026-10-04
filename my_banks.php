@@ -6,6 +6,7 @@ use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
 use App\Helpers\Html;
 use App\Helpers\BalanceHelper;
+use App\Helpers\LeanSync;
 
 Bootstrap::init();
 
@@ -32,6 +33,22 @@ try {
     error_log("Error fetching banks: " . $e->getMessage());
 }
 
+// Banks whose balance is fed by open banking (Lean): bank_id => last sync time
+$lean_synced = [];
+if (LeanSync::tablesReady($pdo)) {
+    try {
+        $stmt = $pdo->prepare("SELECT bank_id, MAX(last_synced_at) AS synced_at FROM lean_accounts
+                               WHERE tenant_id = ? AND bank_id IS NOT NULL GROUP BY bank_id");
+        $stmt->execute([$tenant_id]);
+        foreach ($stmt->fetchAll() as $row) {
+            $lean_synced[(int) $row['bank_id']] = $row['synced_at'];
+        }
+    } catch (PDOException $e) {
+        error_log("Error fetching open banking links: " . $e->getMessage());
+    }
+}
+$can_connect = $can_edit && LeanSync::isAdmin();
+
 Layout::header();
 Layout::sidebar();
 ?>
@@ -44,7 +61,16 @@ Layout::sidebar();
             <p class="text-muted mb-0">Monitor balances and reconcile statements across connected institutions</p>
         </div>
         <div class="col-md-6">
-            <div class="d-flex justify-content-md-end gap-2">
+            <div class="d-flex flex-wrap justify-content-md-end gap-2">
+                <?php if ($can_connect): ?>
+                    <a href="lean_connect.php" class="btn btn-outline-success rounded-pill px-4 shadow-sm hover-lift">
+                        <i class="fa-solid fa-link me-1"></i> Connect bank (open banking)
+                    </a>
+                <?php else: ?>
+                    <a href="lean_accounts.php" class="btn btn-outline-success rounded-pill px-4 shadow-sm hover-lift">
+                        <i class="fa-solid fa-link me-1"></i> Open Banking
+                    </a>
+                <?php endif; ?>
                 <a href="bank_balances.php" class="btn btn-outline-primary rounded-pill px-4 shadow-sm hover-lift">
                     <i class="fa-solid fa-chart-line me-1"></i> Net Worth Map
                 </a>
@@ -57,19 +83,6 @@ Layout::sidebar();
         </div>
     </div>
 
-    <?php if (isset($_GET['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show rounded-4" role="alert">
-            <i class="fa-solid fa-check-circle me-2"></i> <?php echo Html::e($_GET['success']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    <?php endif; ?>
-    <?php if (isset($_GET['error'])): ?>
-        <div class="alert alert-danger alert-dismissible fade show rounded-4" role="alert">
-            <i class="fa-solid fa-exclamation-circle me-2"></i> <?php echo Html::e($_GET['error']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    <?php endif; ?>
-
     <!-- Accounts Grid -->
     <div class="row g-4">
         <?php if (empty($banks)): ?>
@@ -79,6 +92,9 @@ Layout::sidebar();
                     <h5 class="fw-bold text-dark mb-1">No Connected Banks</h5>
                     <p class="text-muted small mb-4">Link your bank accounts to enable balance tracking and monthly net worth snapshots.</p>
                     <a href="add_bank.php" class="btn btn-primary rounded-pill px-4 shadow-sm">Add First Bank</a>
+                    <?php if ($can_connect): ?>
+                        <a href="lean_connect.php" class="btn btn-outline-success rounded-pill px-4 shadow-sm ms-1">Connect via open banking</a>
+                    <?php endif; ?>
                 </div>
             </div>
         <?php else: ?>
@@ -106,6 +122,12 @@ Layout::sidebar();
                                 <div>
                                     <h5 class="fw-bold mb-0 text-white"><?php echo Html::e($bank['bank_name']); ?></h5>
                                     <small class="text-white-50"><?php echo Html::e($bank['account_number'] ? '•••• ' . substr($bank['account_number'], -4) : ($bank['account_type'] ?: 'Current') . ' Account'); ?></small>
+                                    <?php if (array_key_exists((int) $bank['id'], $lean_synced)): ?>
+                                        <?php $synced_at = $lean_synced[(int) $bank['id']]; ?>
+                                        <div><a href="lean_accounts.php" class="badge rounded-pill bg-white bg-opacity-25 text-white text-decoration-none mt-1" title="Balance synced automatically through open banking">
+                                            <i class="fa-solid fa-rotate me-1"></i>Synced via Lean · <?php echo Html::e($synced_at ? date('d M, H:i', strtotime($synced_at)) : 'pending'); ?>
+                                        </a></div>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                             <?php if ($can_edit): ?>

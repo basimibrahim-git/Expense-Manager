@@ -26,6 +26,10 @@
             class="nav-link <?php echo ($current_page == 'bank_balances.php' || $current_page == 'add_balance.php' || $current_page == 'monthly_balances.php') ? 'active' : ''; ?>">
             <i class="fa-solid fa-building-columns"></i> My Banks
         </a>
+        <a href="<?php echo BASE_URL; ?>lean_accounts.php"
+            class="nav-link <?php echo in_array($current_page, ['lean_accounts.php', 'lean_transactions.php', 'lean_connect.php'], true) ? 'active' : ''; ?>">
+            <i class="fa-solid fa-link"></i> Open Banking
+        </a>
         <a href="<?php echo BASE_URL; ?>subscriptions.php"
             class="nav-link <?php echo $current_page == 'subscriptions.php' ? 'active' : ''; ?>">
             <i class="fa-solid fa-repeat"></i> Subscriptions
@@ -37,6 +41,10 @@
         <a href="<?php echo BASE_URL; ?>goals.php"
             class="nav-link <?php echo $current_page == 'goals.php' ? 'active' : ''; ?>">
             <i class="fa-solid fa-bullseye"></i> Goals
+        </a>
+        <a href="<?php echo BASE_URL; ?>family_split.php"
+            class="nav-link <?php echo $current_page == 'family_split.php' ? 'active' : ''; ?>">
+            <i class="fa-solid fa-people-arrows"></i> Family Split
         </a>
         <a href="<?php echo BASE_URL; ?>net_worth.php"
             class="nav-link <?php echo $current_page == 'net_worth.php' ? 'active' : ''; ?>">
@@ -82,6 +90,7 @@
             'monthly_incentives.php',
             'zakath_tracker.php',
             'zakath_calculator.php',
+            'zakath_settings.php',
             'interest_tracker.php',
             'monthly_interest.php',
             'sadaqa_tracker.php',
@@ -105,7 +114,7 @@
                     Incentive Tracker
                 </a>
                 <a href="<?php echo BASE_URL; ?>zakath_tracker.php"
-                    class="nav-link py-1 <?php echo ($current_page == 'zakath_tracker.php' || $current_page == 'zakath_calculator.php') ? $activeClass : 'text-muted'; ?>">
+                    class="nav-link py-1 <?php echo ($current_page == 'zakath_tracker.php' || $current_page == 'zakath_calculator.php' || $current_page == 'zakath_settings.php') ? $activeClass : 'text-muted'; ?>">
                     Zakath Tracker
                 </a>
                 <a href="<?php echo BASE_URL; ?>interest_tracker.php"
@@ -262,3 +271,4 @@
         }
     </script>
     <div class="container-fluid">
+        <?php echo App\Helpers\Flash::render(); ?>

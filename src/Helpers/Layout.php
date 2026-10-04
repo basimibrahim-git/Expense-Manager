@@ -8,6 +8,22 @@ namespace App\Helpers;
 class Layout
 {
     /**
+     * Allow an extra source for one CSP directive on the current page only.
+     * Call before Layout::header(), e.g. Layout::allowCsp('script-src', 'https://cdn.example.com').
+     */
+    public static function allowCsp(string $directive, string $source): void
+    {
+        $allowed = ['script-src', 'connect-src', 'frame-src', 'img-src', 'style-src', 'font-src'];
+        // data:/blob: are only ever accepted for frames and fetches (needed by some bank SDKs), never for scripts.
+        $schemeOnly = in_array($source, ['data:', 'blob:'], true) && in_array($directive, ['frame-src', 'connect-src', 'img-src'], true);
+        if (!in_array($directive, $allowed, true)
+            || (!$schemeOnly && !preg_match('#^https://[A-Za-z0-9.*-]+(:\d+)?(/[\w./-]*)?$#', $source))) {
+            throw new \InvalidArgumentException("Refusing CSP source {$directive} {$source}");
+        }
+        $GLOBALS['csp_extra'][$directive][] = $source;
+    }
+
+    /**
      * Includes the header template.
      */
     public static function header()

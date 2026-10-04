@@ -161,6 +161,21 @@ if ((int) date('j') === 1) {
     runMonthlyDigest($pdo);
 }
 
+// ── Feature jobs (cron/jobs/*.php) ────────────────────────────────────────────
+// Budget alerts, card due dates, Zakath reminders, bank sync… Each job runs in its own
+// scope with $pdo available; one failing job never stops the others.
+foreach (glob(__DIR__ . '/jobs/*.php') ?: [] as $jobFile) {
+    try {
+        (function (PDO $pdo) use ($jobFile) {
+            require $jobFile;
+        })($pdo);
+        logLine('JOB done ' . basename($jobFile));
+    } catch (Throwable $e) {
+        logLine('JOB FAILED ' . basename($jobFile) . ': ' . $e->getMessage());
+        error_log('Cron job ' . basename($jobFile) . ' failed: ' . $e->getMessage());
+    }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function logLine(string $msg): void

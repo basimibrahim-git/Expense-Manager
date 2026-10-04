@@ -5,6 +5,7 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
 use App\Helpers\Html;
+use App\Helpers\Categories;
 
 Bootstrap::init();
 
@@ -35,22 +36,6 @@ Layout::sidebar();
         <i class="fa-solid fa-arrow-left me-2"></i> Back
     </a>
 </div>
-
-<?php if (isset($_GET['success'])): ?>
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="fa-solid fa-check-circle me-2"></i>
-        <?php echo htmlspecialchars($_GET['success']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
-
-<?php if (isset($_GET['error'])): ?>
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="fa-solid fa-exclamation-circle me-2"></i>
-        <?php echo htmlspecialchars($_GET['error']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
 
 <div class="row justify-content-center">
     <div class="col-md-6">
@@ -90,13 +75,7 @@ Layout::sidebar();
                 <div class="mb-3">
                     <label for="incomeCategory" class="form-label">Category <span class="text-danger">*</span></label>
                     <select name="category" id="incomeCategory" class="form-select" required>
-                        <option value="Salary">💼 Salary</option>
-                        <option value="Incentives">🎯 Incentives / Commission</option>
-                        <option value="Business">🏢 Business Income</option>
-                        <option value="Bonus">🎁 Bonus</option>
-                        <option value="Investment">📈 Investment Return</option>
-                        <option value="Gift">🎀 Gift</option>
-                        <option value="Other">🔹 Other</option>
+                        <?php echo Categories::incomeOptions(); ?>
                     </select>
                 </div>
 

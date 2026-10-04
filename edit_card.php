@@ -5,6 +5,7 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
 use App\Helpers\Html;
+use App\Helpers\Categories;
 
 Bootstrap::init();
 
@@ -45,20 +46,6 @@ Layout::sidebar();
         <h1 class="h3 fw-bold mb-1 text-dark">Edit Card Details</h1>
         <p class="text-muted mb-0">Modify configuration, payment schedules, and rewards for this account</p>
     </div>
-
-    <?php if (isset($_GET['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show rounded-4" role="alert">
-            <i class="fa-solid fa-check-circle me-2"></i> <?php echo htmlspecialchars($_GET['success']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    <?php endif; ?>
-
-    <?php if (isset($_GET['error'])): ?>
-        <div class="alert alert-danger alert-dismissible fade show rounded-4" role="alert">
-            <i class="fa-solid fa-exclamation-circle me-2"></i> <?php echo htmlspecialchars($_GET['error']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    <?php endif; ?>
 
     <div class="row g-4">
         <!-- Form Section -->
@@ -165,12 +152,14 @@ Layout::sidebar();
 
                     <div class="row g-3 mb-4">
                         <div class="col-md-6">
-                            <label class="form-label fw-bold text-muted small" for="billDayInput">Bill Generation Day</label>
-                            <input type="number" name="bill_day" id="billDayInput" class="form-control rounded-pill px-3" min="1" max="31" value="<?php echo htmlspecialchars($card['bill_day'] ?? ''); ?>">
+                            <label class="form-label fw-bold text-muted small" for="statementDayInput">Statement Day</label>
+                            <input type="number" name="statement_day" id="statementDayInput" class="form-control rounded-pill px-3" min="1" max="31" value="<?php echo Html::e($card['statement_day'] ?? ''); ?>">
+                            <div class="form-text text-muted x-small ps-1 mt-1">Day of the month the statement closes (31 = last day of the month). Credit cards only.</div>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-bold text-muted small" for="statementDayInput">Statement Closing Day</label>
-                            <input type="number" name="statement_day" id="statementDayInput" class="form-control rounded-pill px-3" min="1" max="31" value="<?php echo htmlspecialchars($card['statement_day'] ?? ''); ?>">
+                            <label class="form-label fw-bold text-muted small" for="billDayInput">Payment Due Day</label>
+                            <input type="number" name="bill_day" id="billDayInput" class="form-control rounded-pill px-3" min="1" max="31" value="<?php echo Html::e($card['bill_day'] ?? ''); ?>">
+                            <div class="form-text text-muted x-small ps-1 mt-1">If it is on or before the statement day, it falls in the following month.</div>
                         </div>
                     </div>
 
@@ -196,33 +185,18 @@ Layout::sidebar();
                         <div class="p-3 bg-light rounded-4 border border-light">
                             <div class="row g-2 mb-2">
                                 <?php
-                                $cats = [
-                                    'Grocery' => 'Grocery',
-                                    'Food' => 'Dining/Food',
-                                    'Transport' => 'Transport',
-                                    'Shopping' => 'Shopping',
-                                    'Utilities' => 'Utilities',
-                                    'Travel' => 'Travel',
-                                    'Medical' => 'Medical',
-                                    'Entertainment' => 'Entmt.',
-                                    'Education' => 'Education',
-                                    'Other' => 'Other/Gen.'
-                                ];
-                                $count = 0;
-                                foreach ($cats as $key => $label):
-                                    if ($count % 4 == 0 && $count != 0) {
-                                        echo '</div><div class="row g-2 mb-2">';
-                                    }
+                                foreach (Categories::EXPENSE as $key => $label):
+                                    $cbRate = $cb_struct[$key] ?? 0;
                                     ?>
                                     <div class="col-6 col-md-3">
-                                        <label for="cb_<?php echo $key; ?>" class="x-small text-muted fw-bold mb-1"><?php echo $label; ?></label>
+                                        <label for="cb_<?php echo Html::e($key); ?>" class="x-small text-muted fw-bold mb-1 text-truncate d-block" title="<?php echo Html::e($label); ?>"><?php echo Html::e($label); ?></label>
                                         <div class="input-group input-group-sm">
-                                            <input type="number" id="cb_<?php echo $key; ?>" name="cb_<?php echo $key; ?>" class="form-control" step="0.1"
-                                                value="<?php echo (float) ($cb_struct[$key] ?? 0); ?>">
+                                            <input type="number" id="cb_<?php echo Html::e($key); ?>" name="cb_<?php echo Html::e($key); ?>" class="form-control" step="0.1" min="0" max="100"
+                                                value="<?php echo is_numeric($cbRate) ? (float) $cbRate : 0; ?>">
                                             <span class="input-group-text">%</span>
                                         </div>
                                     </div>
-                                    <?php $count++; endforeach; ?>
+                                <?php endforeach; ?>
                             </div>
                         </div>
                     </div>

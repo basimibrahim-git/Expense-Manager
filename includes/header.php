@@ -8,7 +8,29 @@ $GLOBALS['csp_nonce'] = $csp_nonce;
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
 header('X-XSS-Protection: 1; mode=block');
-header("Content-Security-Policy: default-src 'self'; script-src 'self' cdn.jsdelivr.net 'nonce-{$csp_nonce}'; style-src 'self' cdn.jsdelivr.net 'unsafe-inline'; font-src 'self' cdn.jsdelivr.net; img-src 'self' data: https://images.unsplash.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';");
+$csp = [
+    'default-src'     => ["'self'"],
+    'script-src'      => ["'self'", 'cdn.jsdelivr.net', "'nonce-{$csp_nonce}'"],
+    'style-src'       => ["'self'", 'cdn.jsdelivr.net', "'unsafe-inline'"],
+    'font-src'        => ["'self'", 'cdn.jsdelivr.net'],
+    'img-src'         => ["'self'", 'data:', 'https://images.unsplash.com'],
+    'connect-src'     => ["'self'"],
+    'frame-src'       => ["'none'"],
+    'frame-ancestors' => ["'none'"],
+    'base-uri'        => ["'self'"],
+    'form-action'     => ["'self'"],
+];
+// Per-page additions registered with Layout::allowCsp() (e.g. a third-party SDK on one page)
+foreach (($GLOBALS['csp_extra'] ?? []) as $directive => $sources) {
+    if (isset($csp[$directive])) {
+        $csp[$directive] = array_values(array_unique(array_merge(array_diff($csp[$directive], ["'none'"]), $sources)));
+    }
+}
+header('Content-Security-Policy: ' . implode('; ', array_map(
+    function ($d, $s) { return $d . ' ' . implode(' ', $s); },
+    array_keys($csp),
+    $csp
+)) . ';');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Permissions-Policy: geolocation=(), camera=(), microphone=()');
 ?>

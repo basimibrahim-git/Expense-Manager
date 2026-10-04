@@ -4,6 +4,7 @@ require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\Layout;
 use App\Helpers\Html;
+use App\Helpers\Categories;
 
 Bootstrap::init();
 
@@ -53,7 +54,14 @@ $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 // Get counts for filters
 $stmt_cats = $pdo->prepare("SELECT DISTINCT category FROM expenses WHERE tenant_id = ?");
 $stmt_cats->execute([$_SESSION['tenant_id']]);
-$all_cats = $stmt_cats->fetchAll(PDO::FETCH_COLUMN);
+// Standard categories (with labels) first, then any other category found in this family's data
+$category_options = Categories::EXPENSE;
+foreach ($stmt_cats->fetchAll(PDO::FETCH_COLUMN) as $cat) {
+    $cat = (string) $cat;
+    if ($cat !== '' && !isset($category_options[$cat])) {
+        $category_options[$cat] = $cat;
+    }
+}
 
 $stmt_methods = $pdo->prepare("SELECT DISTINCT payment_method FROM expenses WHERE tenant_id = ?");
 $stmt_methods->execute([$_SESSION['tenant_id']]);
@@ -83,9 +91,9 @@ $all_methods = $stmt_methods->fetchAll(PDO::FETCH_COLUMN);
                     <label for="searchCategory" class="form-label small fw-bold">Category</label>
                     <select name="category" id="searchCategory" class="form-select form-select-sm">
                         <option value="">All Categories</option>
-                        <?php foreach ($all_cats as $cat): ?>
+                        <?php foreach ($category_options as $cat => $cat_label): ?>
                             <option value="<?php echo Html::e($cat); ?>" <?php echo $category === (string) $cat ? 'selected' : ''; ?>>
-                                <?php echo Html::e($cat); ?>
+                                <?php echo Html::e($cat_label); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>

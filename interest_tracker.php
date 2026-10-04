@@ -66,18 +66,6 @@ $current_month = date('n');
 $current_year = date('Y');
 ?>
 
-<?php if (!empty($_GET['success'])): ?>
-    <div class="alert alert-success alert-dismissible fade show rounded-4" role="alert">
-        <?php echo Html::e($_GET['success']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
-<?php if (!empty($_GET['error'])): ?>
-    <div class="alert alert-danger alert-dismissible fade show rounded-4" role="alert">
-        <?php echo Html::e($_GET['error']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
 
 <!-- Premium Header Banner -->
 <div class="row mb-4">

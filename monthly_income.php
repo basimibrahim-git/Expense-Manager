@@ -7,13 +7,14 @@ use App\Helpers\AuditHelper;
 use App\Helpers\Layout;
 use App\Helpers\Html;
 use App\Helpers\ExchangeRateHelper;
+use App\Helpers\Flash;
+use App\Helpers\Categories;
 
 Bootstrap::init();
 
 $month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]) ?: (int) date('n');
 $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]) ?: (int) date('Y');
 
-$bulk_categories = ['Salary', 'Bonus', 'Investment', 'Business', 'Freelance', 'Gift', 'Other'];
 
 // Handle Bulk Category Change (before any output so the redirect works)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'bulk_change_category') {
@@ -21,24 +22,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     // Permission Check
     if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
-        header("Location: monthly_income.php?month=$month&year=$year&error=Unauthorized: Read-only access");
-        exit();
+        Flash::redirect("monthly_income.php?month=$month&year=$year", 'error', 'Unauthorized: Read-only access');
     }
 
     $ids = array_slice(array_values(array_filter(array_map('intval', (array) ($_POST['ids'] ?? [])))), 0, 500);
     $new_category = (string) ($_POST['new_category'] ?? '');
 
-    if (!empty($ids) && in_array($new_category, $bulk_categories, true)) {
+    if (!empty($ids) && Categories::isIncome($new_category)) {
         $ids_placeholder = implode(',', array_fill(0, count($ids), '?'));
         $stmt = $pdo->prepare("UPDATE income SET category = ? WHERE id IN ($ids_placeholder) AND tenant_id = ?");
         $stmt->execute(array_merge([$new_category], $ids, [$_SESSION['tenant_id']]));
 
         AuditHelper::log($pdo, 'bulk_income_edit', "Changed category for " . count($ids) . " items to $new_category");
-        header("Location: monthly_income.php?month=$month&year=$year&success=Bulk update successful");
-        exit();
+        Flash::redirect("monthly_income.php?month=$month&year=$year", 'success', 'Bulk update successful');
     }
-    header("Location: monthly_income.php?month=$month&year=$year&error=Nothing to update");
-    exit();
+    Flash::redirect("monthly_income.php?month=$month&year=$year", 'error', 'Nothing to update');
 }
 
 // Fetch Records
@@ -209,8 +207,8 @@ Layout::sidebar();
                         Change Category
                     </button>
                     <ul class="dropdown-menu border-0 shadow">
-                        <?php foreach ($bulk_categories as $bulk_cat): ?>
-                            <li><button class="dropdown-item" type="button" data-onclick="submitBulkChange" data-args="<?php echo Html::args($bulk_cat); ?>"><?php echo Html::e($bulk_cat); ?></button></li>
+                        <?php foreach (Categories::INCOME as $bulk_cat => $bulk_label): ?>
+                            <li><button class="dropdown-item" type="button" data-onclick="submitBulkChange" data-args="<?php echo Html::args($bulk_cat); ?>"><?php echo Html::e($bulk_label); ?></button></li>
                         <?php endforeach; ?>
                     </ul>
                 </div>

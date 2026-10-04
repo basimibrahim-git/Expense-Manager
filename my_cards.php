@@ -5,6 +5,7 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
 use App\Helpers\Html;
+use App\Helpers\CardCycleHelper;
 
 Bootstrap::init();
 Layout::header();
@@ -39,6 +40,12 @@ try {
         'year2' => $curr_year
     ]);
     $cards = $stmt->fetchAll();
+
+    // Billing cycle per credit card (only cards with a statement day)
+    $cycles = [];
+    foreach (CardCycleHelper::cycles($pdo, (int) $_SESSION['tenant_id']) as $cycleRow) {
+        $cycles[$cycleRow['card_id']] = $cycleRow;
+    }
 } catch (\PDOException $e) {
     error_log("Database Error in my_cards.php: " . $e->getMessage());
     die("A system error occurred. Please contact support.");
@@ -59,18 +66,11 @@ try {
     </div>
 </div>
 
-<?php if (isset($_GET['success'])): ?>
-    <div class="alert alert-success alert-dismissible fade show rounded-4" role="alert">
-        <i class="fa-solid fa-check-circle me-2"></i> <?php echo Html::e($_GET['success']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-<?php endif; ?>
-<?php if (isset($_GET['error'])): ?>
-    <div class="alert alert-danger alert-dismissible fade show rounded-4" role="alert">
-        <i class="fa-solid fa-exclamation-circle me-2"></i> <?php echo Html::e($_GET['error']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-<?php endif; ?>
+<style>
+    .cycle-strip { background: rgba(var(--bs-secondary-rgb), 0.06); border-radius: 0.9rem; padding: 0.75rem 0.9rem; }
+    .cycle-strip .cycle-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.4px; color: var(--bs-secondary-color); font-weight: 600; }
+    .cycle-strip .cycle-value { font-weight: 700; font-size: 0.9rem; }
+</style>
 
 <?php if (empty($cards)): ?>
     <div class="text-center py-5 glass-panel">
@@ -147,6 +147,68 @@ try {
                         </div>
                     </div>
 
+                    <?php $cy = $cycles[(int) $card['id']] ?? null; ?>
+                    <?php if ($cy !== null): ?>
+                    <?php
+                    $utilPct   = $cy['utilization_pct'];
+                    $utilColor = CardCycleHelper::utilizationColor($utilPct);
+                    $stColor   = CardCycleHelper::statusColor($cy['status']);
+                    if ($cy['status'] === 'paid') {
+                        $dueBadge = 'Paid';
+                    } elseif ($cy['due_remaining'] <= 0) {
+                        $dueBadge = 'Nothing due';
+                    } else {
+                        $dueBadge = CardCycleHelper::dueLabel($cy['days_to_due']);
+                    }
+                    ?>
+                    <!-- Billing cycle strip -->
+                    <div class="cycle-strip mb-3">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <div class="cycle-label">Next statement</div>
+                                <div class="cycle-value"><?php echo Html::e(date('d M', strtotime($cy['current_cycle_end']))); ?></div>
+                            </div>
+                            <div class="text-end">
+                                <div class="cycle-label">Payment due</div>
+                                <div class="cycle-value">
+                                    <?php echo $cy['last_statement_due_date'] ? Html::e(date('d M', strtotime($cy['last_statement_due_date']))) : '—'; ?>
+                                    <span class="badge rounded-pill bg-<?php echo $stColor; ?><?php echo $stColor === 'warning' ? ' text-dark' : ''; ?> ms-1"><?php echo Html::e($dueBadge); ?></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-end mb-2">
+                            <div>
+                                <div class="cycle-label">Due remaining</div>
+                                <div class="cycle-value blur-sensitive <?php echo $cy['due_remaining'] > 0 ? 'text-' . $stColor : 'text-success'; ?>">AED <?php echo number_format($cy['due_remaining'], 2); ?></div>
+                            </div>
+                            <div class="text-end small text-muted blur-sensitive">
+                                Statement <?php echo Html::e(date('d M', strtotime($cy['last_statement_date']))); ?>: AED <?php echo number_format($cy['last_statement_amount'], 2); ?>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="cycle-label">Utilization</span>
+                            <span class="small fw-bold blur-sensitive">
+                                <?php echo $utilPct !== null ? number_format($utilPct, 1) . '%' : 'No limit set'; ?>
+                                <span class="text-muted fw-normal">· AED <?php echo number_format($cy['outstanding_estimate'], 2); ?> / <?php echo number_format($cy['limit_amount'], 0); ?></span>
+                            </span>
+                        </div>
+                        <div class="progress mb-2" style="height: 6px;" title="Estimated outstanding (all card spend minus all payments) vs. limit">
+                            <div class="progress-bar bg-<?php echo $utilColor; ?>" role="progressbar" style="width: <?php echo $utilPct !== null ? min($utilPct, 100) : 0; ?>%;"></div>
+                        </div>
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted">This cycle: <span class="fw-bold text-body blur-sensitive">AED <?php echo number_format($cy['current_cycle_spend'], 2); ?></span></span>
+                            <span class="text-muted" title="Expected from the card's cashback rates vs. recorded on expenses">
+                                <i class="fa-solid fa-gift text-success me-1"></i><span class="blur-sensitive"><?php echo number_format($cy['cashback_expected'], 2); ?> / <?php echo number_format($cy['cashback_recorded'], 2); ?></span>
+                            </span>
+                        </div>
+                    </div>
+                    <?php else: ?>
+                    <?php if ($card['card_type'] === 'Credit' && ($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                        <div class="small text-muted mb-2">
+                            <i class="fa-solid fa-circle-info me-1"></i>
+                            <a href="edit_card.php?id=<?php echo (int) $card['id']; ?>">Set a statement day</a> to track billing cycles and due dates.
+                        </div>
+                    <?php endif; ?>
                     <!-- Usage Details -->
                     <div>
                         <div class="d-flex justify-content-between align-items-center mb-2">
@@ -170,9 +232,13 @@ try {
                             </div>
                         </div>
                     </div>
+                    <?php endif; ?>
 
                     <!-- Card Actions -->
                     <div class="d-flex gap-2 justify-content-end pt-3 border-top">
+                        <a href="view_card.php?id=<?php echo (int) $card['id']; ?>" class="btn btn-sm btn-outline-primary rounded-pill px-3" title="Details & billing cycle">
+                            <i class="fa-solid fa-eye"></i>
+                        </a>
                         <?php if (!empty($card['bank_url']) && preg_match('#^https?://#i', $card['bank_url'])): ?>
                             <a href="<?php echo Html::e($card['bank_url']); ?>" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary rounded-pill px-3" title="Visit Bank Site">
                                 <i class="fa-solid fa-external-link-alt"></i> Bank

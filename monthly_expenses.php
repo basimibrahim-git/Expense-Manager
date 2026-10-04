@@ -5,6 +5,7 @@ use App\Core\Bootstrap;
 use App\Helpers\Layout;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Html;
+use App\Helpers\Categories;
 
 Bootstrap::init();
 
@@ -169,6 +170,20 @@ try {
     $cat_budgets = [];
     $cat_actuals = [];
 }
+
+// Which listed expenses are split with family (table exists once the family_split migration ran)
+$split_ids = [];
+if (!empty($expenses)) {
+    try {
+        $ids = array_map(fn($e) => (int) $e['id'], $expenses);
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $split_stmt = $pdo->prepare("SELECT DISTINCT expense_id FROM expense_splits WHERE tenant_id = ? AND expense_id IN ($placeholders)");
+        $split_stmt->execute(array_merge([$_SESSION['tenant_id']], $ids));
+        $split_ids = array_flip(array_map('intval', $split_stmt->fetchAll(PDO::FETCH_COLUMN)));
+    } catch (PDOException $e) {
+        $split_ids = [];
+    }
+}
 ?>
 
 <!-- Premium Header Banner -->
@@ -205,13 +220,7 @@ try {
             <label for="filterCategory" class="small text-muted mb-1 fw-bold">Category</label>
             <select name="category" id="filterCategory" class="form-select" data-autosubmit>
                 <option value="">All Categories</option>
-                <?php
-                $categories = ['Grocery', 'Medical', 'Food', 'Utilities', 'Transport', 'Shopping', 'Entertainment', 'Travel', 'Education', 'Other'];
-                foreach ($categories as $cat): ?>
-                    <option value="<?php echo Html::e($cat); ?>" <?php echo $category_filter == $cat ? 'selected' : ''; ?>>
-                        <?php echo Html::e($cat); ?>
-                    </option>
-                <?php endforeach; ?>
+                <?php echo Categories::expenseOptions($category_filter); ?>
             </select>
         </div>
 
@@ -343,7 +352,14 @@ try {
                                 </span>
                             </td>
                             <td>
-                                <div class="fw-bold text-dark"><?php echo htmlspecialchars($expense['description']); ?></div>
+                                <div class="fw-bold text-dark">
+                                    <?php echo htmlspecialchars($expense['description']); ?>
+                                    <?php if (isset($split_ids[(int) $expense['id']])): ?>
+                                        <a href="family_split.php?month=<?php echo $month; ?>&amp;year=<?php echo $year; ?>" class="badge rounded-pill bg-info-subtle text-info text-decoration-none ms-1 align-middle" style="font-size: 0.65em;" title="Split with family">
+                                            <i class="fa-solid fa-people-arrows me-1"></i>split
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
                                 <?php if (!empty($expense['tags'])): ?>
                                     <div class="mt-1">
                                         <?php foreach (explode(',', $expense['tags']) as $tag): ?>
@@ -464,11 +480,11 @@ try {
                         Change Category
                     </button>
                     <ul class="dropdown-menu border-0 shadow">
-                        <?php foreach ($categories as $cat): ?>
+                        <?php foreach (Categories::EXPENSE as $cat => $catLabel): ?>
                             <li>
                                 <button type="button" class="dropdown-item"
                                     data-onclick="bulkAction" data-args="<?php echo Html::args('change_category', $cat); ?>">
-                                    <?php echo Html::e($cat); ?>
+                                    <?php echo Html::e($catLabel); ?>
                                 </button>
                             </li>
                         <?php endforeach; ?>

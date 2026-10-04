@@ -3,6 +3,7 @@ $page_title = "My Profile";
 require_once __DIR__ . '/autoload.php';
 use App\Core\Bootstrap;
 use App\Helpers\AuditHelper;
+use App\Helpers\Flash;
 use App\Helpers\Html;
 use App\Helpers\Layout;
 use App\Helpers\SecurityHelper;
@@ -20,14 +21,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'update_name') {
         $name = trim((string) ($_POST['name'] ?? ''));
         if ($name === '' || mb_strlen($name) > 100) {
-            header("Location: profile.php?error=" . urlencode("Name must be between 1 and 100 characters."));
-            exit();
+            Flash::redirect('profile.php', 'error', "Name must be between 1 and 100 characters.");
         }
         $pdo->prepare("UPDATE users SET name = ? WHERE id = ?")->execute([$name, $user_id]);
         $_SESSION['user_name'] = $name;
         AuditHelper::log($pdo, 'profile_update', "Changed display name");
-        header("Location: profile.php?success=" . urlencode("Name updated."));
-        exit();
+        Flash::redirect('profile.php', 'success', "Name updated.");
+    }
+
+    if ($action === 'update_notifications') {
+        $enabled = !empty($_POST['notifications_enabled']) ? 1 : 0;
+        $pdo->prepare("INSERT INTO user_preferences (user_id, notifications_enabled) VALUES (?, ?)
+                       ON DUPLICATE KEY UPDATE notifications_enabled = VALUES(notifications_enabled)")
+            ->execute([$user_id, $enabled]);
+        $_SESSION['preferences']['notifications_enabled'] = $enabled;
+        AuditHelper::log($pdo, 'profile_update', $enabled ? 'Enabled email notifications' : 'Disabled email notifications');
+        Flash::redirect('profile.php', 'success', $enabled ? 'Email notifications turned on.' : 'Email notifications turned off.');
     }
 
     if ($action === 'change_password') {
@@ -37,8 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $fails = ['count' => 0, 'since' => time()];
         }
         if ($fails['count'] >= PROFILE_MAX_PW_FAILS) {
-            header("Location: profile.php?error=" . urlencode("Too many wrong attempts. Try again in 15 minutes."));
-            exit();
+            Flash::redirect('profile.php', 'error', "Too many wrong attempts. Try again in 15 minutes.");
         }
 
         $current = (string) ($_POST['current_password'] ?? '');
@@ -53,8 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $fails['count']++;
             $_SESSION['pw_change_fails'] = $fails;
             AuditHelper::log($pdo, 'password_change_failed', "Wrong current password");
-            header("Location: profile.php?error=" . urlencode("Your current password is incorrect."));
-            exit();
+            Flash::redirect('profile.php', 'error', "Your current password is incorrect.");
         }
 
         $error = SecurityHelper::validatePassword($new);
@@ -65,8 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = "The new password must be different from the current one.";
         }
         if ($error !== null) {
-            header("Location: profile.php?error=" . urlencode($error));
-            exit();
+            Flash::redirect('profile.php', 'error', $error);
         }
 
         $newHash = password_hash($new, PASSWORD_DEFAULT);
@@ -80,16 +86,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         unset($_SESSION['pw_change_fails']);
         session_regenerate_id(true);
         AuditHelper::log($pdo, 'password_changed', "Password changed from profile");
-        header("Location: profile.php?success=" . urlencode("Password changed successfully."));
-        exit();
+        Flash::redirect('profile.php', 'success', "Password changed successfully.");
     }
 
     header("Location: profile.php");
     exit();
 }
 
-$stmt = $pdo->prepare("SELECT u.name, u.email, u.role, u.permission, u.created_at, t.family_name
-                       FROM users u LEFT JOIN tenants t ON t.id = u.tenant_id
+$stmt = $pdo->prepare("SELECT u.name, u.email, u.role, u.permission, u.created_at, t.family_name,
+                              COALESCE(p.notifications_enabled, 1) AS notifications_enabled
+                       FROM users u
+                       LEFT JOIN tenants t ON t.id = u.tenant_id
+                       LEFT JOIN user_preferences p ON p.user_id = u.id
                        WHERE u.id = ?");
 $stmt->execute([$user_id]);
 $me = $stmt->fetch();
@@ -107,12 +115,6 @@ Layout::sidebar();
     </div>
 </div>
 
-<?php if (!empty($_GET['success'])): ?>
-    <div class="alert alert-success shadow-sm border-0"><i class="fa-solid fa-check-circle me-2"></i><?php echo Html::e($_GET['success']); ?></div>
-<?php endif; ?>
-<?php if (!empty($_GET['error'])): ?>
-    <div class="alert alert-danger shadow-sm border-0"><i class="fa-solid fa-circle-exclamation me-2"></i><?php echo Html::e($_GET['error']); ?></div>
-<?php endif; ?>
 
 <div class="row g-4">
     <div class="col-lg-5">
@@ -141,6 +143,19 @@ Layout::sidebar();
                     <button type="submit" class="btn btn-outline-primary">Save</button>
                 </div>
                 <div class="form-text small">To change your email, ask your family admin.</div>
+            </form>
+
+            <form method="POST" class="mt-4">
+                <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
+                <input type="hidden" name="action" value="update_notifications">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="notificationsEnabled"
+                        name="notifications_enabled" value="1" data-autosubmit
+                        <?php echo $me['notifications_enabled'] ? 'checked' : ''; ?>>
+                    <label class="form-check-label fw-bold small" for="notificationsEnabled">Email notifications</label>
+                </div>
+                <div class="form-text small">Budget alerts, card due dates, Zakath and reminder emails.</div>
+                <noscript><button type="submit" class="btn btn-sm btn-outline-primary mt-2">Save</button></noscript>
             </form>
         </div>
     </div>

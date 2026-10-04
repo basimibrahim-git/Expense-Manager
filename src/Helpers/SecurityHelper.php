@@ -41,7 +41,8 @@ class SecurityHelper
             // A 403 with a Location header is not followed by browsers (blank page), so use a 303 redirect.
             $target = isset($_SESSION['user_id']) ? 'dashboard.php' : 'index.php';
             $base   = defined('BASE_URL') ? BASE_URL : '/';
-            header('Location: ' . $base . $target . '?error=' . urlencode('Your session token expired. Please try again.'), true, 303);
+            Flash::error('Your session token expired. Please try again.');
+            header('Location: ' . $base . $target, true, 303);
             exit();
         }
     }
@@ -55,7 +56,8 @@ class SecurityHelper
     {
         if (!in_array($_SESSION['role'] ?? '', $roles, true)) {
             $base = defined('BASE_URL') ? BASE_URL : '/';
-            header('Location: ' . $base . $redirect . '?error=' . urlencode('You do not have access to that page.'));
+            Flash::error('You do not have access to that page.');
+            header('Location: ' . $base . $redirect);
             exit();
         }
     }

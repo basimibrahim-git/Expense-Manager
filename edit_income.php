@@ -5,14 +5,15 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
 use App\Helpers\Html;
+use App\Helpers\Flash;
+use App\Helpers\Categories;
 
 Bootstrap::init();
 
 $income_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 
 if (!$income_id) {
-    header("Location: income.php?error=Invalid income");
-    exit();
+    Flash::redirect('income.php', 'error', 'Invalid income');
 }
 
 // Fetch income
@@ -21,23 +22,7 @@ $stmt->execute([$income_id, $_SESSION['tenant_id']]);
 $income = $stmt->fetch();
 
 if (!$income) {
-    header("Location: income.php?error=Income not found");
-    exit();
-}
-
-$categories = [
-    'Salary' => '💼 Salary',
-    'Incentives' => '🎯 Incentives / Commission',
-    'Business' => '🏢 Business Income',
-    'Bonus' => '🎁 Bonus',
-    'Investment' => '📈 Investment Return',
-    'Freelance' => '💻 Freelance',
-    'Gift' => '🎀 Gift',
-    'Other' => '🔹 Other'
-];
-// Keep a legacy category selectable so saving the form does not silently change it
-if ($income['category'] !== '' && !isset($categories[$income['category']])) {
-    $categories[$income['category']] = $income['category'];
+    Flash::redirect('income.php', 'error', 'Income not found');
 }
 
 $currency = strtoupper($income['currency'] ?: 'AED');
@@ -61,22 +46,6 @@ Layout::sidebar();
         <h1 class="h3 fw-bold mb-0">Edit Income</h1>
     </div>
 </div>
-
-<?php if (isset($_GET['success'])): ?>
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="fa-solid fa-check-circle me-2"></i>
-        <?php echo Html::e($_GET['success']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-<?php endif; ?>
-
-<?php if (isset($_GET['error'])): ?>
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="fa-solid fa-exclamation-circle me-2"></i>
-        <?php echo Html::e($_GET['error']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-<?php endif; ?>
 
 <div class="row justify-content-center">
     <div class="col-md-6">
@@ -116,11 +85,8 @@ Layout::sidebar();
                 <div class="mb-3">
                     <label class="form-label" for="category">Category <span class="text-danger">*</span></label>
                     <select name="category" id="category" class="form-select" required>
-                        <?php foreach ($categories as $key => $label): ?>
-                            <option value="<?php echo Html::e($key); ?>" <?php echo $income['category'] === (string) $key ? 'selected' : ''; ?>>
-                                <?php echo Html::e($label); ?>
-                            </option>
-                        <?php endforeach; ?>
+                        <?php /* a legacy category stays selectable so saving does not silently change it */ ?>
+                        <?php echo Categories::incomeOptions((string) $income['category']); ?>
                     </select>
                 </div>
 
