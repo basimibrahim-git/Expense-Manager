@@ -99,13 +99,16 @@ ini_set('display_errors', 0);
 ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
 // Secure Error Logging
-// Attempt to log outside webroot, or fallback to hidden file
-$logDataDir = dirname(__DIR__); // Parent of project root
-$logFile = $logDataDir . '/expense_manager_errors.log';
-
-// If parent is not writable, fallback to project root but hidden
-if (!is_writable($logDataDir) && !is_writable($logFile)) {
-    $logFile = __DIR__ . '/.error.log';
+// The parent folder is NOT safe: on this host it is the main site's public_html, where the
+// log was publicly downloadable. Log into logs/, which is denied by logs/.htaccess and the
+// app's root .htaccess.
+$logDir = __DIR__ . '/logs';
+if (!is_dir($logDir)) {
+    @mkdir($logDir, 0750, true);
+}
+$logFile = $logDir . '/php_errors.log';
+if (!is_writable($logDir) && !is_writable($logFile)) {
+    $logFile = __DIR__ . '/.error.log'; // *.log is denied by the root .htaccess
 }
 
 ini_set('log_errors', 1);

@@ -1,0 +1,11 @@
+# Expense Manager — never serve files that are not pages or public assets.
+# (Works whether the app is served from a domain root or from a sub-folder.)
+
+# Database dumps, logs, docs, lock/config/backup files and leftover debug scripts
+<FilesMatch "\.(sql|log|md|lock|bak|orig|tmp|sh|bat|ini|example)$|^(\.env.*|\.gitignore|composer\.json|(debug|test|scratch)_.*\.php)$">
+    Require all denied
+</FilesMatch>
+
+# Internal folders: PHP classes, templates, migrations, installer, logs, git metadata.
+# (cron/ stays reachable: its HTTP trigger is protected by CRON_SECRET.)
+RedirectMatch 403 "(^|/)(src|includes|migrations|install|logs|\.git|\.github)(/|$)"

@@ -18,7 +18,8 @@ codecheck.bat
 # Logs
 *.log
 .error.log
-logs/
+logs/*
+!logs/.htaccess
 error.log
 
 # OS artifacts
