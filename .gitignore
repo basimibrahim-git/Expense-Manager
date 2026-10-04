@@ -54,3 +54,6 @@ test_*.php
 scratch_*.php
 # Database dumps (contain real user data) — never commit
 /*.sql
+
+# Local deploy packages
+deploy/
