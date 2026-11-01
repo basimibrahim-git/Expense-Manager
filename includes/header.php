@@ -5,6 +5,10 @@ $asset_version = $_ENV['APP_VERSION'] ?? '1.0.0';
 $csp_nonce = base64_encode(random_bytes(16));
 $GLOBALS['csp_nonce'] = $csp_nonce;
 
+// Pages hold live, per-user figures: never serve them from the browser/proxy cache, so a page
+// reached by Back or reopened after adding an expense or payment always shows current numbers
+header('Cache-Control: no-store, no-cache, must-revalidate, private');
+header('Pragma: no-cache');
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
 header('X-XSS-Protection: 1; mode=block');

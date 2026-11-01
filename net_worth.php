@@ -10,6 +10,7 @@ use App\Helpers\ExchangeRateHelper;
 use App\Helpers\BalanceHelper;
 use App\Helpers\Html;
 use App\Helpers\Flash;
+use App\Helpers\DashboardStats;
 
 Bootstrap::init();
 
@@ -112,7 +113,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM net_worth_items WHERE tenant_id = ? AND type = 'liability'");
         $stmt->execute([$tenant_id]);
-        $snap_liabilities = (float)$stmt->fetchColumn();
+        $snap_liabilities = (float)$stmt->fetchColumn()
+            + max(0.0, DashboardStats::interestBalance($pdo, (int) $tenant_id)); // interest still to dispose of (AED)
 
         $snap_total_assets = $snap_bank + $snap_savings + $snap_lent + $snap_manual_assets;
         $snap_net_worth    = $snap_total_assets - $snap_liabilities;
@@ -168,8 +170,13 @@ $manual_liabilities = array_filter($all_items, fn($i) => $i['type'] === 'liabili
 $manual_assets_total      = array_sum(array_column(iterator_to_array(new ArrayIterator($manual_assets)), 'amount'));
 $manual_liabilities_total = array_sum(array_column(iterator_to_array(new ArrayIterator($manual_liabilities)), 'amount'));
 
+// Interest received but not yet given away is owed to charity: an automatic liability
+// (the same all-time figure as the Interest Tracker; a credit is not counted as an asset)
+$interest_due_aed = max(0.0, DashboardStats::interestBalance($pdo, (int) $tenant_id));
+$interest_due = ($base_currency === 'INR') ? $interest_due_aed * $aed_to_inr : $interest_due_aed;
+
 $total_assets      = $auto_total + $manual_assets_total;
-$total_liabilities = $manual_liabilities_total;
+$total_liabilities = $manual_liabilities_total + $interest_due;
 $net_worth         = $total_assets - $total_liabilities;
 
 // Trend data — latest 12 snapshots, oldest first
@@ -374,6 +381,14 @@ Layout::sidebar();
         </button>
         <?php endif; ?>
     </div>
+
+    <?php if ($interest_due > 0): ?>
+        <a href="interest_tracker.php" class="d-flex justify-content-between align-items-center p-3 mb-3 rounded-3 bg-danger-subtle text-decoration-none">
+            <span class="text-body"><i class="fa-solid fa-percent text-danger me-2"></i><span class="fw-semibold">Interest to dispose of</span>
+                <span class="small text-muted ms-1">(auto, from Interest Tracker)</span></span>
+            <span class="fw-bold text-danger blur-sensitive"><?php echo Html::e($currency_label); ?> <?php echo number_format($interest_due, 2); ?></span>
+        </a>
+    <?php endif; ?>
 
     <?php if (empty($manual_liabilities)): ?>
         <div class="text-center py-4 text-muted">

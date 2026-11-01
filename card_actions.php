@@ -5,6 +5,7 @@ use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
 use App\Helpers\BalanceHelper;
 use App\Helpers\Categories;
+use App\Helpers\CardOfferHelper;
 use App\Helpers\ExchangeRateHelper;
 use App\Helpers\Flash;
 
@@ -159,6 +160,24 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         error_log("Card Update Error: " . $e->getMessage());
         Flash::redirect("edit_card.php?id=$card_id", 'error', 'Failed to update card details.');
     }
+} elseif ($action == 'refresh_offers' && $_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Re-read the card's bank page now: features text + the cashback rates the page states
+    $card_id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
+    $stmt = $pdo->prepare("SELECT id, card_name, bank_url, cashback_struct, features FROM cards WHERE id = ? AND tenant_id = ?");
+    $stmt->execute([$card_id ?: 0, $tenant_id]);
+    $card = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$card) {
+        Flash::redirect('my_cards.php', 'error', 'Card not found');
+    }
+    $result = CardOfferHelper::refreshCard($pdo, $tenant_id, $card);
+    if (!$result['ok']) {
+        Flash::redirect('my_cards.php', 'error', 'Could not refresh offers: ' . $result['error']);
+    }
+    AuditHelper::log($pdo, 'refresh_card_offers', "Refreshed offers: {$card['card_name']} (ID: {$card['id']})");
+    $found = count($result['rates']);
+    Flash::redirect('my_cards.php', 'success', $found > 0
+        ? "Offers refreshed: cashback rates found for $found " . ($found === 1 ? 'category' : 'categories') . '.'
+        : 'Offers refreshed. The bank page lists no cashback rates the app can read, so the rates were kept.');
 } elseif ($action == 'delete_card' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['id'])) {
     $card_id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
 

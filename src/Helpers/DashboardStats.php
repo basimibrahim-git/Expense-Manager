@@ -117,4 +117,23 @@ class DashboardStats
         }
         return $cents / 100;
     }
+
+    /**
+     * Interest still to be disposed of: the all-time running total of interest_tracker
+     * (interest received is positive, charity payments negative), so overpayments carry forward.
+     * Negative means credit. With $beforeDate, only entries dated before it (the balance
+     * carried into that day). Every page that shows "interest due" uses this one figure.
+     */
+    public static function interestBalance(PDO $pdo, int $tenantId, ?string $beforeDate = null): float
+    {
+        $sql = "SELECT SUM(amount) FROM interest_tracker WHERE tenant_id = ?";
+        $params = [$tenantId];
+        if ($beforeDate !== null) {
+            $sql .= " AND interest_date < ?";
+            $params[] = $beforeDate;
+        }
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        return round((float) $stmt->fetchColumn(), 2);
+    }
 }

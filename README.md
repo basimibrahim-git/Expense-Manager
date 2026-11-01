@@ -82,7 +82,7 @@ Copy `.env.example` to `.env`. Unquoted values may have a trailing `# comment`.
 
 ## ⏰ Scheduled jobs
 
-One daily job runs reminders, the monthly digest, budget alerts, card due-date reminders, Zakath reminders and the open-banking sync (`cron/jobs/*.php`):
+One daily job runs reminders, the monthly digest, budget alerts, card due-date reminders, Zakath reminders, the weekly card-offers refresh (cashback rates from each card's bank page) and the open-banking sync (`cron/jobs/*.php`):
 
 ```bash
 0 9 * * * php /path/to/app/cron/reminder_emails.php >> /dev/null 2>&1

@@ -1,5 +1,5 @@
 // Bump CACHE_NAME whenever the precached asset list (or the caching strategy) changes.
-const CACHE_NAME = 'expense-manager-v2';
+const CACHE_NAME = 'expense-manager-v3';
 
 // Paths are relative to this script (registered from BASE_URL, e.g. /expenses/sw.js),
 // so they work whether the app lives at / or /expenses/.

@@ -562,6 +562,33 @@ class ZakathHelper
             error_log('ZakathHelper: bank total failed: ' . $e->getMessage());
         }
 
+        // Savings goals: money set aside for a goal (Hajj, a car, a house) is still fully owned, so
+        // it is zakatable like any other cash once the total wealth meets the nisab for a hawl.
+        // Earmarking it does not exempt it. The Goals page does not move money out of the bank,
+        // so it is already inside the bank balances above and is not added a second time.
+        try {
+            $stmt = $pdo->prepare("SELECT COALESCE(SUM(current_saved), 0) FROM sinking_funds WHERE tenant_id = ?");
+            $stmt->execute([$tenantId]);
+            $goals = (float) $stmt->fetchColumn();
+            if ($goals > 0) {
+                $out['cash']['parts'][] = 'incl. savings goals ' . self::money($goals) . ' (zakatable, already in bank balances; add any kept outside the bank)';
+            }
+        } catch (Throwable $e) {
+            error_log('ZakathHelper: savings goals failed: ' . $e->getMessage());
+        }
+
+        // Interest received and not yet given away is not the owner's wealth: it is owed to charity
+        // in full, so it is deducted rather than zakated (same all-time figure as the Interest Tracker).
+        try {
+            $interestDue = DashboardStats::interestBalance($pdo, $tenantId);
+            if ($interestDue > 0) {
+                $out['liabilities']['amount'] += $interestDue;
+                $out['liabilities']['parts'][] = 'interest to dispose of ' . self::money($interestDue);
+            }
+        } catch (Throwable $e) {
+            error_log('ZakathHelper: interest balance failed: ' . $e->getMessage());
+        }
+
         // Manual Net Worth items (stored in AED)
         try {
             $stmt = $pdo->prepare("SELECT name, type, category, amount FROM net_worth_items WHERE tenant_id = ? ORDER BY type, sort_order, id");

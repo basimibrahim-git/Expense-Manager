@@ -49,8 +49,10 @@ class CardCycleHelper
      *   last_statement_date     string   Y-m-d (< today)
      *   last_statement_due_date string|null Y-m-d, null without bill_day
      *   last_statement_amount   float    card spend in the previous cycle
-     *   paid_since_statement    float    card payments after the last statement date up to today
-     *   due_remaining           float    max(0, last_statement_amount − paid_since_statement)
+     *   paid_since_statement    float    part of last_statement_amount already paid (0 … last_statement_amount)
+     *   due_remaining           float    max(0, all spend up to the last statement − all payments up to today):
+     *                                    payments made early (before or on the statement date) count, and an
+     *                                    unpaid earlier statement carries into this one
      *   days_to_due             int|null negative when the due date has passed; null without bill_day
      *   current_cycle_spend     float    card spend in the current cycle
      *   outstanding_estimate    float    see below
@@ -93,13 +95,14 @@ class CardCycleHelper
                     SUM(CASE WHEN expense_date > ? AND expense_date <= ? THEN amount ELSE 0 END)          AS prev_spend,
                     SUM(CASE WHEN expense_date > ? AND expense_date <= ? THEN amount ELSE 0 END)          AS cur_spend,
                     SUM(CASE WHEN expense_date > ? AND expense_date <= ? THEN cashback_earned ELSE 0 END) AS cur_cashback,
+                    SUM(CASE WHEN expense_date <= ? THEN amount ELSE 0 END)                               AS billed_spend,
                     SUM(amount) AS total_spend
                FROM expenses
               WHERE tenant_id = ? AND card_id = ?
               GROUP BY category"
         );
         $payStmt = $pdo->prepare(
-            "SELECT SUM(CASE WHEN payment_date > ? AND payment_date <= ? THEN amount ELSE 0 END) AS since_statement,
+            "SELECT SUM(CASE WHEN payment_date <= ? THEN amount ELSE 0 END) AS paid_to_date,
                     SUM(amount) AS total_paid
                FROM card_payments
               WHERE tenant_id = ? AND card_id = ?"
@@ -117,23 +120,28 @@ class CardCycleHelper
                 $d['previous_cycle_start_exclusive'], $d['last_statement_date'],
                 $d['last_statement_date'], $d['current_cycle_end'],
                 $d['last_statement_date'], $d['current_cycle_end'],
+                $d['last_statement_date'],
                 $tenantId, $cardId,
             ]);
-            $prevSpend = $curSpend = $cbRecorded = $totalSpend = $cbExpected = 0.0;
+            $prevSpend = $curSpend = $cbRecorded = $billedSpend = $totalSpend = $cbExpected = 0.0;
             foreach ($expStmt->fetchAll(PDO::FETCH_ASSOC) as $e) {
                 $prevSpend  += (float) $e['prev_spend'];
                 $curSpend   += (float) $e['cur_spend'];
                 $cbRecorded += (float) $e['cur_cashback'];
+                $billedSpend += (float) $e['billed_spend'];
                 $totalSpend += (float) $e['total_spend'];
                 $cbExpected += (float) $e['cur_spend'] * self::rateFor($rates, (string) $e['category']) / 100;
             }
 
-            $payStmt->execute([$d['last_statement_date'], $today, $tenantId, $cardId]);
+            $payStmt->execute([$today, $tenantId, $cardId]);
             $pay        = $payStmt->fetch(PDO::FETCH_ASSOC) ?: [];
-            $paidSince  = (float) ($pay['since_statement'] ?? 0);
+            $paidToDate = (float) ($pay['paid_to_date'] ?? 0);
             $totalPaid  = (float) ($pay['total_paid'] ?? 0);
 
-            $dueRemaining = max(0.0, round($prevSpend - $paidSince, 2));
+            // Everything billed so far minus everything paid so far, so a payment made before the
+            // statement closed (or on the statement day) still settles it
+            $dueRemaining = max(0.0, round($billedSpend - $paidToDate, 2));
+            $paidSince    = max(0.0, min($prevSpend, $prevSpend - $dueRemaining));
             $daysToDue    = $d['last_statement_due_date'] !== null ? self::daysBetween($today, $d['last_statement_due_date']) : null;
             $outstanding  = max(0.0, round($totalSpend - $totalPaid, 2));
             $limit        = (float) $card['limit_amount'];

@@ -7,6 +7,7 @@ use App\Helpers\Layout;
 use App\Helpers\ExchangeRateHelper;
 use App\Helpers\DashboardStats;
 use App\Helpers\Html;
+use App\Helpers\CardCycleHelper;
 
 Bootstrap::init();
 Layout::header();
@@ -295,47 +296,65 @@ $safe_to_spend = $true_liquidity - $remaining_fixed - $savings_target - $total_g
 // 10. Smart Alerts Engine
 $alerts = [];
 
-// A. Smart Swap (Check last 5 card expenses)
+// A. Smart Swap: card spends of the last 30 days where another card earns a higher cashback
+// rate for that category. Grouped per category + card used, biggest missed cashback first.
+$card_rates = [];
+foreach ($roi_cards as $card) {
+    $card_rates[(int) $card['id']] = CardCycleHelper::cashbackRates($card['cashback_struct'] ?? null);
+}
 $stmt = $pdo->prepare("
     SELECT e.amount, e.category, c.card_name, c.id as used_card_id
     FROM expenses e
     JOIN cards c ON e.card_id = c.id AND c.tenant_id = e.tenant_id
-    WHERE e.tenant_id = ? AND e.payment_method = 'Card'
-    ORDER BY e.expense_date DESC LIMIT 5
+    WHERE e.tenant_id = ? AND e.payment_method = 'Card' AND e.expense_date >= ?
+    ORDER BY e.expense_date DESC LIMIT 50
 ");
-$stmt->execute([$tenant_id]);
-$recent_card_txns = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$stmt->execute([$tenant_id, date('Y-m-d', strtotime('-30 days'))]);
 
-foreach ($recent_card_txns as $txn) {
-    if (empty($txn['category'])) {
+$swaps = [];
+foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $txn) {
+    $category = (string) $txn['category'];
+    if ($category === '') {
         continue;
     }
+    $used_id   = (int) $txn['used_card_id'];
+    $used_rate = CardCycleHelper::rateFor($card_rates[$used_id] ?? [], $category);
+    $best_card = null;
+    $best_rate = $used_rate;
     foreach ($roi_cards as $card) {
-        if ($card['id'] == $txn['used_card_id']) {
-            continue; // Skip same card
-        }
-
-        $keywords = json_decode($card['cashback_struct'] ?? '[]', true);
-        if (is_array($keywords)) {
-            foreach ($keywords as $key => $val) {
-                // cashback_struct is {"Category": pct}; older rows may be a plain list of categories
-                $k = is_string($key) ? $key : (string) $val;
-                if ($k === '') {
-                    continue;
-                }
-                if (stripos($txn['category'], $k) !== false || stripos($k, $txn['category']) !== false) {
-                    $alerts[] = [
-                        'type' => 'swap',
-                        'icon' => 'fa-arrow-right-arrow-left',
-                        'color' => 'info',
-                        'msg' => 'Smart Swap: You spent ' . Html::e(number_format((float) $txn['amount'], 2)) . ' on ' . Html::e($txn['category'])
-                            . ' with ' . Html::e($txn['card_name']) . '. Use <b>' . Html::e($card['card_name']) . '</b> next time for better rewards!'
-                    ];
-                    break 2; // Alert once per batch to avoid spam
-                }
-            }
+        $rate = CardCycleHelper::rateFor($card_rates[(int) $card['id']] ?? [], $category);
+        if ((int) $card['id'] !== $used_id && $rate > $best_rate) {
+            $best_card = $card;
+            $best_rate = $rate;
         }
     }
+    if ($best_card === null) {
+        continue; // the card used already earns the best rate for this category
+    }
+    $key = $category . '|' . $used_id;
+    $swaps[$key] = $swaps[$key] ?? [
+        'category' => $category, 'used_name' => $txn['card_name'], 'used_rate' => $used_rate,
+        'best_name' => $best_card['card_name'], 'best_rate' => $best_rate, 'count' => 0, 'spent' => 0.0,
+    ];
+    $swaps[$key]['count']++;
+    $swaps[$key]['spent'] += (float) $txn['amount'];
+}
+foreach ($swaps as &$swap) {
+    $swap['missed'] = $swap['spent'] * ($swap['best_rate'] - $swap['used_rate']) / 100;
+}
+unset($swap);
+uasort($swaps, fn($a, $b) => $b['missed'] <=> $a['missed']);
+
+foreach (array_slice($swaps, 0, 5) as $swap) {
+    $alerts[] = [
+        'type' => 'swap',
+        'icon' => 'fa-arrow-right-arrow-left',
+        'color' => 'info',
+        'msg' => 'Smart Swap: ' . Html::e(number_format($swap['spent'], 2)) . ' on ' . Html::e($swap['category'])
+            . ' (' . $swap['count'] . ' ' . ($swap['count'] === 1 ? 'spend' : 'spends') . ') with ' . Html::e($swap['used_name'])
+            . ' at ' . Html::e(rtrim(rtrim(number_format($swap['used_rate'], 2), '0'), '.')) . '%. <b>' . Html::e($swap['best_name']) . '</b> earns '
+            . Html::e(rtrim(rtrim(number_format($swap['best_rate'], 2), '0'), '.')) . '%, about <b>' . Html::e(number_format($swap['missed'], 2)) . '</b> more cashback.'
+    ];
 }
 
 // B. Liquidity Warning (Bill vs Balance)
@@ -383,6 +402,8 @@ for ($i = 11; $i >= 0; $i--) {
     $interest_accrued_data[] = ($interest_by_month[$key]['accrued'] ?? 0) ?: 0;
     $interest_paid_data[] = ($interest_by_month[$key]['paid'] ?? 0) ?: 0;
 }
+// Same all-time figure as the Interest Tracker and Net Worth (negative = credit)
+$interest_due_total = DashboardStats::interestBalance($pdo, (int) $tenant_id);
 
 // 12. Upcoming Bills & Pending Auto-Drafts
 $upcoming_bills = [];
@@ -634,13 +655,30 @@ $show_split = $widget_split_net !== null && abs($widget_split_net) >= 0.01;
 <?php if (!empty($alerts)): ?>
     <div class="row mb-4">
         <div class="col-12">
-            <?php foreach ($alerts as $alert): ?>
-                <div class="alert alert-<?php echo $alert['color']; ?> border-0 shadow-sm d-flex align-items-center mb-2"
-                    role="alert">
-                    <i class="fa-solid <?php echo $alert['icon']; ?> fa-lg me-3"></i>
-                    <div><?php echo $alert['msg']; /* built from escaped parts above */ ?></div>
+            <!-- One alert at a time, sliding every 7s (paused on hover); arrows + counter when there are several -->
+            <div id="alertsCarousel" class="carousel slide alerts-carousel" data-bs-ride="carousel" data-bs-interval="7000">
+                <div class="carousel-inner">
+                    <?php foreach ($alerts as $i => $alert): ?>
+                        <div class="carousel-item<?php echo $i === 0 ? ' active' : ''; ?>">
+                            <div class="alert alert-<?php echo $alert['color']; ?> border-0 shadow-sm d-flex align-items-center mb-0" role="alert">
+                                <i class="fa-solid <?php echo $alert['icon']; ?> fa-lg me-3"></i>
+                                <div class="flex-grow-1"><?php echo $alert['msg']; /* built from escaped parts above */ ?></div>
+                                <?php if (count($alerts) > 1): ?>
+                                    <div class="d-flex align-items-center gap-1 ms-3 flex-shrink-0">
+                                        <button class="btn btn-sm btn-link text-reset p-1" type="button" data-bs-target="#alertsCarousel" data-bs-slide="prev" aria-label="Previous alert">
+                                            <i class="fa-solid fa-chevron-left"></i>
+                                        </button>
+                                        <span class="small fw-semibold text-nowrap"><?php echo $i + 1; ?> / <?php echo count($alerts); ?></span>
+                                        <button class="btn btn-sm btn-link text-reset p-1" type="button" data-bs-target="#alertsCarousel" data-bs-slide="next" aria-label="Next alert">
+                                            <i class="fa-solid fa-chevron-right"></i>
+                                        </button>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
                 </div>
-            <?php endforeach; ?>
+            </div>
         </div>
     </div>
 <?php endif; ?>
@@ -910,9 +948,15 @@ $show_split = $widget_split_net !== null && abs($widget_split_net) >= 0.01;
                     </h5>
                     <p class="text-muted small mb-0">Interest Accrued vs Payments (Last 12 Months)</p>
                 </div>
-                <a href="interest_tracker.php" class="btn btn-sm btn-outline-danger fw-bold rounded-pill px-3">
-                    View Details <i class="fa-solid fa-arrow-right ms-1"></i>
-                </a>
+                <div class="d-flex align-items-end gap-3">
+                    <div class="text-end">
+                        <div class="small text-muted"><?php echo $interest_due_total < 0 ? 'Credit (all time)' : 'Due (all time)'; ?></div>
+                        <div class="fw-bold <?php echo $interest_due_total > 0 ? 'text-danger' : 'text-success'; ?> blur-sensitive">AED <?php echo number_format(abs($interest_due_total), 2); ?></div>
+                    </div>
+                    <a href="interest_tracker.php" class="btn btn-sm btn-outline-danger fw-bold rounded-pill px-3">
+                        View Details <i class="fa-solid fa-arrow-right ms-1"></i>
+                    </a>
+                </div>
             </div>
             <div style="position: relative; height: 300px; width: 100%;">
                 <canvas id="interestChart"></canvas>

@@ -7,6 +7,7 @@ use App\Helpers\AuditHelper;
 use App\Helpers\Html;
 use App\Helpers\Flash;
 use App\Helpers\Layout;
+use App\Helpers\DashboardStats;
 
 Bootstrap::init();
 
@@ -74,17 +75,18 @@ $stmt = $pdo->prepare("SELECT id, title, amount, interest_date FROM interest_tra
 $stmt->execute([$_SESSION['tenant_id'], $month, $year]);
 $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$total_interest = 0;
-$total_payment = 0;
 foreach ($records as &$r) {
     $r['type'] = $r['amount'] < 0 ? 'payment' : 'interest';
-    if ($r['type'] == 'interest') {
-        $total_interest += $r['amount'];
-    } else {
-        $total_payment += abs($r['amount']);
-    }
 }
 unset($r);
+$total_interest = DashboardStats::sumMoney(array_map(fn($r) => $r['amount'] > 0 ? $r['amount'] : null, $records));
+$total_payment = DashboardStats::sumMoney(array_map(fn($r) => $r['amount'] < 0 ? abs((float) $r['amount']) : null, $records));
+
+// Balance carried in from earlier months (negative = credit) and the running total at month end,
+// the same all-time figure the tracker, dashboard and Net Worth show
+$month_start = sprintf('%04d-%02d-01', $year, $month);
+$carried_in = DashboardStats::interestBalance($pdo, (int) $_SESSION['tenant_id'], $month_start);
+$closing_balance = round($carried_in + $total_interest - $total_payment, 2);
 $can_edit = ($_SESSION['permission'] ?? 'edit') !== 'read_only';
 ?>
 
@@ -160,7 +162,10 @@ $can_edit = ($_SESSION['permission'] ?? 'edit') !== 'read_only';
     <div class="glass-panel-premium p-4 mb-4">
         <h6 class="fw-bold mb-2 text-dark">Disposal Progress Ratio</h6>
         <?php
-        $progress = ($total_interest > 0) ? ($total_payment / $total_interest) * 100 : 100;
+        // Share of everything due up to this month (carried-in balance + this month's interest) that is cleared
+        $due_this_month = max(0, $carried_in) + $total_interest;
+        $credit_in = max(0, -$carried_in);
+        $progress = $due_this_month > 0 ? (($total_payment + $credit_in) / $due_this_month) * 100 : 100;
         $progress = min(100, $progress);
         $progress_color = $progress >= 100 ? 'bg-success' : 'bg-warning';
         ?>
@@ -171,7 +176,10 @@ $can_edit = ($_SESSION['permission'] ?? 'edit') !== 'read_only';
         </div>
         <div class="d-flex justify-content-between small text-muted">
             <span>Cleared: <strong><?php echo number_format($progress, 1); ?>%</strong></span>
-            <span>Outstanding balance: <strong>AED <?php echo number_format(max(0, $total_interest - $total_payment), 2); ?></strong></span>
+            <span><?php echo $closing_balance < 0 ? 'Credit carried forward' : 'Outstanding balance'; ?>: <strong class="blur-sensitive">AED <?php echo number_format(abs($closing_balance), 2); ?></strong></span>
+        </div>
+        <div class="small text-muted mt-1">
+            Brought forward from earlier months: <span class="blur-sensitive">AED <?php echo number_format(abs($carried_in), 2); ?><?php echo $carried_in < 0 ? ' credit' : ''; ?></span>
         </div>
     </div>
 
