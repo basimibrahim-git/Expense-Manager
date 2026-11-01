@@ -26,6 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'refresh_prices') {
+        // The helper still applies its retry throttle, so repeated clicks cannot hammer the price API
         $market = ZakathHelper::marketPrices($pdo, true);
         if ($market['gold'] && $market['gold']['fresh'] && $market['silver'] && $market['silver']['fresh']) {
             Flash::redirect('zakath_settings.php', 'success', 'Gold and silver prices refreshed.');
@@ -195,7 +196,7 @@ Layout::sidebar();
                 <h5 class="fw-bold mb-2 text-dark"><i class="fa-solid fa-moon me-2 text-primary"></i>Hawl (Zakath year)</h5>
                 <p class="text-muted small mb-2">
                     The date your family's wealth first reached the nisab. Zakath falls due every lunar year
-                    (354 days) from this date; we'll email reminders 30 days, 7 days and on the day.
+                    (on the Hijri anniversary of this date); we'll email reminders 30 days, 7 days and on the day.
                 </p>
                 <div class="mb-4">
                     <label for="hawlStart" class="form-label fw-bold text-muted small">Hawl start date</label>

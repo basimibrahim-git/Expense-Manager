@@ -52,11 +52,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 AuditHelper::log($pdo, 'add_expense_preset', "Saved spend: $name ($category)");
                 Flash::redirect('expense_presets.php', 'success', "Saved \"$name\".");
             }
-            if ($id) {
-                $pdo->prepare("UPDATE expense_presets SET name = ?, category = ? WHERE id = ? AND tenant_id = ?")
-                    ->execute([$name, $category, $id, $tenant_id]);
-                AuditHelper::log($pdo, 'update_expense_preset', "Updated saved spend #$id: $name ($category)");
+            $exists = $pdo->prepare("SELECT 1 FROM expense_presets WHERE id = ? AND tenant_id = ?");
+            $exists->execute([$id ?: 0, $tenant_id]);
+            if (!$exists->fetchColumn()) {
+                Flash::redirect('expense_presets.php', 'error', 'Saved spend not found.');
             }
+            $pdo->prepare("UPDATE expense_presets SET name = ?, category = ? WHERE id = ? AND tenant_id = ?")
+                ->execute([$name, $category, $id, $tenant_id]);
+            AuditHelper::log($pdo, 'update_expense_preset', "Updated saved spend #$id: $name ($category)");
             Flash::redirect('expense_presets.php', 'success', "Updated \"$name\".");
         } catch (PDOException $e) {
             if ($e->getCode() === '23000') {

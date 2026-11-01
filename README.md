@@ -82,13 +82,21 @@ Copy `.env.example` to `.env`. Unquoted values may have a trailing `# comment`.
 
 ## ⏰ Scheduled jobs
 
-One daily job runs reminders, the monthly digest, budget alerts, card due-date reminders, Zakath reminders and the open-banking sync (`cron/jobs/*.php`):
+One daily job runs reminders, the monthly digest, budget alerts, card due-date reminders, Zakath reminders, the weekly card-offers refresh (cashback rates from each card's bank page) and the open-banking sync (`cron/jobs/*.php`):
 
 ```bash
 0 9 * * * php /path/to/app/cron/reminder_emails.php >> /dev/null 2>&1
 ```
 
-If your host cannot run PHP from cron, call `https://your-domain/cron/reminder_emails.php?key=<CRON_SECRET>` instead.
+If your host cannot run PHP from cron, call the URL over HTTP with the secret in a header (preferred, keeps it out of access logs):
+
+```bash
+curl -fsS -H "X-Cron-Key: <CRON_SECRET>" https://your-domain/cron/reminder_emails.php
+```
+
+The legacy `?key=<CRON_SECRET>` query parameter still works but leaks the secret into logs.
+
+**Deploy notes:** set `APP_URL` in `.env` (emailed links are never built from the Host header), run `migrations/2026_11_01_auth.sql`, and make sure `.htaccess` is honoured (it blocks `.md`, `migrations/`, `deploy/`, `.codegraph/`, `.claude/`, `.agent/`).
 
 ## 🏦 Open banking (Lean) setup
 

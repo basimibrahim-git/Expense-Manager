@@ -137,9 +137,8 @@ function fetchFlightDataFromAPI($flight_number) {
     }
     
     $flight_number = strtoupper(str_replace(' ', '', $flight_number));
-    // Aviationstack's free plan only serves plain HTTP (HTTPS needs a paid plan). If the account is on a
-    // paid plan, change this to https://.
-    $url = "http://api.aviationstack.com/v1/flights?access_key=" . urlencode($key) . "&flight_iata=" . urlencode($flight_number) . "&limit=1";
+    // HTTPS: the access key is sent in the query string (free plans may need a paid plan for HTTPS).
+    $url = "https://api.aviationstack.com/v1/flights?access_key=" . urlencode($key) . "&flight_iata=" . urlencode($flight_number) . "&limit=1";
     
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
@@ -236,7 +235,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $return = trim($_POST['return_flight_number'] ?? '');
         $return_time = trim($_POST['return_flight_time'] ?? '');
 
-        if (empty($location) || mb_strlen($location) > 255 || !tripValidDate($start_date) || !tripValidDate($end_date)
+        if (empty($location) || mb_strlen($location) > 255 || !tripValidDate($start_date) || !tripValidDate($end_date) || $end_date < $start_date
             || mb_strlen($outbound) > 100 || mb_strlen($return) > 100 || mb_strlen($outbound_time) > 50 || mb_strlen($return_time) > 50) {
             Flash::redirect('travel_planner.php', 'error', 'Please fill in all required fields.');
         }
@@ -299,7 +298,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $return = trim($_POST['return_flight_number'] ?? '');
         $return_time = trim($_POST['return_flight_time'] ?? '');
 
-        if (!$id || empty($location) || mb_strlen($location) > 255 || !tripValidDate($start_date) || !tripValidDate($end_date)
+        if (!$id || empty($location) || mb_strlen($location) > 255 || !tripValidDate($start_date) || !tripValidDate($end_date) || $end_date < $start_date
             || mb_strlen($outbound) > 100 || mb_strlen($return) > 100 || mb_strlen($outbound_time) > 50 || mb_strlen($return_time) > 50) {
             Flash::redirect('travel_planner.php', 'error', 'Invalid trip details.');
         }
@@ -475,7 +474,7 @@ if ($selected_trip_id) {
     $selected_trip = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($selected_trip) {
-        // Automatically refresh flight status on page view for real-time live tracking
+        // Live flight status for this view (display only, see below)
         $out_live = getAutomaticFlightStatus($selected_trip['outbound_flight_number'], $selected_trip['start_date']);
         $ret_live = getAutomaticFlightStatus($selected_trip['return_flight_number'], $selected_trip['end_date']);
         
@@ -523,12 +522,8 @@ if ($selected_trip_id) {
             }
         }
         
-        if (!empty($update_fields)) {
-            $update_params[] = $selected_trip_id;
-            $update_params[] = $tenant_id;
-            $update_stmt = $pdo->prepare("UPDATE trips SET " . implode(', ', $update_fields) . " WHERE id = ? AND tenant_id = ?");
-            $update_stmt->execute($update_params);
-        }
+        // Viewing a trip never writes to the database (GET, and read-only users, must not modify data):
+        // the live values above are shown for this view only; the "Refresh flights" POST action saves them.
 
         $stmt = $pdo->prepare("SELECT * FROM trip_expenses WHERE trip_id = ? AND tenant_id = ? ORDER BY expense_date DESC");
         $stmt->execute([$selected_trip_id, $tenant_id]);

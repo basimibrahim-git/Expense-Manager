@@ -97,8 +97,27 @@ class SecurityHelper
         $redirect = $default;
 
         if (!empty($url)) {
+            // Reject backslashes (browsers treat "/\evil.com" as "//evil.com") and control chars/whitespace tricks.
+            if (strpos($url, chr(92)) !== false || preg_match('/[\x00-\x1F\x7F]/', $url)) {
+                return $default;
+            }
+            // Protocol-relative ("//host") is external.
+            if (strpos($url, '//') === 0) {
+                return $default;
+            }
             $parsed = parse_url($url);
-            $isInternal = !isset($parsed['host']) || (isset($_SERVER['HTTP_HOST']) && $parsed['host'] === $_SERVER['HTTP_HOST']);
+            if ($parsed === false) {
+                return $default;
+            }
+            if (isset($parsed['scheme']) || isset($parsed['host'])) {
+                // Absolute URL: only accept our own configured host (never the request Host header).
+                $appHost = parse_url((string) ($_ENV['APP_URL'] ?? ''), PHP_URL_HOST);
+                $isInternal = $appHost && isset($parsed['host'])
+                    && in_array(strtolower($parsed['scheme'] ?? ''), ['http', 'https'], true)
+                    && strcasecmp($parsed['host'], $appHost) === 0;
+            } else {
+                $isInternal = true;
+            }
 
             if ($isInternal) {
                 $redirect = $url;

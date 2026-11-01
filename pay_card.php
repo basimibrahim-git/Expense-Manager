@@ -11,8 +11,8 @@ Bootstrap::init();
 
 $tenant_id = (int) $_SESSION['tenant_id'];
 
-// Fetch family's cards (credit cards first)
-$cards_stmt = $pdo->prepare("SELECT id, bank_name, card_name, card_type FROM cards WHERE tenant_id = ? ORDER BY card_type = 'Credit' DESC, card_name ASC");
+// Fetch family's credit cards (payments only apply to credit cards)
+$cards_stmt = $pdo->prepare("SELECT id, bank_name, card_name, card_type FROM cards WHERE tenant_id = ? AND LOWER(card_type) = 'credit' ORDER BY card_name ASC");
 $cards_stmt->execute([$tenant_id]);
 $all_cards = $cards_stmt->fetchAll();
 

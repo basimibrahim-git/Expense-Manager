@@ -46,7 +46,7 @@ if ($action == 'save_budgets' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         // The unique key is per user (user_id, category, month, year), so replace the tenant's row
         // explicitly instead of ON DUPLICATE KEY UPDATE, which left one row per family member.
         $delStmt = $pdo->prepare("DELETE FROM budgets WHERE tenant_id = ? AND category = ? AND month = ? AND year = ?");
-        $insStmt = $pdo->prepare("INSERT INTO budgets (user_id, tenant_id, category, amount, month, year) VALUES (?, ?, ?, ?, ?, ?)");
+        $insStmt = $pdo->prepare("INSERT INTO budgets (user_id, tenant_id, category, amount, currency, month, year) VALUES (?, ?, ?, ?, 'AED', ?, ?)");
 
         foreach ($budgets as $category => $amount) {
             $category = (string) $category;

@@ -6,39 +6,30 @@ use App\Helpers\SecurityHelper;
 use App\Helpers\Layout;
 use App\Helpers\Html;
 use App\Helpers\CardCycleHelper;
+use App\Helpers\CardOfferHelper;
+use App\Helpers\Categories;
 
 Bootstrap::init();
 Layout::header();
 Layout::sidebar();
 
-// Fetch cards with current month usage
+// Fetch cards with their outstanding: all card spend minus all payments up to today (the same
+// estimate as CardCycleHelper::outstanding_estimate), so a payment never makes usage negative
 try {
-    $curr_month = date('n');
-    $curr_year = date('Y');
-
     $stmt = $pdo->prepare("
         SELECT c.*,
         (SELECT SUM(amount) FROM expenses e
          WHERE e.card_id = c.id
-         AND e.tenant_id = c.tenant_id
-         AND MONTH(e.expense_date) = :month1
-         AND YEAR(e.expense_date) = :year1) as total_expenses,
+         AND e.tenant_id = c.tenant_id) as total_expenses,
         (SELECT SUM(amount) FROM card_payments p
          WHERE p.card_id = c.id
          AND p.tenant_id = c.tenant_id
-         AND MONTH(p.payment_date) = :month2
-         AND YEAR(p.payment_date) = :year2) as total_payments
+         AND p.payment_date <= CURDATE()) as total_payments
         FROM cards c
         WHERE c.tenant_id = :tenant_id
         ORDER BY c.created_at DESC
     ");
-    $stmt->execute([
-        'tenant_id' => $_SESSION['tenant_id'],
-        'month1' => $curr_month,
-        'year1' => $curr_year,
-        'month2' => $curr_month,
-        'year2' => $curr_year
-    ]);
+    $stmt->execute(['tenant_id' => $_SESSION['tenant_id']]);
     $cards = $stmt->fetchAll();
 
     // Billing cycle per credit card (only cards with a statement day)
@@ -85,9 +76,13 @@ try {
     <div class="row g-4">
         <?php foreach ($cards as $card): ?>
             <?php
-            $used = ($card['total_expenses'] ?: 0) - ($card['total_payments'] ?: 0);
+            $used = max(0, round(($card['total_expenses'] ?: 0) - ($card['total_payments'] ?: 0), 2));
             $limit = $card['limit_amount'] ?: 0;
             $usage_pct = $limit > 0 ? min(($used / $limit) * 100, 100) : 0;
+            $card_rates = CardCycleHelper::cashbackRates($card['cashback_struct'] ?? null);
+            arsort($card_rates);
+            $has_bank_url = !empty($card['bank_url']) && preg_match('#^https?://#i', $card['bank_url']);
+            $offers_synced = $has_bank_url ? CardOfferHelper::lastSynced($pdo, trim($card['bank_url'])) : null;
             
             // Usage bar color logic
             $usage_color_class = 'bg-success';
@@ -234,6 +229,35 @@ try {
                     </div>
                     <?php endif; ?>
 
+                    <!-- Cashback rates + offers (refreshed weekly from the bank page, or with the button) -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted small fw-bold text-uppercase">Cashback</span>
+                            <?php if ($has_bank_url): ?>
+                                <span class="small text-muted" title="Offers are re-read from the bank page every <?php echo CardOfferHelper::STALE_DAYS; ?> days">
+                                    <i class="fa-solid fa-rotate me-1"></i><?php echo $offers_synced ? 'Synced ' . Html::e(date('d M', strtotime($offers_synced))) : 'Not synced yet'; ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        <?php if (empty($card_rates)): ?>
+                            <div class="small text-muted">No cashback rates set.</div>
+                        <?php else: ?>
+                            <div class="d-flex flex-wrap gap-1">
+                                <?php foreach ($card_rates as $cat => $pct): ?>
+                                    <span class="badge rounded-pill bg-success-subtle text-success-emphasis fw-semibold" title="<?php echo Html::e(Categories::EXPENSE[$cat] ?? $cat); ?>">
+                                        <?php echo Html::e($cat); ?> <?php echo Html::e(rtrim(rtrim(number_format($pct, 2), '0'), '.')); ?>%
+                                    </span>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                        <?php if (!empty($card['features'])): ?>
+                            <details class="small mt-2">
+                                <summary class="text-primary" style="cursor: pointer;">Offers &amp; features</summary>
+                                <div class="text-muted mt-1" style="white-space: pre-line;"><?php echo Html::e($card['features']); ?></div>
+                            </details>
+                        <?php endif; ?>
+                    </div>
+
                     <!-- Card Actions -->
                     <div class="d-flex gap-2 justify-content-end pt-3 border-top">
                         <a href="view_card.php?id=<?php echo (int) $card['id']; ?>" class="btn btn-sm btn-outline-primary rounded-pill px-3" title="Details & billing cycle">
@@ -245,6 +269,16 @@ try {
                             </a>
                         <?php endif; ?>
                         <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
+                            <?php if ($has_bank_url): ?>
+                                <form action="card_actions.php" method="POST" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="<?php echo SecurityHelper::generateCsrfToken(); ?>">
+                                    <input type="hidden" name="action" value="refresh_offers">
+                                    <input type="hidden" name="id" value="<?php echo (int) $card['id']; ?>">
+                                    <button type="submit" class="btn btn-sm btn-outline-success rounded-pill px-3" title="Refresh cashback rates and offers from the bank page">
+                                        <i class="fa-solid fa-rotate"></i>
+                                    </button>
+                                </form>
+                            <?php endif; ?>
                             <a href="pay_card.php?card_id=<?php echo (int) $card['id']; ?>" class="btn btn-sm btn-success text-white rounded-pill px-3">
                                 <i class="fa-solid fa-receipt me-1"></i> Pay
                             </a>

@@ -49,8 +49,12 @@ class CardCycleHelper
      *   last_statement_date     string   Y-m-d (< today)
      *   last_statement_due_date string|null Y-m-d, null without bill_day
      *   last_statement_amount   float    card spend in the previous cycle
-     *   paid_since_statement    float    card payments after the last statement date up to today
-     *   due_remaining           float    max(0, last_statement_amount − paid_since_statement)
+     *   paid_since_statement    float    part of last_statement_amount already paid (0 … last_statement_amount)
+     *   carried_over            float    due_remaining beyond last_statement_amount (unpaid earlier statements), so
+     *                                    last_statement_amount − paid_since_statement + carried_over = due_remaining
+     *   due_remaining           float    max(0, all spend up to the last statement − all payments up to today):
+     *                                    payments made early (before or on the statement date) count, and an
+     *                                    unpaid earlier statement carries into this one
      *   days_to_due             int|null negative when the due date has passed; null without bill_day
      *   current_cycle_spend     float    card spend in the current cycle
      *   outstanding_estimate    float    see below
@@ -59,8 +63,8 @@ class CardCycleHelper
      *   cashback_recorded       float    Σ expenses.cashback_earned in the current cycle
      *   status                  string   'overdue' | 'due_soon' | 'paid' | 'ok'
      *
-     * outstanding_estimate = all spend ever recorded on the card − all payments ever recorded,
-     * floored at 0. There is no opening-balance field, so this assumes the card was at zero when the
+     * outstanding_estimate = all spend ever recorded on the card − all payments dated up to today,
+     * floored at 0 (future-dated payments are not counted yet, as on my_cards.php). There is no opening-balance field, so this assumes the card was at zero when the
      * family started tracking it. A payment that cleared a balance from before tracking started would
      * push the figure below zero, which is why it is floored; spend never entered in the app makes it
      * an underestimate. It is a planning number, not the bank's figure.
@@ -93,14 +97,14 @@ class CardCycleHelper
                     SUM(CASE WHEN expense_date > ? AND expense_date <= ? THEN amount ELSE 0 END)          AS prev_spend,
                     SUM(CASE WHEN expense_date > ? AND expense_date <= ? THEN amount ELSE 0 END)          AS cur_spend,
                     SUM(CASE WHEN expense_date > ? AND expense_date <= ? THEN cashback_earned ELSE 0 END) AS cur_cashback,
+                    SUM(CASE WHEN expense_date <= ? THEN amount ELSE 0 END)                               AS billed_spend,
                     SUM(amount) AS total_spend
                FROM expenses
               WHERE tenant_id = ? AND card_id = ?
               GROUP BY category"
         );
         $payStmt = $pdo->prepare(
-            "SELECT SUM(CASE WHEN payment_date > ? AND payment_date <= ? THEN amount ELSE 0 END) AS since_statement,
-                    SUM(amount) AS total_paid
+            "SELECT SUM(CASE WHEN payment_date <= ? THEN amount ELSE 0 END) AS paid_to_date
                FROM card_payments
               WHERE tenant_id = ? AND card_id = ?"
         );
@@ -117,25 +121,30 @@ class CardCycleHelper
                 $d['previous_cycle_start_exclusive'], $d['last_statement_date'],
                 $d['last_statement_date'], $d['current_cycle_end'],
                 $d['last_statement_date'], $d['current_cycle_end'],
+                $d['last_statement_date'],
                 $tenantId, $cardId,
             ]);
-            $prevSpend = $curSpend = $cbRecorded = $totalSpend = $cbExpected = 0.0;
+            $prevSpend = $curSpend = $cbRecorded = $billedSpend = $totalSpend = $cbExpected = 0.0;
             foreach ($expStmt->fetchAll(PDO::FETCH_ASSOC) as $e) {
                 $prevSpend  += (float) $e['prev_spend'];
                 $curSpend   += (float) $e['cur_spend'];
                 $cbRecorded += (float) $e['cur_cashback'];
+                $billedSpend += (float) $e['billed_spend'];
                 $totalSpend += (float) $e['total_spend'];
                 $cbExpected += (float) $e['cur_spend'] * self::rateFor($rates, (string) $e['category']) / 100;
             }
 
-            $payStmt->execute([$d['last_statement_date'], $today, $tenantId, $cardId]);
+            $payStmt->execute([$today, $tenantId, $cardId]);
             $pay        = $payStmt->fetch(PDO::FETCH_ASSOC) ?: [];
-            $paidSince  = (float) ($pay['since_statement'] ?? 0);
-            $totalPaid  = (float) ($pay['total_paid'] ?? 0);
+            $paidToDate = (float) ($pay['paid_to_date'] ?? 0);
 
-            $dueRemaining = max(0.0, round($prevSpend - $paidSince, 2));
+            // Everything billed so far minus everything paid so far, so a payment made before the
+            // statement closed (or on the statement day) still settles it
+            $dueRemaining = max(0.0, round($billedSpend - $paidToDate, 2));
+            $paidSince    = max(0.0, min($prevSpend, $prevSpend - $dueRemaining));
+            $carriedOver  = max(0.0, round($dueRemaining - $prevSpend, 2));
             $daysToDue    = $d['last_statement_due_date'] !== null ? self::daysBetween($today, $d['last_statement_due_date']) : null;
-            $outstanding  = max(0.0, round($totalSpend - $totalPaid, 2));
+            $outstanding  = max(0.0, round($totalSpend - $paidToDate, 2));
             $limit        = (float) $card['limit_amount'];
 
             $rows[] = [
@@ -152,6 +161,7 @@ class CardCycleHelper
                 'last_statement_due_date' => $d['last_statement_due_date'],
                 'last_statement_amount'   => round($prevSpend, 2),
                 'paid_since_statement'    => round($paidSince, 2),
+                'carried_over'            => $carriedOver,
                 'due_remaining'           => $dueRemaining,
                 'days_to_due'             => $daysToDue,
                 'current_cycle_spend'     => round($curSpend, 2),
@@ -232,7 +242,8 @@ class CardCycleHelper
     /**
      * Payment due date for a statement. bill_day <= statement_day (as configured, before clamping)
      * means the following month; otherwise the same month. A clamped due date that does not fall
-     * after the statement date (e.g. statement 29 / due 30 in a 28-day February) moves to the next month.
+     * after the statement date (e.g. statement 28 / due 30 in a 28-day February) keeps the configured
+     * gap instead: statement date + (bill_day − statement_day) days (28 Feb → 2 Mar).
      */
     public static function dueDateFor(string $statementDate, int $statementDay, int $billDay): string
     {
@@ -244,6 +255,7 @@ class CardCycleHelper
             if ($due > $statementDate) {
                 return $due;
             }
+            return self::addDays($statementDate, $billDay - $statementDay);
         }
         return self::clampedDate($y, $m + 1, $billDay);
     }

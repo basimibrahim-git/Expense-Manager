@@ -296,7 +296,14 @@ Layout::sidebar();
                 if (data.data.image) {
                     document.getElementById('cardImageInput').value = data.data.image;
                 }
-                alert("Offers and features successfully updated from live URL.");
+                // Cashback rates the page states fill the matching category boxes
+                const rates = data.data.rates || {};
+                Object.keys(rates).forEach((cat) => {
+                    const input = document.getElementById('cb_' + cat);
+                    if (input) { input.value = rates[cat]; }
+                });
+                const found = Object.keys(rates).length;
+                alert("Offers and features updated from live URL." + (found ? " Cashback rates found for " + found + " categories." : " No cashback rates found on the page; rates unchanged."));
                 updatePreview();
             } else {
                 alert("Failed to synchronize features.");

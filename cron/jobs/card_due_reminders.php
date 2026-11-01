@@ -53,7 +53,8 @@ foreach ($tenantIds as $tenantId) {
             $body = '<p>The payment for <strong>' . $e($cardLabel) . '</strong> is due <strong>' . $e($when) . '</strong> (' . $e($dueDate) . ').</p>'
                 . '<table cellpadding="6" cellspacing="0" style="border-collapse:collapse;margin:12px 0;">'
                 . '<tr><td style="color:#6b7280;">Statement (' . $e(date('d M Y', strtotime($row['last_statement_date']))) . ')</td><td style="text-align:right;">AED ' . $e(number_format($row['last_statement_amount'], 2)) . '</td></tr>'
-                . '<tr><td style="color:#6b7280;">Paid since statement</td><td style="text-align:right;">AED ' . $e(number_format($row['paid_since_statement'], 2)) . '</td></tr>'
+                . '<tr><td style="color:#6b7280;">Paid toward statement</td><td style="text-align:right;">AED ' . $e(number_format($row['paid_since_statement'], 2)) . '</td></tr>'
+                . ($row['carried_over'] > 0 ? '<tr><td style="color:#6b7280;">Carried from earlier statements</td><td style="text-align:right;">AED ' . $e(number_format($row['carried_over'], 2)) . '</td></tr>' : '')
                 . '<tr><td><strong>Still due</strong></td><td style="text-align:right;"><strong>' . $e($amount) . '</strong></td></tr>'
                 . '</table>'
                 . '<p style="color:#6b7280;font-size:13px;">Amounts are based on the card expenses and payments recorded in Expense Manager. '

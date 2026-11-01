@@ -220,7 +220,7 @@ Layout::sidebar();
             </div>
             <div class="col-md-4">
                 <div class="p-3 rounded-4 border h-100">
-                    <div class="text-muted small fw-bold text-uppercase mb-1">Payments since statement</div>
+                    <div class="text-muted small fw-bold text-uppercase mb-1">Paid toward statement</div>
                     <div class="small text-muted mb-2">After <?php echo Html::e($fmt($cycle['last_statement_date'])); ?></div>
                     <div class="fs-4 fw-bold text-success blur-sensitive">AED <?php echo number_format($cycle['paid_since_statement'], 2); ?></div>
                     <div class="small">

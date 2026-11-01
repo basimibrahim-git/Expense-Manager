@@ -7,6 +7,7 @@ use App\Helpers\Layout;
 use App\Helpers\ExchangeRateHelper;
 use App\Helpers\DashboardStats;
 use App\Helpers\Html;
+use App\Helpers\CardCycleHelper;
 
 Bootstrap::init();
 Layout::header();
@@ -105,7 +106,8 @@ $savings_rate = max($savings_rate, 0); // No negative savings rate visually
 $last_year_net_worth = $balance_totals[$last_year_month_end] ?? 0.0;
 
 $wealth_growth_abs = $net_worth - $last_year_net_worth;
-$wealth_growth_pct = ($last_year_net_worth > 0) ? ($wealth_growth_abs / $last_year_net_worth) * 100 : 100;
+// No meaningful % when last year's base is zero or negative (null renders as n/a)
+$wealth_growth_pct = ($last_year_net_worth > 0) ? ($wealth_growth_abs / $last_year_net_worth) * 100 : null;
 
 // Wealth Chart Data (Last 12 Months Net Worth Trend)
 $wealth_months = [];
@@ -129,7 +131,8 @@ for ($i = 5; $i >= 0; $i--) {
 
 // 3. Category Data (Current Month) + 7. Lifestyle Creep base (same month last year): one query.
 // ORDER BY category = the implicit GROUP BY order MariaDB used before (keeps the doughnut colours).
-$ly_ts = strtotime('-1 year');
+// Explicit year-1 (strtotime('-1 year') on 29 Feb lands on 1 Mar); only the month matters here
+$ly_ts = mktime(0, 0, 0, (int) date('n'), 1, (int) date('Y') - 1);
 $ly_from = date('Y-m-01', $ly_ts);
 $ly_to = date('Y-m-d', mktime(0, 0, 0, (int) date('n', $ly_ts) + 1, 1, (int) date('Y', $ly_ts)));
 $stmt = $pdo->prepare("SELECT category,
@@ -168,13 +171,16 @@ $total_cost = $fixed_cost + $var_cost;
 $fixed_pct = ($total_cost > 0) ? ($fixed_cost / $total_cost) * 100 : 0;
 
 // 6. Emergency Runway (Avg Expense Last 3 Months) + 9. fixed spend over the same window: one query
-$stmt = $pdo->prepare("SELECT SUM(amount) AS total, SUM(CASE WHEN is_fixed = 1 THEN amount END) AS fixed_total
+// Divide by the months that actually have data (min 1, max 3), not a flat 3
+$stmt = $pdo->prepare("SELECT SUM(amount) AS total, SUM(CASE WHEN is_fixed = 1 THEN amount END) AS fixed_total,
+                              COUNT(DISTINCT DATE_FORMAT(expense_date, '%Y-%m')) AS months_with_data
                        FROM expenses
                        WHERE tenant_id = ? AND expense_date BETWEEN DATE_SUB(NOW(), INTERVAL 3 MONTH) AND NOW()");
 $stmt->execute([$tenant_id]);
 $last_3m = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 $last_3m_spend = ($last_3m['total'] ?? 0) ?: 0;
-$avg_monthly_spend = $last_3m_spend / 3;
+$last_3m_months = max(1, min(3, (int) ($last_3m['months_with_data'] ?? 0)));
+$avg_monthly_spend = $last_3m_spend / $last_3m_months;
 $runway_months = ($avg_monthly_spend > 0) ? $net_worth / $avg_monthly_spend : 0;
 
 // Fetch Monthly Budgets for Dashboard Overview
@@ -204,8 +210,13 @@ foreach ($cat_results as $cat => $amount) {
 
 // 8. Cash Flow Projection (Next 30 Days)
 // Fetch Recurring Income
-$stmt = $pdo->prepare("SELECT " . $income_aed_sql . " AS amount, recurrence_day FROM income WHERE tenant_id = ? AND is_recurring = 1");
-$stmt->execute([$tenant_id]);
+// One row per recurring source (latest entry per description), like the subscription templates below;
+// otherwise every past month's copy of a recurring income would be projected again.
+$stmt = $pdo->prepare("SELECT " . $income_aed_sql . " AS amount, recurrence_day
+                       FROM income
+                       WHERE tenant_id = ? AND is_recurring = 1
+                         AND id IN (SELECT MAX(id) FROM income WHERE tenant_id = ? AND is_recurring = 1 GROUP BY description)");
+$stmt->execute([$tenant_id, $tenant_id]);
 $recurring_incomes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Subscription templates: one row per template (latest entry per description).
@@ -237,19 +248,20 @@ $running_bal = $net_worth;
 
 for ($i = 0; $i <= 30; $i++) {
     $target_date = strtotime("+$i days");
-    $day_num = date('j', $target_date);
+    $day_num = (int) date('j', $target_date);
+    $days_in_target_month = (int) date('t', $target_date);
     $formatted_date = date('M j', $target_date);
 
-    // Add Income
+    // Add Income (a day 29-31 recurrence lands on the last day of shorter months)
     foreach ($recurring_incomes as $inc) {
-        if ($inc['recurrence_day'] == $day_num) {
+        if (min((int) $inc['recurrence_day'], $days_in_target_month) === $day_num && (int) $inc['recurrence_day'] > 0) {
             $running_bal += $inc['amount'];
         }
     }
 
     // Subtract Subscriptions
     foreach ($recurring_expenses as $exp) {
-        if ($exp['day'] == $day_num) {
+        if (min($exp['day'], $days_in_target_month) === $day_num) {
             $running_bal -= $exp['amount'];
         }
     }
@@ -259,13 +271,17 @@ for ($i = 0; $i <= 30; $i++) {
 }
 
 // 8.5 PHASE 4: ROI & Liquidity (Restored)
-// True Liquidity: Net Worth - Unbilled Card Spends (approx using this month's card spend)
-$unbilled_card_spend = $total_card_spend;
+// True Liquidity: Net Worth - unpaid card spend (unpaid billed statements + the open cycle).
+// Not this month's card spend: payments already made would be deducted twice.
+$unbilled_card_spend = 0.0;
+foreach (CardCycleHelper::cycles($pdo, (int) $tenant_id) as $cc) {
+    $unbilled_card_spend += (float) $cc['due_remaining'] + (float) $cc['current_cycle_spend'];
+}
 $true_liquidity = $net_worth - $unbilled_card_spend;
 
 // 9. PHASE 6: Safe-to-Spend Logic
 // Estimate Monthly Fixed Cost (Avg of last 3 months fixed spend)
-$avg_fixed_cost = (($last_3m['fixed_total'] ?? 0) ?: 0) / 3;
+$avg_fixed_cost = (($last_3m['fixed_total'] ?? 0) ?: 0) / $last_3m_months;
 $remaining_fixed = max(0, $avg_fixed_cost - $fixed_cost);
 $savings_target = $income_now * 0.20; // 20% Goal
 
@@ -295,47 +311,65 @@ $safe_to_spend = $true_liquidity - $remaining_fixed - $savings_target - $total_g
 // 10. Smart Alerts Engine
 $alerts = [];
 
-// A. Smart Swap (Check last 5 card expenses)
+// A. Smart Swap: card spends of the last 30 days where another card earns a higher cashback
+// rate for that category. Grouped per category + card used, biggest missed cashback first.
+$card_rates = [];
+foreach ($roi_cards as $card) {
+    $card_rates[(int) $card['id']] = CardCycleHelper::cashbackRates($card['cashback_struct'] ?? null);
+}
 $stmt = $pdo->prepare("
     SELECT e.amount, e.category, c.card_name, c.id as used_card_id
     FROM expenses e
     JOIN cards c ON e.card_id = c.id AND c.tenant_id = e.tenant_id
-    WHERE e.tenant_id = ? AND e.payment_method = 'Card'
-    ORDER BY e.expense_date DESC LIMIT 5
+    WHERE e.tenant_id = ? AND e.payment_method = 'Card' AND e.expense_date >= ?
+    ORDER BY e.expense_date DESC LIMIT 50
 ");
-$stmt->execute([$tenant_id]);
-$recent_card_txns = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$stmt->execute([$tenant_id, date('Y-m-d', strtotime('-30 days'))]);
 
-foreach ($recent_card_txns as $txn) {
-    if (empty($txn['category'])) {
+$swaps = [];
+foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $txn) {
+    $category = (string) $txn['category'];
+    if ($category === '') {
         continue;
     }
+    $used_id   = (int) $txn['used_card_id'];
+    $used_rate = CardCycleHelper::rateFor($card_rates[$used_id] ?? [], $category);
+    $best_card = null;
+    $best_rate = $used_rate;
     foreach ($roi_cards as $card) {
-        if ($card['id'] == $txn['used_card_id']) {
-            continue; // Skip same card
-        }
-
-        $keywords = json_decode($card['cashback_struct'] ?? '[]', true);
-        if (is_array($keywords)) {
-            foreach ($keywords as $key => $val) {
-                // cashback_struct is {"Category": pct}; older rows may be a plain list of categories
-                $k = is_string($key) ? $key : (string) $val;
-                if ($k === '') {
-                    continue;
-                }
-                if (stripos($txn['category'], $k) !== false || stripos($k, $txn['category']) !== false) {
-                    $alerts[] = [
-                        'type' => 'swap',
-                        'icon' => 'fa-arrow-right-arrow-left',
-                        'color' => 'info',
-                        'msg' => 'Smart Swap: You spent ' . Html::e(number_format((float) $txn['amount'], 2)) . ' on ' . Html::e($txn['category'])
-                            . ' with ' . Html::e($txn['card_name']) . '. Use <b>' . Html::e($card['card_name']) . '</b> next time for better rewards!'
-                    ];
-                    break 2; // Alert once per batch to avoid spam
-                }
-            }
+        $rate = CardCycleHelper::rateFor($card_rates[(int) $card['id']] ?? [], $category);
+        if ((int) $card['id'] !== $used_id && $rate > $best_rate) {
+            $best_card = $card;
+            $best_rate = $rate;
         }
     }
+    if ($best_card === null) {
+        continue; // the card used already earns the best rate for this category
+    }
+    $key = $category . '|' . $used_id;
+    $swaps[$key] = $swaps[$key] ?? [
+        'category' => $category, 'used_name' => $txn['card_name'], 'used_rate' => $used_rate,
+        'best_name' => $best_card['card_name'], 'best_rate' => $best_rate, 'count' => 0, 'spent' => 0.0,
+    ];
+    $swaps[$key]['count']++;
+    $swaps[$key]['spent'] += (float) $txn['amount'];
+}
+foreach ($swaps as &$swap) {
+    $swap['missed'] = $swap['spent'] * ($swap['best_rate'] - $swap['used_rate']) / 100;
+}
+unset($swap);
+uasort($swaps, fn($a, $b) => $b['missed'] <=> $a['missed']);
+
+foreach (array_slice($swaps, 0, 5) as $swap) {
+    $alerts[] = [
+        'type' => 'swap',
+        'icon' => 'fa-arrow-right-arrow-left',
+        'color' => 'info',
+        'msg' => 'Smart Swap: ' . Html::e(number_format($swap['spent'], 2)) . ' on ' . Html::e($swap['category'])
+            . ' (' . $swap['count'] . ' ' . ($swap['count'] === 1 ? 'spend' : 'spends') . ') with ' . Html::e($swap['used_name'])
+            . ' at ' . Html::e(rtrim(rtrim(number_format($swap['used_rate'], 2), '0'), '.')) . '%. <b>' . Html::e($swap['best_name']) . '</b> earns '
+            . Html::e(rtrim(rtrim(number_format($swap['best_rate'], 2), '0'), '.')) . '%, about <b>' . Html::e(number_format($swap['missed'], 2)) . '</b> more cashback.'
+    ];
 }
 
 // B. Liquidity Warning (Bill vs Balance)
@@ -383,6 +417,8 @@ for ($i = 11; $i >= 0; $i--) {
     $interest_accrued_data[] = ($interest_by_month[$key]['accrued'] ?? 0) ?: 0;
     $interest_paid_data[] = ($interest_by_month[$key]['paid'] ?? 0) ?: 0;
 }
+// Same all-time figure as the Interest Tracker and Net Worth (negative = credit)
+$interest_due_total = DashboardStats::interestBalance($pdo, (int) $tenant_id);
 
 // 12. Upcoming Bills & Pending Auto-Drafts
 $upcoming_bills = [];
@@ -392,13 +428,14 @@ $logged_subs = $curr_month_logged->fetchAll(PDO::FETCH_COLUMN);
 
 // $templates (unique subscription templates) was fetched in section 8
 foreach ($templates as $sb) {
-    $day = date('d', strtotime($sb['expense_date']));
+    $day_raw = (int) date('j', strtotime($sb['expense_date']));
     $is_logged = in_array($sb['description'], $logged_subs);
 
-    // Calculate next renewal for "Upcoming" list
-    $target_renewal = date('Y-m-') . $day;
+    // Calculate next renewal for "Upcoming" list (day 29-31 clamps to the month's last day)
+    $day = date('d', strtotime(CardCycleHelper::clampedDate((int) date('Y'), (int) date('n'), $day_raw)));
+    $target_renewal = CardCycleHelper::clampedDate((int) date('Y'), (int) date('n'), $day_raw);
     if (strtotime($target_renewal) < time()) {
-        $target_renewal = date('Y-m-', strtotime('+1 month')) . $day;
+        $target_renewal = CardCycleHelper::clampedDate((int) date('Y'), (int) date('n') + 1, $day_raw);
     }
     $days_to_bill = ceil((strtotime($target_renewal) - time()) / 86400);
 
@@ -634,13 +671,30 @@ $show_split = $widget_split_net !== null && abs($widget_split_net) >= 0.01;
 <?php if (!empty($alerts)): ?>
     <div class="row mb-4">
         <div class="col-12">
-            <?php foreach ($alerts as $alert): ?>
-                <div class="alert alert-<?php echo $alert['color']; ?> border-0 shadow-sm d-flex align-items-center mb-2"
-                    role="alert">
-                    <i class="fa-solid <?php echo $alert['icon']; ?> fa-lg me-3"></i>
-                    <div><?php echo $alert['msg']; /* built from escaped parts above */ ?></div>
+            <!-- One alert at a time, sliding every 7s (paused on hover); arrows + counter when there are several -->
+            <div id="alertsCarousel" class="carousel slide alerts-carousel" data-bs-ride="carousel" data-bs-interval="7000">
+                <div class="carousel-inner">
+                    <?php foreach ($alerts as $i => $alert): ?>
+                        <div class="carousel-item<?php echo $i === 0 ? ' active' : ''; ?>">
+                            <div class="alert alert-<?php echo $alert['color']; ?> border-0 shadow-sm d-flex align-items-center mb-0" role="alert">
+                                <i class="fa-solid <?php echo $alert['icon']; ?> fa-lg me-3"></i>
+                                <div class="flex-grow-1"><?php echo $alert['msg']; /* built from escaped parts above */ ?></div>
+                                <?php if (count($alerts) > 1): ?>
+                                    <div class="d-flex align-items-center gap-1 ms-3 flex-shrink-0">
+                                        <button class="btn btn-sm btn-link text-reset p-1" type="button" data-bs-target="#alertsCarousel" data-bs-slide="prev" aria-label="Previous alert">
+                                            <i class="fa-solid fa-chevron-left"></i>
+                                        </button>
+                                        <span class="small fw-semibold text-nowrap"><?php echo $i + 1; ?> / <?php echo count($alerts); ?></span>
+                                        <button class="btn btn-sm btn-link text-reset p-1" type="button" data-bs-target="#alertsCarousel" data-bs-slide="next" aria-label="Next alert">
+                                            <i class="fa-solid fa-chevron-right"></i>
+                                        </button>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
                 </div>
-            <?php endforeach; ?>
+            </div>
         </div>
     </div>
 <?php endif; ?>
@@ -910,9 +964,15 @@ $show_split = $widget_split_net !== null && abs($widget_split_net) >= 0.01;
                     </h5>
                     <p class="text-muted small mb-0">Interest Accrued vs Payments (Last 12 Months)</p>
                 </div>
-                <a href="interest_tracker.php" class="btn btn-sm btn-outline-danger fw-bold rounded-pill px-3">
-                    View Details <i class="fa-solid fa-arrow-right ms-1"></i>
-                </a>
+                <div class="d-flex align-items-end gap-3">
+                    <div class="text-end">
+                        <div class="small text-muted"><?php echo $interest_due_total < 0 ? 'Credit (all time)' : 'Due (all time)'; ?></div>
+                        <div class="fw-bold <?php echo $interest_due_total > 0 ? 'text-danger' : 'text-success'; ?> blur-sensitive">AED <?php echo number_format(abs($interest_due_total), 2); ?></div>
+                    </div>
+                    <a href="interest_tracker.php" class="btn btn-sm btn-outline-danger fw-bold rounded-pill px-3">
+                        View Details <i class="fa-solid fa-arrow-right ms-1"></i>
+                    </a>
+                </div>
             </div>
             <div style="position: relative; height: 300px; width: 100%;">
                 <canvas id="interestChart"></canvas>
@@ -978,10 +1038,10 @@ $show_split = $widget_split_net !== null && abs($widget_split_net) >= 0.01;
                         class="display-6 fw-bold <?php echo $wealth_growth_abs >= 0 ? 'text-success' : 'text-danger'; ?>">
                         <?php echo $wealth_growth_abs >= 0 ? '+' : ''; ?><?php echo number_format($wealth_growth_abs, 2); ?>
                     </div>
-                    <div class="small <?php echo $wealth_growth_pct >= 0 ? 'text-success' : 'text-danger'; ?>">
+                    <div class="small <?php echo $wealth_growth_abs >= 0 ? 'text-success' : 'text-danger'; ?>">
                         <i
-                            class="fa-solid <?php echo $wealth_growth_pct >= 0 ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'; ?> me-1"></i>
-                        <?php echo number_format($wealth_growth_pct, 1); ?>% vs Last Year
+                            class="fa-solid <?php echo $wealth_growth_abs >= 0 ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'; ?> me-1"></i>
+                        <?php echo $wealth_growth_pct === null ? "n/a" : number_format($wealth_growth_pct, 1) . "%"; ?> vs Last Year
                     </div>
                 </div>
             </div>

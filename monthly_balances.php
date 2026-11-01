@@ -87,17 +87,11 @@ Layout::sidebar();
 
     <?php
     // RECONCILIATION LOGIC
-    // 1. Previous month closing balance = latest balance of every bank as of last month's end
-    $opening_balance = BalanceHelper::totalAed($pdo, $tenant_id, $prev_month_end);
-
-    // 2. Get Income & Expenses This Month
-    $stmt = $pdo->prepare("SELECT SUM(" . ExchangeRateHelper::aedSql($pdo) . ") FROM income WHERE tenant_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ?");
-    $stmt->execute([$tenant_id, $month, $year]);
-    $m_income = $stmt->fetchColumn() ?: 0;
-
-    $stmt = $pdo->prepare("SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
-    $stmt->execute([$tenant_id, $month, $year]);
-    $m_expense = $stmt->fetchColumn() ?: 0;
+    // Opening + income - expenses/card payments, all in AED (shared with reconcile_fix.php)
+    $recon = BalanceHelper::monthlyReconciliation($pdo, $tenant_id, $month, $year);
+    $opening_balance = $recon['opening'];
+    $m_income        = $recon['income'];
+    $m_expense       = $recon['expense'];
 
     $expected_balance = $opening_balance + $m_income - $m_expense;
     $actual_balance = $total;
@@ -122,7 +116,7 @@ Layout::sidebar();
                 <div class="col-md-4 border-end">
                     <span class="text-muted small text-uppercase">Expected (Calculated)</span>
                     <div class="h5 fw-bold text-dark mt-1">AED <?php echo number_format($expected_balance); ?></div>
-                    <div class="x-small text-muted">(Open: <?php echo number_format($opening_balance); ?> + Inc: <?php echo number_format($m_income); ?> - Exp: <?php echo number_format($m_expense); ?>)</div>
+                    <div class="x-small text-muted">(Open: <?php echo number_format($opening_balance); ?> + Inc: <?php echo number_format($m_income); ?> - Exp &amp; card payments: <?php echo number_format($m_expense); ?>)</div>
                 </div>
                 <div class="col-md-4 border-end">
                     <span class="text-muted small text-uppercase">Actual (Recorded)</span>

@@ -23,6 +23,7 @@ class PasswordResetHelper
 
     /**
      * True when this IP or user has asked for too many reset links recently.
+     * Callers must show the same message whether or not the account exists.
      */
     public static function isRateLimited(PDO $pdo, ?int $userId, string $ip): bool
     {
@@ -109,7 +110,7 @@ class PasswordResetHelper
 
     /**
      * Absolute URL of the reset page for a token.
-     * Uses APP_URL from .env when set (recommended), otherwise the current host.
+     * Built from APP_URL only; returns '' when APP_URL is not configured (never the Host header).
      */
     public static function url(string $token): string
     {

@@ -10,6 +10,7 @@ use App\Helpers\ExchangeRateHelper;
 use App\Helpers\BalanceHelper;
 use App\Helpers\Html;
 use App\Helpers\Flash;
+use App\Helpers\DashboardStats;
 
 Bootstrap::init();
 
@@ -23,6 +24,7 @@ $tenant_id     = (int) $_SESSION['tenant_id'];
 $base_currency  = $_SESSION['preferences']['base_currency'] ?? 'AED';
 $inr_to_aed     = ExchangeRateHelper::getRate('INR', 'AED', $pdo);
 $aed_to_inr     = ($inr_to_aed > 0) ? (1 / $inr_to_aed) : 22.0;
+$fx             = ($base_currency === 'INR') ? $aed_to_inr : 1.0; // AED -> display currency
 $currency_label = $base_currency;
 
 // Tables net_worth_items / net_worth_snapshots are created by the installer.
@@ -97,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$tenant_id]);
         $snap_savings = (float)$stmt->fetchColumn(); // stored in AED
 
-        $stmt = $pdo->prepare("SELECT amount, currency FROM lending_tracker WHERE tenant_id = ? AND status = 'Pending'");
+        $stmt = $pdo->prepare("SELECT amount, currency FROM lending_tracker WHERE tenant_id = ? AND status IN ('Pending', 'Partially Paid')");
         $stmt->execute([$tenant_id]);
         $snap_lent = 0.0;
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -112,9 +114,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM net_worth_items WHERE tenant_id = ? AND type = 'liability'");
         $stmt->execute([$tenant_id]);
-        $snap_liabilities = (float)$stmt->fetchColumn();
+        $snap_liabilities = (float)$stmt->fetchColumn()
+            + max(0.0, DashboardStats::interestBalance($pdo, (int) $tenant_id)); // interest still to dispose of (AED)
 
-        $snap_total_assets = $snap_bank + $snap_savings + $snap_lent + $snap_manual_assets;
+        // Savings-goal money already sits inside bank balances, so it is not added again
+        $snap_total_assets = $snap_bank + $snap_lent + $snap_manual_assets;
         $snap_net_worth    = $snap_total_assets - $snap_liabilities;
 
         $snap_year  = (int)date('Y');
@@ -145,7 +149,7 @@ $stmt->execute([$tenant_id]);
 $savings_goals_aed = (float)$stmt->fetchColumn();
 $savings_goals = ($base_currency === 'INR') ? $savings_goals_aed * $aed_to_inr : $savings_goals_aed;
 
-$stmt = $pdo->prepare("SELECT amount, currency FROM lending_tracker WHERE tenant_id = ? AND status = 'Pending'");
+$stmt = $pdo->prepare("SELECT amount, currency FROM lending_tracker WHERE tenant_id = ? AND status IN ('Pending', 'Partially Paid')");
 $stmt->execute([$tenant_id]);
 $money_lent_aed = 0.0;
 foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -155,7 +159,8 @@ foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
 }
 $money_lent = ($base_currency === 'INR') ? $money_lent_aed * $aed_to_inr : $money_lent_aed;
 
-$auto_total = $bank_balances_total + $savings_goals + $money_lent;
+// Savings goals are already inside bank balances: shown as 'of which in goals', not added
+$auto_total = $bank_balances_total + $money_lent;
 
 // Manual items
 $stmt = $pdo->prepare("SELECT * FROM net_worth_items WHERE tenant_id = ? ORDER BY type, sort_order, id");
@@ -165,11 +170,17 @@ $all_items = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $manual_assets      = array_filter($all_items, fn($i) => $i['type'] === 'asset');
 $manual_liabilities = array_filter($all_items, fn($i) => $i['type'] === 'liability');
 
-$manual_assets_total      = array_sum(array_column(iterator_to_array(new ArrayIterator($manual_assets)), 'amount'));
-$manual_liabilities_total = array_sum(array_column(iterator_to_array(new ArrayIterator($manual_liabilities)), 'amount'));
+// Manual items are stored in AED; convert to the display currency
+$manual_assets_total      = array_sum(array_column(iterator_to_array(new ArrayIterator($manual_assets)), 'amount')) * $fx;
+$manual_liabilities_total = array_sum(array_column(iterator_to_array(new ArrayIterator($manual_liabilities)), 'amount')) * $fx;
+
+// Interest received but not yet given away is owed to charity: an automatic liability
+// (the same all-time figure as the Interest Tracker; a credit is not counted as an asset)
+$interest_due_aed = max(0.0, DashboardStats::interestBalance($pdo, (int) $tenant_id));
+$interest_due = ($base_currency === 'INR') ? $interest_due_aed * $aed_to_inr : $interest_due_aed;
 
 $total_assets      = $auto_total + $manual_assets_total;
-$total_liabilities = $manual_liabilities_total;
+$total_liabilities = $manual_liabilities_total + $interest_due;
 $net_worth         = $total_assets - $total_liabilities;
 
 // Trend data — latest 12 snapshots, oldest first
@@ -181,7 +192,7 @@ $snap_labels = [];
 $snap_values = [];
 foreach ($snapshots as $s) {
     $snap_labels[] = date('M Y', mktime(0, 0, 0, $s['snap_month'], 1, $s['snap_year']));
-    $snap_values[] = (float)$s['net_worth'];
+    $snap_values[] = round((float)$s['net_worth'] * $fx, 2); // snapshots are stored in AED
 }
 
 Layout::header();
@@ -269,8 +280,8 @@ Layout::sidebar();
                 <li class="list-group-item bg-transparent px-0 d-flex justify-content-between align-items-center border-bottom py-3">
                     <div>
                         <i class="fa-solid fa-piggy-bank me-2 text-info"></i>
-                        <span class="fw-semibold">Savings Goals</span>
-                        <div class="small text-muted">Sinking funds balance</div>
+                        <span class="fw-semibold">Of which in goals</span>
+                        <div class="small text-muted">Already inside bank balances, not added again</div>
                     </div>
                     <span class="fw-bold text-info blur-sensitive"><?php echo Html::e($currency_label); ?> <?php echo number_format($savings_goals, 2); ?></span>
                 </li>
@@ -331,7 +342,7 @@ Layout::sidebar();
                                     <?php endif; ?>
                                 </td>
                                 <td><span class="badge bg-success-subtle text-success"><?php echo Html::e($item['category']); ?></span></td>
-                                <td class="text-end fw-bold text-success blur-sensitive"><?php echo Html::e($currency_label); ?> <?php echo number_format($item['amount'], 2); ?></td>
+                                <td class="text-end fw-bold text-success blur-sensitive"><?php echo Html::e($currency_label); ?> <?php echo number_format($item['amount'] * $fx, 2); ?></td>
                                 <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
                                 <td class="text-end">
                                     <button class="btn btn-sm btn-outline-primary border-0"
@@ -375,6 +386,14 @@ Layout::sidebar();
         <?php endif; ?>
     </div>
 
+    <?php if ($interest_due > 0): ?>
+        <a href="interest_tracker.php" class="d-flex justify-content-between align-items-center p-3 mb-3 rounded-3 bg-danger-subtle text-decoration-none">
+            <span class="text-body"><i class="fa-solid fa-percent text-danger me-2"></i><span class="fw-semibold">Interest to dispose of</span>
+                <span class="small text-muted ms-1">(auto, from Interest Tracker)</span></span>
+            <span class="fw-bold text-danger blur-sensitive"><?php echo Html::e($currency_label); ?> <?php echo number_format($interest_due, 2); ?></span>
+        </a>
+    <?php endif; ?>
+
     <?php if (empty($manual_liabilities)): ?>
         <div class="text-center py-4 text-muted">
             <i class="fa-solid fa-circle-check fa-2x opacity-25 mb-2 text-success"></i>
@@ -403,7 +422,7 @@ Layout::sidebar();
                             <?php endif; ?>
                         </td>
                         <td><span class="badge bg-danger-subtle text-danger"><?php echo Html::e($item['category']); ?></span></td>
-                        <td class="text-end fw-bold text-danger blur-sensitive"><?php echo Html::e($currency_label); ?> <?php echo number_format($item['amount'], 2); ?></td>
+                        <td class="text-end fw-bold text-danger blur-sensitive"><?php echo Html::e($currency_label); ?> <?php echo number_format($item['amount'] * $fx, 2); ?></td>
                         <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>
                         <td class="text-end">
                             <button class="btn btn-sm btn-outline-primary border-0"
@@ -463,7 +482,7 @@ Layout::sidebar();
         data: {
             labels: labels,
             datasets: [{
-                label: 'Net Worth (AED)',
+                label: 'Net Worth (' + CURRENCY_LABEL + ')',
                 data: values,
                 borderColor: 'rgba(13, 110, 253, 1)',
                 backgroundColor: gradient,

@@ -290,6 +290,13 @@ $all_banks = $banks_stmt->fetchAll();
             });
             const data = await response.json();
 
+            // Cashback rates the page states fill the matching category boxes
+            if (data.success && data.data.rates) {
+                Object.keys(data.data.rates).forEach((cat) => {
+                    const input = document.getElementById('cb' + cat);
+                    if (input) { input.value = data.data.rates[cat]; }
+                });
+            }
             if (data.success && data.data.description && data.data.description.length > 20) {
                 features = "✅ VERIFIED LIVE DATA FROM BANK WEBSITE:\n" + data.data.description;
                 if (data.data.title) {

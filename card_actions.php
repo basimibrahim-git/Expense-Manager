@@ -5,6 +5,7 @@ use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
 use App\Helpers\BalanceHelper;
 use App\Helpers\Categories;
+use App\Helpers\CardOfferHelper;
 use App\Helpers\ExchangeRateHelper;
 use App\Helpers\Flash;
 
@@ -49,6 +50,20 @@ function cardActionsDay(string $field): ?int
     return $day ?: null;
 }
 
+/** Posted card type, normalised to 'Credit' or 'Debit'; null when it is neither. */
+function cardActionsType(): ?string
+{
+    $t = strtolower(trim((string) ($_POST['card_type'] ?? '')));
+    return $t === 'credit' ? 'Credit' : ($t === 'debit' ? 'Debit' : null);
+}
+
+/** Strict Y-m-d check (rejects 2026-02-31); returns the date or null. */
+function cardActionsDate(string $raw): ?string
+{
+    $d = DateTime::createFromFormat('!Y-m-d', $raw);
+    return ($d && $d->format('Y-m-d') === $raw) ? $raw : null;
+}
+
 /** JSON {"Category": percent} from the cb_<Category> inputs (only rates above zero). */
 function cardActionsCashbackStruct(): string
 {
@@ -66,7 +81,10 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $user_id = $_SESSION['user_id'];
     $bank_name = trim($_POST['bank_name'] ?? '');
     $card_name = trim($_POST['card_name'] ?? '');
-    $card_type = trim($_POST['card_type'] ?? '');
+    $card_type = cardActionsType();
+    if ($card_type === null) {
+        Flash::redirect('add_card.php', 'error', 'Card type must be Credit or Debit.');
+    }
     $network = trim($_POST['network'] ?? '');
     $tier = trim($_POST['tier'] ?? '');
     $fee_type = trim($_POST['fee_type'] ?? 'LTF');
@@ -107,7 +125,10 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
     $bank_name = trim($_POST['bank_name'] ?? '');
     $card_name = trim($_POST['card_name'] ?? '');
-    $card_type = trim($_POST['card_type'] ?? '');
+    $card_type = cardActionsType();
+    if ($card_type === null) {
+        Flash::redirect("edit_card.php?id=$card_id", 'error', 'Card type must be Credit or Debit.');
+    }
     $network = trim($_POST['network'] ?? '');
     $tier = trim($_POST['tier'] ?? '');
     $fee_type = trim($_POST['fee_type'] ?? 'LTF');
@@ -159,16 +180,43 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         error_log("Card Update Error: " . $e->getMessage());
         Flash::redirect("edit_card.php?id=$card_id", 'error', 'Failed to update card details.');
     }
+} elseif ($action == 'refresh_offers' && $_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Re-read the card's bank page now: features text + the cashback rates the page states
+    $card_id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
+    $stmt = $pdo->prepare("SELECT id, card_name, bank_url, cashback_struct, features FROM cards WHERE id = ? AND tenant_id = ?");
+    $stmt->execute([$card_id ?: 0, $tenant_id]);
+    $card = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$card) {
+        Flash::redirect('my_cards.php', 'error', 'Card not found');
+    }
+    $result = CardOfferHelper::refreshCard($pdo, $tenant_id, $card);
+    if (!$result['ok']) {
+        Flash::redirect('my_cards.php', 'error', 'Could not refresh offers: ' . $result['error']);
+    }
+    AuditHelper::log($pdo, 'refresh_card_offers', "Refreshed offers: {$card['card_name']} (ID: {$card['id']})");
+    $found = count($result['rates']);
+    Flash::redirect('my_cards.php', 'success', $found > 0
+        ? "Offers refreshed: cashback rates found for $found " . ($found === 1 ? 'category' : 'categories') . '.'
+        : 'Offers refreshed. The bank page lists no cashback rates the app can read, so the rates were kept.');
 } elseif ($action == 'delete_card' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['id'])) {
     $card_id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
 
     if ($card_id) {
         try {
+            $pdo->beginTransaction();
+            // Detach the card's expenses (kept as Cash so the edit form stays valid; any bank deduction stays linked)
+            // and drop its payments, so nothing is left pointing at a card that no longer exists
+            $pdo->prepare("UPDATE expenses SET card_id = NULL, payment_method = 'Cash' WHERE card_id = ? AND tenant_id = ?")->execute([$card_id, $tenant_id]);
+            $pdo->prepare("DELETE FROM card_payments WHERE card_id = ? AND tenant_id = ?")->execute([$card_id, $tenant_id]);
             $stmt = $pdo->prepare("DELETE FROM cards WHERE id = ? AND tenant_id = ?");
             $stmt->execute([$card_id, $tenant_id]);
+            $pdo->commit();
             AuditHelper::log($pdo, 'delete_card', "Deleted Card ID: $card_id");
             Flash::redirect('my_cards.php', 'success', 'Card deleted');
         } catch (PDOException $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             error_log("Delete Card Error: " . $e->getMessage());
             Flash::redirect('my_cards.php', 'error', 'Delete failed');
         }
@@ -182,20 +230,24 @@ if ($action == 'add_card' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         Flash::redirect($back, 'error', 'Invalid source bank account.');
     }
     $amount = round(floatval($_POST['amount'] ?? 0), 2);
-    $dateRaw = $_POST['payment_date'] ?? '';
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateRaw) || !strtotime($dateRaw)) {
-        Flash::redirect($back, 'error', 'Invalid date format');
+    $date = cardActionsDate((string) ($_POST['payment_date'] ?? ''));
+    if ($date === null) {
+        Flash::redirect($back, 'error', 'Invalid date');
     }
-    $date = $dateRaw;
 
     if (!$card_id || $amount <= 0) {
         Flash::redirect($back, 'error', 'Invalid input');
     }
 
-    $own = $pdo->prepare("SELECT id FROM cards WHERE id = ? AND tenant_id = ?");
+    // Payments only make sense for this tenant's credit cards
+    $own = $pdo->prepare("SELECT card_type FROM cards WHERE id = ? AND tenant_id = ?");
     $own->execute([$card_id, $tenant_id]);
-    if (!$own->fetchColumn()) {
+    $ownType = $own->fetchColumn();
+    if ($ownType === false) {
         Flash::redirect('pay_card.php', 'error', 'Card not found');
+    }
+    if (strtolower((string) $ownType) !== 'credit') {
+        Flash::redirect('my_cards.php', 'error', 'Payments can only be recorded for credit cards');
     }
 
     // The payment is entered in AED; convert to the source account's currency.

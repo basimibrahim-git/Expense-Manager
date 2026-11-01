@@ -5,6 +5,7 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\Html;
 use App\Helpers\Layout;
+use App\Helpers\DashboardStats;
 
 Bootstrap::init();
 Layout::header();
@@ -32,20 +33,25 @@ $total_accrued = $year_stats['total_accrued'] ?? 0;
 $total_paid = $year_stats['total_paid'] ?? 0;
 $current_balance = $total_accrued - $total_paid;
 
-// Get Global Pending Breakdown (For the new Modal)
+// All-time balance per year (For the Modal). Overpaid years are included, so a credit in one
+// year offsets what is due in another; running_balance is the total carried to the end of each year.
 $stmt = $pdo->prepare("SELECT YEAR(interest_date) as year, SUM(amount) as net_balance
                        FROM interest_tracker
                        WHERE tenant_id = ?
                        GROUP BY YEAR(interest_date)
-                       HAVING net_balance > 0
                        ORDER BY year ASC");
 $stmt->execute([$_SESSION['tenant_id']]);
 $global_pending_breakdown = $stmt->fetchAll();
 
-$global_net_pending = 0;
-foreach ($global_pending_breakdown as $row) {
-    $global_net_pending += $row['net_balance'];
+$running = 0;
+foreach ($global_pending_breakdown as &$row) {
+    $running += (int) round((float) $row['net_balance'] * 100);
+    $row['running_balance'] = $running / 100;
 }
+unset($row);
+
+// The one "interest due" figure, the same as the dashboard and Net Worth (negative = credit)
+$global_net_pending = DashboardStats::interestBalance($pdo, (int) $_SESSION['tenant_id']);
 
 $months = [
     1 => 'January',
@@ -86,7 +92,7 @@ $current_year = date('Y');
                     <form action="" method="GET" class="d-inline-block">
                         <select name="year" class="form-select rounded-pill px-3 fw-bold" data-autosubmit style="min-width: 100px; border: none; height: 38px;">
                             <?php
-                            $start_year = min(2025, $year);
+                            $start_year = min(2025, $year, (int) ($global_pending_breakdown[0]['year'] ?? 2025));
                             $end_year = max((int) date('Y') + 5, $year);
                             for ($y = $start_year; $y <= $end_year; $y++):
                                 $selected = ($y == $year) ? 'selected' : '';
@@ -108,12 +114,15 @@ $current_year = date('Y');
             <div class="position-absolute end-0 top-50 translate-middle-y me-4 opacity-10">
                 <i class="fa-solid fa-circle-exclamation fa-4x text-danger"></i>
             </div>
-            <h6 class="text-muted fw-bold text-uppercase small mb-2">Remaining Interest Due (<?php echo $year; ?>)</h6>
-            <h2 class="fw-bold text-danger mb-1">
-                <small class="fs-6 text-muted">AED</small> 
-                <span class="blur-sensitive"><?php echo number_format($current_balance, 2); ?></span>
+            <h6 class="text-muted fw-bold text-uppercase small mb-2"><?php echo $global_net_pending < 0 ? 'Interest Credit (All Time)' : 'Remaining Interest Due (All Time)'; ?></h6>
+            <h2 class="fw-bold <?php echo $global_net_pending > 0 ? 'text-danger' : 'text-success'; ?> mb-1">
+                <small class="fs-6 text-muted">AED</small>
+                <span class="blur-sensitive"><?php echo number_format(abs($global_net_pending), 2); ?></span>
             </h2>
-            <p class="text-muted small mb-0">Total interest received needing disposal</p>
+            <p class="text-muted small mb-0">
+                All interest received minus all payments, overpayments carried forward.
+                <?php echo $year; ?>: received <span class="blur-sensitive"><?php echo number_format($total_accrued, 2); ?></span>, net <span class="blur-sensitive"><?php echo number_format($current_balance, 2); ?></span>
+            </p>
         </div>
     </div>
     <div class="col-md-6">
@@ -282,25 +291,30 @@ $current_year = date('Y');
             </div>
             <div class="modal-body p-4">
                 <div class="text-center mb-4">
-                    <h6 class="text-muted text-uppercase small fw-bold">Cumulative Outstanding</h6>
-                    <h1 class="display-5 fw-bold text-danger mb-1">
-                        <small class="fs-6 text-muted">AED</small> <span class="blur-sensitive"><?php echo number_format($global_net_pending, 2); ?></span>
+                    <h6 class="text-muted text-uppercase small fw-bold"><?php echo $global_net_pending < 0 ? 'Cumulative Credit' : 'Cumulative Outstanding'; ?></h6>
+                    <h1 class="display-5 fw-bold <?php echo $global_net_pending > 0 ? 'text-danger' : 'text-success'; ?> mb-1">
+                        <small class="fs-6 text-muted">AED</small> <span class="blur-sensitive"><?php echo number_format(abs($global_net_pending), 2); ?></span>
                     </h1>
-                    <p class="text-muted small mb-0">Total across all historic tracking years</p>
+                    <p class="text-muted small mb-0">All years, overpayments carried forward</p>
                 </div>
 
                 <div class="p-3 bg-light rounded-4 border border-light">
-                    <div class="fw-bold small text-uppercase text-muted mb-2 ps-1">
-                        Yearly Outstanding Breakdown
+                    <div class="d-flex justify-content-between fw-bold small text-uppercase text-muted mb-2 px-3">
+                        <span>Year · net</span><span>Running total</span>
                     </div>
                     <div class="d-flex flex-column gap-2">
                         <?php if (empty($global_pending_breakdown)): ?>
-                            <div class="text-center text-muted py-3 small">All interest is fully cleared.</div>
+                            <div class="text-center text-muted py-3 small">No interest recorded yet.</div>
                         <?php else: ?>
                             <?php foreach ($global_pending_breakdown as $row): ?>
                                 <div class="d-flex justify-content-between align-items-center py-2 px-3 bg-white rounded-3 shadow-sm border-light">
-                                    <span class="fw-bold text-dark"><?php echo $row['year']; ?></span>
-                                    <span class="text-danger fw-bold">AED <?php echo number_format($row['net_balance'], 2); ?></span>
+                                    <span>
+                                        <span class="fw-bold text-dark"><?php echo (int) $row['year']; ?></span>
+                                        <span class="small <?php echo $row['net_balance'] > 0 ? 'text-danger' : 'text-success'; ?> blur-sensitive ms-2"><?php echo ($row['net_balance'] > 0 ? '+' : '') . number_format($row['net_balance'], 2); ?></span>
+                                    </span>
+                                    <span class="fw-bold <?php echo $row['running_balance'] > 0 ? 'text-danger' : 'text-success'; ?> blur-sensitive">
+                                        AED <?php echo number_format(abs($row['running_balance']), 2); ?><?php echo $row['running_balance'] < 0 ? ' credit' : ''; ?>
+                                    </span>
                                 </div>
                             <?php endforeach; ?>
                         <?php endif; ?>

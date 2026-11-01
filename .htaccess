@@ -10,5 +10,5 @@
 # (install/ stays reachable for first-time setup; it refuses to run once .env exists.)
 # (cron/reminder_emails.php stays reachable: its HTTP trigger is protected by CRON_SECRET;
 #  the job files it runs live in cron/jobs/ and are denied.)
-RedirectMatch 403 "(^|/)(src|includes|migrations|logs|tests|\.git|\.github)(/|$)"
+RedirectMatch 403 "(^|/)(src|includes|migrations|logs|tests|deploy|\.git|\.github|\.codegraph|\.claude|\.agent)(/|$)"
 RedirectMatch 403 "(^|/)cron/jobs(/|$)"

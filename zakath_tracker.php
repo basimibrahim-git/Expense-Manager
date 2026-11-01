@@ -48,7 +48,9 @@ $z_estimate = ZakathHelper::calculate(
     $z_auto['liabilities']['amount'],
     $z_nisab['value']
 );
-$z_cycle_calc = $z_hawl ? ZakathHelper::calculationForDue($pdo, $tenant_id, $z_hawl['due']) : null;
+// The cycle a calculation saved today is filed under (the just-passed one while it is unpaid)
+$z_file_due   = $z_hawl ? ZakathHelper::filingDueDate($pdo, $tenant_id, $z_hawl) : null;
+$z_cycle_calc = $z_file_due ? ZakathHelper::calculationForDue($pdo, $tenant_id, $z_file_due) : null;
 
 Layout::header();
 Layout::sidebar();
@@ -58,11 +60,27 @@ $stmt = $pdo->prepare("SELECT * FROM zakath_calculations WHERE tenant_id = ? ORD
 $stmt->execute([$tenant_id]);
 $records = $stmt->fetchAll();
 
-$total_pending = 0;
+// Re-saving a calculation for the same due date supersedes the earlier one: count only the latest
+// Pending row per due date (records are newest first), and none when that cycle is already Paid.
+$paid_dues = [];
 foreach ($records as $r) {
-    if ($r['status'] == 'Pending') {
-        $total_pending += $r['total_zakath'];
+    if ($r['status'] == 'Paid' && !empty($r['due_date'])) {
+        $paid_dues[$r['due_date']] = true;
     }
+}
+$total_pending = 0;
+$counted_dues = [];
+foreach ($records as $r) {
+    if ($r['status'] != 'Pending') {
+        continue;
+    }
+    if (!empty($r['due_date'])) {
+        if (isset($counted_dues[$r['due_date']]) || isset($paid_dues[$r['due_date']])) {
+            continue;
+        }
+        $counted_dues[$r['due_date']] = true;
+    }
+    $total_pending += $r['total_zakath'];
 }
 ?>
 
@@ -112,7 +130,7 @@ foreach ($records as $r) {
                         <?php echo $dl === 0 ? 'Due today' : $dl . ' day' . ($dl === 1 ? '' : 's') . ' left'; ?>
                     </span>
                 </div>
-                <div class="text-muted small mt-2">Hawl started <?php echo Html::e(date('M d, Y', strtotime($z_hawl['start']))); ?> · lunar year = 354 days</div>
+                <div class="text-muted small mt-2">Hawl started <?php echo Html::e(date('M d, Y', strtotime($z_hawl['start']))); ?> · Hijri year</div>
             <?php else: ?>
                 <h5 class="fw-bold text-muted mb-1">Not set</h5>
                 <p class="text-muted small mb-0">Set the date your wealth first reached the nisab to track due dates and get email reminders.</p>
@@ -149,7 +167,7 @@ foreach ($records as $r) {
                 <div class="text-muted small"><?php echo Html::e($z_cycle_calc['cycle_name']); ?> ·
                     <?php echo $z_cycle_calc['status'] === 'Paid' ? '<span class="text-success fw-bold">Paid</span>' : '<span class="text-warning fw-bold">Pending</span>'; ?></div>
             <?php else: ?>
-                <p class="text-muted small mb-1">No calculation saved for <?php echo $z_hawl ? 'the hawl ending ' . Html::e(date('M d, Y', strtotime($z_hawl['due']))) : 'this cycle'; ?> yet.</p>
+                <p class="text-muted small mb-1">No calculation saved for <?php echo $z_hawl ? 'the hawl ending ' . Html::e(date('M d, Y', strtotime($z_file_due))) : 'this cycle'; ?> yet.</p>
                 <div class="small">Estimated Zakath now: <span class="fw-bold blur-sensitive">AED <?php echo number_format($z_estimate['zakat'], 2); ?></span></div>
             <?php endif; ?>
             <?php if (($_SESSION['permission'] ?? 'edit') !== 'read_only'): ?>

@@ -49,18 +49,20 @@ foreach ($zakathRows as $zakathRow) {
         $stage = '7';
     } elseif ($daysLeft >= 8 && $daysLeft <= 30) {
         $stage = '30';
-    } elseif ($hawl['prev_due'] !== null && $daysLeft >= ZakathHelper::HAWL_DAYS - 2) {
+    } elseif ($hawl['prev_due'] !== null
+        && ($sincePrev = (int) (new DateTimeImmutable($hawl['prev_due']))->diff($zakathToday)->format('%r%a')) >= 1 && $sincePrev <= 2) {
         // The due date was 1–2 days ago (cron missed it) — still send the "due" email for it.
+        // (Measured from the previous due date: Hijri years are 354 or 355 days.)
         $dueDate = $hawl['prev_due'];
         $stage = '0';
-        $daysLeft = (int) $zakathToday->diff(new DateTimeImmutable($dueDate))->format('%r%a');
+        $daysLeft = -$sincePrev;
     }
     if ($stage === null) {
         continue;
     }
 
     $calc = ZakathHelper::calculationForDue($pdo, $tenantId, $dueDate);
-    if ($calc && $calc['status'] === 'Paid') {
+    if (ZakathHelper::hasPaidCalculation($pdo, $tenantId, $dueDate)) {
         logLine("ZAKATH tenant #{$tenantId} due {$dueDate}: already marked paid — no reminder");
         continue;
     }

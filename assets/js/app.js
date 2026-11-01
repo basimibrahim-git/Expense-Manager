@@ -164,3 +164,13 @@
         });
     }, true);
 })();
+
+/**
+ * A page restored from the back/forward cache shows the numbers from when it was left
+ * (e.g. Back after adding an expense or a card payment). Reload it so figures are current.
+ */
+window.addEventListener('pageshow', function (event) {
+    if (event.persisted) {
+        window.location.reload();
+    }
+});

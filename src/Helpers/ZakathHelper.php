@@ -33,6 +33,7 @@ class ZakathHelper
 {
     public const RATE                 = 0.025;
     public const HAWL_DAYS            = 354;
+    public const HAWL_AVG_DAYS        = 354.367;
     public const GRAMS_PER_TROY_OUNCE = 31.1034768;
     public const AED_PER_USD          = 3.6725;
     public const CACHE_HOURS          = 12;
@@ -188,23 +189,23 @@ class ZakathHelper
             // Table missing (migration not run): don't hit the network on every page load.
             return self::$marketMemo = ['gold' => null, 'silver' => null];
         }
-        $needsRefresh = $forceRefresh;
-        $recentAttempt = false;
+        // Throttle per metal: a recent attempt for one metal must not block the other.
+        // A forced refresh still respects the retry throttle (it only skips the freshness check).
+        $toRefresh = [];
         foreach (self::METALS as $m) {
             $r = $rows[$m] ?? null;
-            if (!$r || $r['aed_per_gram'] === null || !$r['fresh']) {
-                $needsRefresh = true;
-            }
-            if ($r && $r['attempted_at'] && strtotime($r['attempted_at']) > time() - self::RETRY_MINUTES * 60) {
-                $recentAttempt = true;
+            $stale = !$r || $r['aed_per_gram'] === null || !$r['fresh'];
+            $recentAttempt = $r && $r['attempted_at'] && strtotime($r['attempted_at']) > time() - self::RETRY_MINUTES * 60;
+            if (($stale || $forceRefresh) && !$recentAttempt) {
+                $toRefresh[] = $m;
             }
         }
 
-        if ($needsRefresh && ($forceRefresh || !$recentAttempt) && self::provider() !== 'none') {
-            self::markAttempt($pdo);
+        if ($toRefresh && self::provider() !== 'none') {
+            self::markAttempt($pdo, $toRefresh);
             $live = self::fetchLive();
             foreach ($live as $metal => $usdPerOunce) {
-                if ($usdPerOunce !== null) {
+                if ($usdPerOunce !== null && in_array($metal, $toRefresh, true)) {
                     self::storePrice($pdo, $metal, $usdPerOunce);
                 }
             }
@@ -302,14 +303,15 @@ class ZakathHelper
         return $rows;
     }
 
-    private static function markAttempt(PDO $pdo): void
+    /** @param string[] $metals */
+    private static function markAttempt(PDO $pdo, array $metals): void
     {
         try {
             $stmt = $pdo->prepare(
                 "INSERT INTO zakath_metal_prices (metal, attempted_at) VALUES (?, NOW())
                  ON DUPLICATE KEY UPDATE attempted_at = NOW()"
             );
-            foreach (self::METALS as $m) {
+            foreach ($metals as $m) {
                 $stmt->execute([$m]);
             }
         } catch (Throwable $e) {
@@ -481,7 +483,9 @@ class ZakathHelper
 
     /**
      * Current hawl cycle from the family's start date, or null when not set.
-     * Due dates are start + 354 days x n (the first one on or after today).
+     * Due dates follow the HIJRI anniversary of the start date (Umm al-Qura calendar, same Hijri
+     * month/day each year, clamped to the month's length); the first one on or after today is "due".
+     * Without ext-intl it falls back to the average lunar year (354.367 days) from the start date.
      *
      * @return array{start: string, cycle_start: string, due: string, cycle_number: int, days_left: int,
      *               due_hijri: ?string, start_hijri: ?string, prev_due: ?string}|null
@@ -497,9 +501,16 @@ class ZakathHelper
         }
         $today   = $today ?? new DateTimeImmutable('today');
         $elapsed = (int) $start->diff($today)->format('%r%a');
-        $n       = max(1, intdiv(max(0, $elapsed) + self::HAWL_DAYS - 1, self::HAWL_DAYS));
-        $due     = $start->modify('+' . ($n * self::HAWL_DAYS) . ' days');
-        $cycleStart = $due->modify('-' . self::HAWL_DAYS . ' days');
+        $n       = max(1, intdiv(max(0, $elapsed), self::HAWL_DAYS + 1));
+        while ($n > 1 && self::dueForCycle($start, $n - 1) >= $today) {
+            $n--;
+        }
+        while (self::dueForCycle($start, $n) < $today) {
+            $n++;
+        }
+        $due        = self::dueForCycle($start, $n);
+        $prevDue    = $n > 1 ? self::dueForCycle($start, $n - 1) : null;
+        $cycleStart = $prevDue ?? $start;
 
         return [
             'start'        => $start->format('Y-m-d'),
@@ -509,8 +520,59 @@ class ZakathHelper
             'days_left'    => (int) $today->diff($due)->format('%r%a'),
             'due_hijri'    => self::hijri($due),
             'start_hijri'  => self::hijri($start),
-            'prev_due'     => $n > 1 ? $cycleStart->format('Y-m-d') : null,
+            'prev_due'     => $prevDue ? $prevDue->format('Y-m-d') : null,
         ];
+    }
+
+    /** Due date of hawl cycle $n (n >= 1): the n-th Hijri anniversary of $start (average-year fallback). */
+    public static function dueForCycle(DateTimeImmutable $start, int $n): DateTimeImmutable
+    {
+        if (extension_loaded('intl') && class_exists('IntlCalendar')) {
+            try {
+                // Noon UTC so no timezone/DST shift can move the calendar day
+                $cal = \IntlCalendar::createInstance('UTC', 'en_US@calendar=islamic-umalqura');
+                $cal->setTime(gmmktime(12, 0, 0, (int) $start->format('n'), (int) $start->format('j'), (int) $start->format('Y')) * 1000);
+                $year  = $cal->get(\IntlCalendar::FIELD_YEAR);
+                $month = $cal->get(\IntlCalendar::FIELD_MONTH);
+                $day   = $cal->get(\IntlCalendar::FIELD_DAY_OF_MONTH);
+                $cal->clear();
+                $cal->set($year + $n, $month, 1);
+                $cal->set(\IntlCalendar::FIELD_DAY_OF_MONTH, min($day, $cal->getActualMaximum(\IntlCalendar::FIELD_DAY_OF_MONTH)));
+                $ts = $cal->getTime();
+                if ($ts !== false) {
+                    return DateTimeImmutable::createFromFormat('!Y-m-d', gmdate('Y-m-d', intdiv((int) $ts, 1000)));
+                }
+            } catch (Throwable $e) {
+                // fall through to the average-year estimate
+            }
+        }
+        return $start->modify('+' . (int) round($n * self::HAWL_AVG_DAYS) . ' days');
+    }
+
+    /**
+     * Due date a calculation saved today should be filed under. After a due date passes, the grace
+     * period lasts until the next due date: a calculation made then belongs to the cycle that just
+     * ended, unless that cycle already has a paid calculation (then it belongs to the upcoming one).
+     */
+    public static function filingDueDate(PDO $pdo, int $tenantId, array $hawl): string
+    {
+        if ($hawl['prev_due'] !== null && !self::hasPaidCalculation($pdo, $tenantId, $hawl['prev_due'])) {
+            return $hawl['prev_due'];
+        }
+        return $hawl['due'];
+    }
+
+    /** True when any calculation for the hawl due date has been marked Paid. */
+    public static function hasPaidCalculation(PDO $pdo, int $tenantId, string $dueDate): bool
+    {
+        try {
+            $stmt = $pdo->prepare("SELECT 1 FROM zakath_calculations WHERE tenant_id = ? AND due_date = ? AND status = 'Paid' LIMIT 1");
+            $stmt->execute([$tenantId, $dueDate]);
+            return (bool) $stmt->fetchColumn();
+        } catch (Throwable $e) {
+            error_log('ZakathHelper: paid lookup failed: ' . $e->getMessage());
+            return false;
+        }
     }
 
     /** Hijri (Umm al-Qura) date like "15 Ramadan 1448 AH", or null without ext-intl. */
@@ -560,6 +622,33 @@ class ZakathHelper
             $out['cash']['parts'][] = 'bank balances ' . self::money($bank);
         } catch (Throwable $e) {
             error_log('ZakathHelper: bank total failed: ' . $e->getMessage());
+        }
+
+        // Savings goals: money set aside for a goal (Hajj, a car, a house) is still fully owned, so
+        // it is zakatable like any other cash once the total wealth meets the nisab for a hawl.
+        // Earmarking it does not exempt it. The Goals page does not move money out of the bank,
+        // so it is already inside the bank balances above and is not added a second time.
+        try {
+            $stmt = $pdo->prepare("SELECT COALESCE(SUM(current_saved), 0) FROM sinking_funds WHERE tenant_id = ?");
+            $stmt->execute([$tenantId]);
+            $goals = (float) $stmt->fetchColumn();
+            if ($goals > 0) {
+                $out['cash']['parts'][] = 'incl. savings goals ' . self::money($goals) . ' (zakatable, already in bank balances; add any kept outside the bank)';
+            }
+        } catch (Throwable $e) {
+            error_log('ZakathHelper: savings goals failed: ' . $e->getMessage());
+        }
+
+        // Interest received and not yet given away is not the owner's wealth: it is owed to charity
+        // in full, so it is deducted rather than zakated (same all-time figure as the Interest Tracker).
+        try {
+            $interestDue = DashboardStats::interestBalance($pdo, $tenantId);
+            if ($interestDue > 0) {
+                $out['liabilities']['amount'] += $interestDue;
+                $out['liabilities']['parts'][] = 'interest to dispose of ' . self::money($interestDue);
+            }
+        } catch (Throwable $e) {
+            error_log('ZakathHelper: interest balance failed: ' . $e->getMessage());
         }
 
         // Manual Net Worth items (stored in AED)

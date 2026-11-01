@@ -20,7 +20,9 @@ $envFile = $rootDir . '/.env';
 
 // Block reinstallation if already set up
 $installLockFile = __DIR__ . '/.installed';
-if (file_exists($installLockFile) || file_exists($envFile)) {
+// (.env is written in step 2, so a session that is mid-install may continue; a finished install never can.)
+$installInProgress = !empty($_SESSION['install_in_progress']) && !file_exists($installLockFile);
+if (file_exists($installLockFile) || (file_exists($envFile) && !$installInProgress)) {
     http_response_code(403);
     echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Already Installed</title>'
        . '<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>'
@@ -55,8 +57,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $name = trim($_POST['db_name']);
         $user = trim($_POST['db_user']);
         $pass = $_POST['db_pass'];
+        $appUrl = rtrim(trim($_POST['app_url'] ?? ''), '/');
+        if ($appUrl !== '' && (!filter_var($appUrl, FILTER_VALIDATE_URL) || !preg_match('#^https?://#i', $appUrl))) {
+            $error = "Application URL must start with http:// or https://";
+            $step = 1;
+        }
 
-        try {
+        if ($error === '') try {
             // Test Connection
             $dsn = "mysql:host=$host;dbname=$name;charset=utf8mb4";
             $pdo = new PDO($dsn, $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
@@ -67,7 +74,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'DB_NAME' => $name,
                 'DB_USER' => $user,
                 'DB_PASS' => '"' . str_replace('"', '\"', $pass) . '"', // Escape quotes
-                'APP_TIMEZONE' => $_POST['app_timezone'] ?? 'Asia/Dubai'
+                'APP_TIMEZONE' => $_POST['app_timezone'] ?? 'Asia/Dubai',
+                'APP_URL' => $appUrl
             ];
 
             if (writeEnvFile($envFile, $envData)) {
@@ -76,6 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // For simplicity, we just move to next step in UI.
                 $step = 3;
                 $_SESSION['db_config'] = $envData; // Temp store
+                $_SESSION['install_in_progress'] = true; // lets steps 3-5 run although .env now exists
             } else {
                 $error = "Failed to write .env file. Check permissions for $rootDir";
                 $step = 1; // Stay here
@@ -171,6 +180,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         payment_method VARCHAR(50) DEFAULT 'Cash',
                         card_id INT,
                         balance_bank_id INT DEFAULT NULL,
+                        balance_amount DECIMAL(15,2) DEFAULT NULL,
                         expense_date DATE NOT NULL,
                         is_subscription TINYINT(1) DEFAULT 0,
                         currency VARCHAR(3) DEFAULT 'AED',
@@ -195,6 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         recurrence_day INT,
                         currency VARCHAR(3) DEFAULT 'AED',
                         balance_bank_id INT DEFAULT NULL,
+                        balance_amount DECIMAL(15,2) DEFAULT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                         FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
@@ -377,7 +388,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         email VARCHAR(255) NOT NULL DEFAULT '',
                         attempted_at DATETIME NOT NULL,
                         success TINYINT(1) NOT NULL DEFAULT 0,
-                        INDEX idx_ip_attempted (ip, attempted_at)
+                        INDEX idx_ip_attempted (ip, attempted_at),
+                        INDEX idx_email_attempted (email, attempted_at)
+                    )",
+                    "CREATE TABLE IF NOT EXISTS signup_attempts (
+                        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                        ip VARCHAR(45) NOT NULL,
+                        attempted_at DATETIME NOT NULL,
+                        INDEX idx_signup_ip (ip, attempted_at)
                     )",
                     "CREATE TABLE IF NOT EXISTS exchange_rate_cache (
                         from_currency CHAR(3) NOT NULL,
@@ -479,12 +497,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($step === 4) {
         // Admin Account Creation
-        $envData = $_SESSION['db_config'];
-        $email = trim($_POST['email']);
-        $pass = $_POST['password'];
-        $name = trim($_POST['name']);
+        $envData = $_SESSION['db_config'] ?? [];
+        $email = trim($_POST['email'] ?? '');
+        $pass = (string) ($_POST['password'] ?? '');
+        $name = trim($_POST['name'] ?? '');
 
-        try {
+        // Same rules as signup / password reset
+        $pwError = null;
+        if (strlen($pass) < 8) {
+            $pwError = 'Password must be at least 8 characters long.';
+        } elseif (strlen($pass) > 72) {
+            $pwError = 'Password must be at most 72 characters long.';
+        } elseif (!preg_match('/[A-Za-z]/', $pass) || !preg_match('/[0-9]/', $pass)) {
+            $pwError = 'Password must contain at least one letter and one number.';
+        }
+
+        if (empty($envData)) {
+            $error = "Session expired. Please start again.";
+            $step = 1;
+        } elseif ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $error = "Please enter your name and a valid email address.";
+            $step = 4;
+        } elseif ($pwError !== null) {
+            $error = $pwError;
+            $step = 4;
+        } else try {
             $dsn = "mysql:host={$envData['DB_HOST']};dbname={$envData['DB_NAME']};charset=utf8mb4";
             $pdo = new PDO($dsn, $envData['DB_USER'], trim($envData['DB_PASS'], '"'), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
@@ -509,6 +546,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $step = 5;
                 // Write secondary install lock file
                 file_put_contents($installLockFile, date('c'));
+                unset($_SESSION['install_in_progress']);
             }
 
         } catch (Exception $e) {
@@ -664,6 +702,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <input type="password" name="db_pass" id="db_pass" class="form-control"
                                         placeholder="******">
                                 </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label" for="app_url">Application URL</label>
+                                <input type="url" name="app_url" id="app_url" class="form-control form-control-lg"
+                                    placeholder="https://yourdomain.com/expenses"
+                                    value="<?php echo htmlspecialchars(($secure ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? '') . rtrim(dirname(dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/' . chr(92)), ENT_QUOTES); ?>" required>
+                                <div class="form-text">Public address of the app (include any sub-folder). Used in emailed links.</div>
                             </div>
 
                             <div class="mb-4">
