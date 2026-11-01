@@ -421,30 +421,70 @@ class ZakathHelper
         }
 
         $deadline = microtime(true) + self::TOTAL_TIMEOUT + 1;
+        $errors = []; // curl result per handle: curl_error() is always empty for multi handles
         do {
             $status = curl_multi_exec($mh, $running);
+            while ($info = curl_multi_info_read($mh)) {
+                $errors[(int) $info['handle']] = (int) $info['result'];
+            }
             if ($running && curl_multi_select($mh, 0.5) === -1) {
                 usleep(50000); // select unsupported on this platform: avoid a busy loop
             }
-        } while ($running && $status === CURLM_OK && microtime(true) < $deadline);
+            // Older libcurl returns CALL_MULTI_PERFORM while work is pending: that is not "done"
+        } while ($running && ($status === CURLM_OK || $status === CURLM_CALL_MULTI_PERFORM) && microtime(true) < $deadline);
 
         $out = [];
         foreach ($handles as $key => $ch) {
             $raw  = curl_multi_getcontent($ch);
             $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            if (!is_string($raw) || $raw === '' || $code !== 200) {
-                // Never log the URL: it may carry an API key.
-                error_log("ZakathHelper: metal price request '{$key}' failed (HTTP {$code}) " . curl_error($ch));
-                $out[$key] = null;
-            } else {
-                $data = json_decode($raw, true);
-                $out[$key] = is_array($data) ? $data : null;
-            }
+            $errno = $errors[(int) $ch] ?? 0;
             curl_multi_remove_handle($mh, $ch);
             curl_close($ch);
+            if (!is_string($raw) || $raw === '' || $code !== 200) {
+                // One slower retry on its own (IPv4, longer timeouts): shared hosts often stall on
+                // IPv6 or a slow DNS lookup, which shows up as "HTTP 0" in the parallel request.
+                [$raw, $code, $retryError] = self::httpGetOnce($urls[$key]);
+                if ($raw === null) {
+                    // Never log the URL: it may carry an API key.
+                    $first = $errno ? curl_strerror($errno) : ($code ? "HTTP $code" : 'no response before the deadline');
+                    error_log("ZakathHelper: metal price request '{$key}' failed ({$first}; retry: {$retryError})");
+                    $out[$key] = null;
+                    continue;
+                }
+            }
+            $data = json_decode($raw, true);
+            $out[$key] = is_array($data) ? $data : null;
         }
         curl_multi_close($mh);
         return $out;
+    }
+
+    /**
+     * Single GET with longer timeouts over IPv4 (fallback for httpGetJsonMulti).
+     *
+     * @return array{0: ?string, 1: int, 2: string} body (null on failure), HTTP code, error text
+     */
+    private static function httpGetOnce(string $url): array
+    {
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL            => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT        => 10,
+            CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_PROTOCOLS      => CURLPROTO_HTTPS,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+            CURLOPT_USERAGENT      => 'ExpenseManager/1.0',
+        ]);
+        $raw   = curl_exec($ch);
+        $code  = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_errno($ch) ? curl_error($ch) : ($code !== 200 ? "HTTP $code" : '');
+        curl_close($ch);
+        return [is_string($raw) && $raw !== '' && $code === 200 ? $raw : null, $code, $error];
     }
 
     // ── Nisab & calculation ───────────────────────────────────────────────────

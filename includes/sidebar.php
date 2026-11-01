@@ -149,7 +149,7 @@
 
         <!-- Management Group -->
         <?php
-        $mgmt_pages = ['family_management.php', 'admin/index.php', 'admin/manage_tenants.php', 'security_audit.php'];
+        $mgmt_pages = ['family_management.php', 'admin/index.php', 'admin/manage_tenants.php', 'security_audit.php', 'error_logs.php'];
         $is_mgmt_active = false;
         foreach ($mgmt_pages as $p) {
             if (strpos($current_page, $p) !== false) {
@@ -189,6 +189,13 @@
                     class="nav-link py-1 <?php echo $current_page == 'security_audit.php' ? $activeClass : 'text-muted'; ?>">
                     Security Audit
                 </a>
+
+                <?php if (in_array($_SESSION['role'] ?? '', ['family_admin', 'root_admin'])): ?>
+                    <a href="<?php echo BASE_URL; ?>error_logs.php"
+                        class="nav-link py-1 <?php echo $current_page == 'error_logs.php' ? $activeClass : 'text-muted'; ?>">
+                        Error Logs
+                    </a>
+                <?php endif; ?>
             </div>
         </div>
     </div>
