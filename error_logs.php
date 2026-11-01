@@ -10,15 +10,8 @@ use App\Helpers\SecurityHelper;
 
 Bootstrap::init();
 
-// The logs cover the whole server (every family). Root admins always; a family admin only when
-// this install has a single family, so no family can read another family's errors.
+// Family admins and root admins. The logs cover the whole server (every family).
 SecurityHelper::requireRole(['family_admin', 'root_admin']);
-if (($_SESSION['role'] ?? '') !== 'root_admin') {
-    $tenant_count = (int) $pdo->query("SELECT COUNT(*) FROM tenants")->fetchColumn();
-    if ($tenant_count > 1) {
-        Flash::redirect('dashboard.php', 'error', 'Server error logs are available to the root admin only.');
-    }
-}
 
 // Same locations config.php writes to
 $sources = [
