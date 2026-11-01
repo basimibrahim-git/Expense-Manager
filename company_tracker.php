@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     }
 
     $amount = $_POST['amount'] ?? ''; // raw input to allow "0"
-    $amount_ok = is_numeric($amount) && abs((float) $amount) <= 99999999.99;
+    $amount_ok = is_numeric($amount) && (float) $amount >= 0 && (float) $amount <= 99999999.99;
 
     // ADD NEW
     if ($_POST['action'] == 'quick_add') {
@@ -77,10 +77,6 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT, ['options'
     <!-- VIEW 1: YEAR OVERVIEW -->
     <?php
     // Fetch Totals for displayed years
-    $years_to_show = range(2023, 2026); // Default Range
-
-    // Check if we have data outside this range to show dynamically?
-    // For now, adhere to "start 2023 end 2026" request but fetch totals.
     $stmt = $pdo->prepare("
         SELECT YEAR(incentive_date) as year, SUM(amount) as total
         FROM company_incentives
@@ -89,6 +85,10 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT, ['options'
     ");
     $stmt->execute([$_SESSION['tenant_id']]);
     $year_totals = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+    // Years shown: from the earliest year with data (or this year) up to the latest (or this year)
+    $data_years = array_map('intval', array_keys($year_totals));
+    $years_to_show = range(min(array_merge($data_years, [(int) date('Y')])), max(array_merge($data_years, [(int) date('Y')])));
     ?>
 
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -112,7 +112,7 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT, ['options'
                     <div class="card h-100 p-4 text-center transform-hover <?php echo $card_class; ?>">
                         <h2 class="fw-bold mb-1"><?php echo $y; ?></h2>
                         <?php if ($has_data): ?>
-                            <div class="h5 fw-bold text-primary mb-0">AED <?php echo number_format($total, 0); ?></div>
+                            <div class="h5 fw-bold text-primary mb-0">AED <?php echo number_format($total, 2); ?></div>
                             <div class="small text-muted">Total Incentive</div>
                         <?php else: ?>
                             <div class="text-muted small opacity-50">- No Data -</div>
@@ -195,7 +195,7 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT, ['options'
             </a>
             <div>
                 <h1 class="h4 fw-bold mb-0">Tracker <?php echo $year; ?></h1>
-                <div class="small text-muted fw-bold text-success">Total: AED <?php echo number_format($year_total, 0); ?>
+                <div class="small text-muted fw-bold text-success">Total: AED <?php echo number_format($year_total, 2); ?>
                 </div>
             </div>
         </div>
@@ -227,7 +227,7 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT, ['options'
                     style="cursor: pointer; transition: transform 0.1s; border: none; text-align: inherit; background: none;">
                     <div class="text-uppercase fw-bold small opacity-75 mb-1"><?php echo $name; ?></div>
                     <?php if ($has_entries): ?>
-                        <div class="fw-bold h6 mb-0">AED <?php echo number_format($total, 0); ?></div>
+                        <div class="fw-bold h6 mb-0">AED <?php echo number_format($total, 2); ?></div>
                     <?php else: ?>
                         <div class="small py-1 opacity-50"><i class="fa-solid fa-plus"></i></div>
                     <?php endif; ?>
@@ -259,7 +259,7 @@ $selected_year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT, ['options'
                             <input type="hidden" name="month" id="modalMonthNum">
 
                             <div class="form-floating mb-2">
-                                <input type="number" step="0.01" name="amount" class="form-control text-center fw-bold"
+                                <input type="number" step="0.01" min="0" max="99999999.99" name="amount" class="form-control text-center fw-bold"
                                     id="amountInput" placeholder="0.00" required>
                                 <label for="amountInput" class="w-100 text-center">Add Amount (AED)</label>
                             </div>

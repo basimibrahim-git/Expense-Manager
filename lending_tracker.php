@@ -20,6 +20,17 @@ function lending_valid_date($date): ?string
     return ($d && $d->format('Y-m-d') === $date) ? $date : null;
 }
 
+/** Parse a money amount: a plain number > 0 and <= 99999999.99 (the DECIMAL(15,2) range we allow), else null. */
+function lending_valid_amount($raw): ?float
+{
+    $raw = is_string($raw) ? trim($raw) : $raw;
+    if (!is_numeric($raw)) {
+        return null;
+    }
+    $v = round((float) $raw, 2);
+    return (is_finite($v) && $v > 0 && $v <= 99999999.99) ? $v : null;
+}
+
 // Handle Actions (Must be before outputting any HTML)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
@@ -32,13 +43,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['action'])) {
         if ($_POST['action'] == 'add_lending') {
             $name = trim((string) ($_POST['borrower_name'] ?? ''));
-            $amount = floatval($_POST['amount'] ?? 0);
+            $amount = lending_valid_amount($_POST['amount'] ?? '');
             $currency = in_array($_POST['currency'] ?? 'AED', ['AED', 'INR'], true) ? $_POST['currency'] : 'AED';
             $lent_date = lending_valid_date($_POST['lent_date'] ?? '');
             $due_date = lending_valid_date($_POST['due_date'] ?? '');
             $notes = trim((string) ($_POST['notes'] ?? ''));
 
-            if (!empty($name) && $amount > 0 && $lent_date !== null) {
+            if ($amount === null) {
+                Flash::redirect('lending_tracker.php', 'error', 'Enter a valid amount greater than 0 (up to 99,999,999.99).');
+            }
+            if (!empty($name) && $lent_date !== null) {
                 $stmt = $pdo->prepare("INSERT INTO lending_tracker (user_id, tenant_id, borrower_name, amount, currency, lent_date, due_date, notes, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending')");
                 $stmt->execute([$_SESSION['user_id'], $_SESSION['tenant_id'], $name, $amount, $currency, $lent_date, $due_date, $notes]);
                 Flash::redirect('lending_tracker.php', 'success', 'Record Added');
@@ -46,13 +60,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         } elseif ($_POST['action'] == 'edit_lending') {
             $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
             $name = trim((string) ($_POST['borrower_name'] ?? ''));
-            $amount = floatval($_POST['amount'] ?? 0);
+            $amount = lending_valid_amount($_POST['amount'] ?? '');
             $currency = in_array($_POST['currency'] ?? 'AED', ['AED', 'INR'], true) ? $_POST['currency'] : 'AED';
             $lent_date = lending_valid_date($_POST['lent_date'] ?? '');
             $due_date = lending_valid_date($_POST['due_date'] ?? '');
             $notes = trim((string) ($_POST['notes'] ?? ''));
 
-            if ($id && !empty($name) && $amount > 0 && $lent_date !== null) {
+            if ($amount === null) {
+                Flash::redirect('lending_tracker.php', 'error', 'Enter a valid amount greater than 0 (up to 99,999,999.99).');
+            }
+            if ($id && !empty($name) && $lent_date !== null) {
                 $stmt = $pdo->prepare("UPDATE lending_tracker SET borrower_name = ?, amount = ?, currency = ?, lent_date = ?, due_date = ?, notes = ? WHERE id = ? AND tenant_id = ?");
                 $stmt->execute([$name, $amount, $currency, $lent_date, $due_date, $notes, $id, $_SESSION['tenant_id']]);
                 Flash::redirect('lending_tracker.php', 'success', 'Record Updated');

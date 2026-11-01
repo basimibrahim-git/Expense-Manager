@@ -107,6 +107,9 @@ spend($pdo, '2026-09-10', 1000); // September statement, never paid
 spend($pdo, '2026-10-10', 500);
 $r = row($pdo, '2026-11-01');
 check('1500 due', 1500.0, $r['due_remaining']);
+check('statement amount is the latest cycle', 500.0, $r['last_statement_amount']);
+check('carried over from the earlier statement', 1000.0, $r['carried_over']);
+check('statement - paid + carried = due', $r['due_remaining'], round($r['last_statement_amount'] - $r['paid_since_statement'] + $r['carried_over'], 2));
 
 echo "spend in the open cycle is not due yet\n";
 $pdo = db();
@@ -122,6 +125,7 @@ spend($pdo, '2026-10-10', 500);
 pay($pdo, '2026-11-10', 500);
 $r = row($pdo, '2026-11-01');
 check('still due', 500.0, $r['due_remaining']);
+check('outstanding ignores the future payment', 500.0, $r['outstanding_estimate']);
 
 echo "\n";
 if ($failed > 0) {

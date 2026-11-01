@@ -32,13 +32,17 @@ $templates = $stmt->fetchAll();
 // 2. Cross-reference with current month logs
 $curr_month = date('n');
 $curr_year = date('Y');
-$stmt = $pdo->prepare("SELECT description FROM expenses WHERE tenant_id = ? AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
+// Only subscription rows count as "logged", and names compare case-insensitively
+$stmt = $pdo->prepare("SELECT description FROM expenses WHERE tenant_id = ? AND is_subscription = 1 AND MONTH(expense_date) = ? AND YEAR(expense_date) = ?");
 $stmt->execute([$_SESSION['tenant_id'], $curr_month, $curr_year]);
-$logged_descriptions = $stmt->fetchAll(PDO::FETCH_COLUMN);
+$logged_descriptions = array_map('mb_strtolower', $stmt->fetchAll(PDO::FETCH_COLUMN));
 
-// Calculate Monthly Burn
+// Calculate Monthly Burn. Templates are the active subscriptions only (is_subscription = 1;
+// "Stop Tracking" clears the flag). There is no billing interval, so every one counts as monthly
+// and the yearly figure is only an estimate.
 $monthly_burn = array_sum(array_column($templates, 'amount'));
 $yearly_burn = $monthly_burn * 12;
+$days_in_month = (int) date('t');
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-5">
@@ -83,7 +87,7 @@ $yearly_burn = $monthly_burn * 12;
             <h3 class="fw-bold mb-1">AED <span class="blur-sensitive">
                     <?php echo number_format($yearly_burn, 2); ?>
                 </span></h3>
-            <span class="text-muted small">Estimated Annual Cost</span>
+            <span class="text-muted small">Estimated Annual Cost (monthly &times; 12, all treated as monthly)</span>
         </div>
     </div>
 </div>
@@ -114,9 +118,10 @@ $yearly_burn = $monthly_burn * 12;
                 <tbody>
                     <?php foreach ($templates as $sub): ?>
                         <?php
-                        $is_logged = in_array($sub['description'], $logged_descriptions);
+                        $is_logged = in_array(mb_strtolower($sub['description']), $logged_descriptions, true);
                         $day = date('d', strtotime($sub['expense_date']));
-                        $is_past = date('d') >= $day;
+                        // A 31st renewal falls on the month's last day in shorter months
+                        $is_past = (int) date('j') >= min((int) $day, $days_in_month);
                         ?>
                         <tr class="<?php echo $is_logged ? 'opacity-75' : ''; ?>">
                             <td class="ps-4">

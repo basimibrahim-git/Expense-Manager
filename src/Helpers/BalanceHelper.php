@@ -47,35 +47,116 @@ class BalanceHelper
     /**
      * Move a bank's balance by $delta (negative = money out).
      *
-     * The new snapshot is dated max($date, latest snapshot date) so a back-dated
-     * transaction still changes the *current* balance instead of hiding behind a
-     * newer snapshot.
+     * The new snapshot is dated min($date, today), then max'd with the latest snapshot
+     * date so a back-dated transaction still changes the *current* balance, and a
+     * future-dated one never creates a future snapshot (the balance changes now).
+     * The bank row is locked while reading + inserting so concurrent adjustments
+     * cannot both start from the same balance.
      *
      * Returns false when the bank does not belong to the tenant.
      */
     public static function adjust(PDO $pdo, int $tenantId, int $userId, int $bankId, float $delta, string $date): bool
     {
-        $bank = self::bank($pdo, $tenantId, $bankId);
-        if (!$bank) {
-            return false;
+        $ownTx = !$pdo->inTransaction();
+        if ($ownTx) {
+            $pdo->beginTransaction();
+        }
+        try {
+            // Lock the bank row (serialises adjustments of the same bank)
+            $stmt = $pdo->prepare("SELECT id, bank_name, currency FROM banks WHERE id = ? AND tenant_id = ? FOR UPDATE");
+            $stmt->execute([$bankId, $tenantId]);
+            $bank = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$bank) {
+                if ($ownTx) {
+                    $pdo->rollBack();
+                }
+                return false;
+            }
+
+            $today      = date('Y-m-d');
+            $latest     = self::latest($pdo, $tenantId, $bank, $today);
+            $current    = $latest ? (float) $latest['amount'] : 0.0;
+            $snapDate   = min($date, $today);
+            if ($latest && $latest['balance_date'] > $snapDate) {
+                $snapDate = $latest['balance_date'];
+            }
+
+            $stmt = $pdo->prepare("INSERT INTO bank_balances (user_id, tenant_id, bank_id, bank_name, amount, balance_date, currency)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([
+                $userId,
+                $tenantId,
+                $bank['id'],
+                $bank['bank_name'],
+                round($current + $delta, 2),
+                $snapDate,
+                $bank['currency'] ?: 'AED',
+            ]);
+            if ($ownTx) {
+                $pdo->commit();
+            }
+        } catch (\Throwable $e) {
+            if ($ownTx && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+        return true;
+    }
+
+    /**
+     * Month reconciliation inputs, all AED: opening balance, income, and money that left
+     * the banks (non-credit-card expenses + card bill payments made from a bank).
+     * Banks first recorded during the month contribute their first snapshot as opening.
+     */
+    public static function monthlyReconciliation(PDO $pdo, int $tenantId, int $month, int $year): array
+    {
+        $monthEnd     = date('Y-m-t', mktime(0, 0, 0, $month, 1, $year));
+        $prevMonthEnd = date('Y-m-t', mktime(0, 0, 0, $month - 1, 1, $year));
+
+        $opening = self::totalAed($pdo, $tenantId, $prevMonthEnd);
+
+        // Banks with no snapshot before this month: their first snapshot is the opening figure,
+        // otherwise the whole balance would show up as a surplus
+        $inrAed = null;
+        $stmt = $pdo->prepare("
+            SELECT COALESCE(b.currency, 'AED') AS currency, bb.amount
+            FROM banks b
+            JOIN bank_balances bb ON bb.id = (
+                SELECT x.id FROM bank_balances x
+                WHERE x.tenant_id = b.tenant_id
+                  AND (x.bank_id = b.id OR (x.bank_id IS NULL AND x.bank_name = b.bank_name))
+                ORDER BY x.balance_date ASC, x.id ASC
+                LIMIT 1
+            )
+            WHERE b.tenant_id = ? AND bb.balance_date > ? AND bb.balance_date <= ?");
+        $stmt->execute([$tenantId, $prevMonthEnd, $monthEnd]);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $nb) {
+            if (strtoupper($nb['currency']) === 'INR') {
+                $inrAed = $inrAed ?? ExchangeRateHelper::getRate('INR', 'AED', $pdo);
+                $opening += (float) $nb['amount'] * $inrAed;
+            } else {
+                $opening += (float) $nb['amount'];
+            }
         }
 
-        $latest     = self::latest($pdo, $tenantId, $bank);
-        $current    = $latest ? (float) $latest['amount'] : 0.0;
-        $snapDate   = ($latest && $latest['balance_date'] > $date) ? $latest['balance_date'] : $date;
+        $stmt = $pdo->prepare("SELECT SUM(" . ExchangeRateHelper::aedSql($pdo) . ") FROM income WHERE tenant_id = ? AND MONTH(income_date) = ? AND YEAR(income_date) = ?");
+        $stmt->execute([$tenantId, $month, $year]);
+        $income = (float) ($stmt->fetchColumn() ?: 0);
 
-        $stmt = $pdo->prepare("INSERT INTO bank_balances (user_id, tenant_id, bank_id, bank_name, amount, balance_date, currency)
-                               VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([
-            $userId,
-            $tenantId,
-            $bank['id'],
-            $bank['bank_name'],
-            round($current + $delta, 2),
-            $snapDate,
-            $bank['currency'] ?: 'AED',
-        ]);
-        return true;
+        // Credit-card spending does not leave a bank account; the card bill payment does
+        $stmt = $pdo->prepare("SELECT SUM(e.amount) FROM expenses e
+            LEFT JOIN cards c ON c.id = e.card_id AND c.tenant_id = e.tenant_id
+            WHERE e.tenant_id = ? AND MONTH(e.expense_date) = ? AND YEAR(e.expense_date) = ?
+              AND NOT (e.payment_method = 'Card' AND c.card_type = 'Credit')");
+        $stmt->execute([$tenantId, $month, $year]);
+        $expense = (float) ($stmt->fetchColumn() ?: 0);
+
+        $stmt = $pdo->prepare("SELECT SUM(amount) FROM card_payments WHERE tenant_id = ? AND bank_id IS NOT NULL AND MONTH(payment_date) = ? AND YEAR(payment_date) = ?");
+        $stmt->execute([$tenantId, $month, $year]);
+        $expense += (float) ($stmt->fetchColumn() ?: 0);
+
+        return ['opening' => $opening, 'income' => $income, 'expense' => $expense, 'actual' => self::totalAed($pdo, $tenantId, $monthEnd)];
     }
 
     /**

@@ -59,6 +59,7 @@ if (count($family_members) > 1) {
 
 $pre_month = filter_input(INPUT_GET, 'month', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]) ?: null;
 $pre_year  = filter_input(INPUT_GET, 'year',  FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]) ?: null;
+$pre_subscription = ($_GET['subscription'] ?? '') === 'true'; // from subscriptions.php: pre-tick "Subscription"
 $default_date = date('Y-m-d');
 if (isset($_GET['date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date'])) {
     $default_date = $_GET['date'];
@@ -311,7 +312,7 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
             <!-- Category -->
             <div class="col-md-2 col-6">
                 <select name="expenses[IDX][category]" class="form-select form-select-sm row-category" required
-                    data-onchange="calcRowReward" data-args="<?php echo Html::args('$this'); ?>">
+                    data-onchange="onCategoryChange" data-args="<?php echo Html::args('$this'); ?>">
                     <option value="" disabled selected>Category *</option>
                     <?php echo Categories::expenseOptions(); ?>
                 </select>
@@ -339,7 +340,7 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
                     <label class="form-check-label small">Fixed Cost</label>
                 </div>
                 <div class="form-check mb-0">
-                    <input class="form-check-input" type="checkbox" name="expenses[IDX][is_subscription]" value="1">
+                    <input class="form-check-input" type="checkbox" name="expenses[IDX][is_subscription]" value="1"<?php echo $pre_subscription ? ' checked' : ''; ?>>
                     <label class="form-check-label small">Subscription</label>
                 </div>
                 <span class="row-cashback badge bg-success-subtle text-success ms-auto" style="display:none">
@@ -356,15 +357,23 @@ $monthly_url  = 'monthly_expenses.php?month=' . ($pre_month ?? date('n')) . '&ye
     const presetCategories = <?php echo Html::json((object) $preset_form['map']); ?>;
     let rowIndex = 0;
 
-    // Description matches a saved spend → fill in its category (and refresh cashback)
+    // Description matches a saved spend → fill in its category (and refresh cashback),
+    // but only while the category is still blank or was itself autofilled (never over a manual pick)
     function applyPreset(descEl) {
         const category = presetCategories[(descEl.value || '').trim().toLowerCase()];
         if (!category) return;
         const select = descEl.closest('.expense-row')?.querySelector('.row-category');
-        if (select && select.value !== category) {
+        if (select && select.value !== category && (select.value === '' || select.dataset.presetFilled === '1')) {
             select.value = category;
+            select.dataset.presetFilled = '1';
             calcRowReward(select);
         }
+    }
+
+    // A manual category pick wins over later autofills
+    function onCategoryChange(el) {
+        delete el.dataset.presetFilled;
+        calcRowReward(el);
     }
 
     // Amount field: refresh the grand total and this row's cashback

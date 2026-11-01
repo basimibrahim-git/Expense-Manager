@@ -41,6 +41,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     SecurityHelper::verifyCsrfToken($_POST['csrf_token'] ?? '');
     $action = $_POST['action'] ?? '';
 
+    // A read-only account can't manage members or reset passwords, even with an admin role
+    if (($_SESSION['permission'] ?? 'edit') === 'read_only') {
+        $error = "Unauthorized: Read-only access";
+        $action = '';
+    }
+
     if ($action == 'add_member') {
         $name = trim($_POST['name'] ?? '');
         $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);

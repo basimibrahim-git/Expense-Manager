@@ -4,6 +4,7 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
 use App\Helpers\Flash;
+use App\Helpers\ExchangeRateHelper;
 
 Bootstrap::init();
 
@@ -53,8 +54,14 @@ if ($action == 'add_balance' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         Flash::redirect('add_balance.php', 'error', 'Bank not found');
     }
     $bank_name = $bank['bank_name'];
-    if (!preg_match('/^[A-Z]{3}$/', $currency)) {
-        $currency = $bank['currency'] ?: 'AED';
+    // Banks only hold AED or INR; the snapshot is always stored in the bank's own currency
+    $bank_currency = strtoupper($bank['currency'] ?: 'AED');
+    if (!in_array($currency, ['AED', 'INR'], true)) {
+        $currency = $bank_currency;
+    }
+    if ($currency !== $bank_currency) {
+        $amount = round($amount * ExchangeRateHelper::getRate($currency, $bank_currency, $pdo), 2);
+        $currency = $bank_currency;
     }
     try {
         $stmt = $pdo->prepare("INSERT INTO bank_balances (user_id, tenant_id, bank_id, bank_name, amount, balance_date, currency) VALUES (?, ?, ?, ?, ?, ?, ?)");

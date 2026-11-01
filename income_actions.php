@@ -62,9 +62,10 @@ function fxPrewarm(PDO $pdo, int $tenantId, array $currencies = []): void
 
 /**
  * Move a bank balance by an income row ($sign +1 = credit, -1 = reverse), in the bank's currency.
- * $row needs amount, currency, income_date.
+ * $row needs amount, currency, income_date; a stored balance_amount (the bank-currency amount
+ * credited at the time) is reused as-is so a reversal ignores today's rate. $applied receives the amount moved.
  */
-function incomeMoveBalance(PDO $pdo, int $tenantId, int $userId, int $bankId, array $row, int $sign): bool
+function incomeMoveBalance(PDO $pdo, int $tenantId, int $userId, int $bankId, array $row, int $sign, ?float &$applied = null): bool
 {
     $bank = BalanceHelper::bank($pdo, $tenantId, $bankId);
     if (!$bank) {
@@ -73,10 +74,24 @@ function incomeMoveBalance(PDO $pdo, int $tenantId, int $userId, int $bankId, ar
     $bankCur  = strtoupper($bank['currency'] ?: 'AED');
     $entryCur = strtoupper($row['currency'] ?: 'AED');
     $value    = (float) $row['amount'];
-    if ($bankCur !== $entryCur) {
+    if (($row['balance_amount'] ?? null) !== null) {
+        $value = (float) $row['balance_amount'];
+    } elseif ($bankCur !== $entryCur) {
         $value = $value * fxToAed($pdo, $entryCur) / fxToAed($pdo, $bankCur);
     }
-    return BalanceHelper::adjust($pdo, $tenantId, $userId, $bankId, $sign * round($value, 2), $row['income_date']);
+    $applied = round($value, 2);
+    return BalanceHelper::adjust($pdo, $tenantId, $userId, $bankId, $sign * $applied, $row['income_date']);
+}
+
+/** Strict Y-m-d check (rejects 2026-02-31) within 2000-2100; returns the date or null. */
+function incomeStrictDate(string $raw): ?string
+{
+    $d = DateTime::createFromFormat('!Y-m-d', $raw);
+    if (!$d || $d->format('Y-m-d') !== $raw) {
+        return null;
+    }
+    $y = (int) $d->format('Y');
+    return ($y < 2000 || $y > 2100) ? null : $raw;
 }
 
 /** fxPrewarm() only when one of these tenant income rows actually moved a bank balance. */
@@ -101,7 +116,7 @@ function incomeReverseBalances(PDO $pdo, int $tenantId, int $userId, array $ids)
         return;
     }
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
-    $stmt = $pdo->prepare("SELECT amount, currency, income_date, balance_bank_id FROM income
+    $stmt = $pdo->prepare("SELECT amount, balance_amount, currency, income_date, balance_bank_id FROM income
                            WHERE id IN ($placeholders) AND tenant_id = ? AND balance_bank_id IS NOT NULL FOR UPDATE");
     $stmt->execute(array_merge($ids, [$tenantId]));
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -137,14 +152,10 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         Flash::redirect('add_income.php', 'error', 'Invalid currency');
     }
     $dateRaw = (string) ($_POST['income_date'] ?? '');
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateRaw) || !strtotime($dateRaw)) {
-        Flash::redirect('add_income.php', 'error', 'Invalid date format');
+    $date = incomeStrictDate($dateRaw);
+    if ($date === null) {
+        Flash::redirect('add_income.php', 'error', 'Invalid date');
     }
-    $year_check = (int)substr($dateRaw, 0, 4);
-    if ($year_check < 2000 || $year_check > 2100) {
-        Flash::redirect('add_income.php', 'error', 'Invalid year');
-    }
-    $date = $dateRaw;
     $desc = trim((string) ($_POST['description'] ?? ''));
     $category = trim((string) ($_POST['category'] ?? ''));
 
@@ -179,15 +190,16 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
         // Snapshot is dated max(income date, latest snapshot), so back-dated income still reaches the current balance
         $balance_bank_id = null;
+        $balance_amount = null;
         if ($bank_id) {
             $moveRow = ['amount' => $amount, 'currency' => $currency, 'income_date' => $date];
-            if (incomeMoveBalance($pdo, (int) $tenant_id, (int) $user_id, $bank_id, $moveRow, +1)) {
+            if (incomeMoveBalance($pdo, (int) $tenant_id, (int) $user_id, $bank_id, $moveRow, +1, $balance_amount)) {
                 $balance_bank_id = $bank_id;
             }
         }
 
-        $stmt = $pdo->prepare("INSERT INTO income (user_id, tenant_id, amount, description, category, income_date, is_recurring, recurrence_day, currency, balance_bank_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$user_id, $tenant_id, $amount, $desc, $category, $date, $is_recurring, $recurrence_day, $currency, $balance_bank_id]);
+        $stmt = $pdo->prepare("INSERT INTO income (user_id, tenant_id, amount, description, category, income_date, is_recurring, recurrence_day, currency, balance_bank_id, balance_amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$user_id, $tenant_id, $amount, $desc, $category, $date, $is_recurring, $recurrence_day, $currency, $balance_bank_id, $balance_amount]);
 
         $pdo->commit();
 
@@ -281,14 +293,10 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         Flash::redirect("edit_income.php?id=$income_id", 'error', 'Invalid currency');
     }
     $dateRaw = (string) ($_POST['income_date'] ?? '');
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateRaw) || !strtotime($dateRaw)) {
-        Flash::redirect("edit_income.php?id=$income_id", 'error', 'Invalid date format');
+    $date = incomeStrictDate($dateRaw);
+    if ($date === null) {
+        Flash::redirect("edit_income.php?id=$income_id", 'error', 'Invalid date');
     }
-    $year_check = (int)substr($dateRaw, 0, 4);
-    if ($year_check < 2000 || $year_check > 2100) {
-        Flash::redirect("edit_income.php?id=$income_id", 'error', 'Invalid year');
-    }
-    $date = $dateRaw;
     $desc = trim((string) ($_POST['description'] ?? ''));
     $category = trim((string) ($_POST['category'] ?? ''));
     $is_recurring = isset($_POST['is_recurring']) && $_POST['is_recurring'] == '1' ? 1 : 0;
@@ -305,7 +313,8 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     if (!Categories::isIncome($category) && $category !== $old['category']) {
         Flash::redirect("edit_income.php?id=$income_id", 'error', 'Invalid category');
     }
-    $recurrence_day = $recurrence_day ? max(1, min(31, (int) $recurrence_day)) : null;
+    // A non-recurring income carries no recurrence day
+    $recurrence_day = ($is_recurring && $recurrence_day) ? max(1, min(31, (int) $recurrence_day)) : null;
 
     try {
         if ($old['balance_bank_id'] !== null) {
@@ -314,7 +323,7 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $pdo->beginTransaction();
 
-        $rowStmt = $pdo->prepare("SELECT amount, currency, income_date, balance_bank_id FROM income WHERE id = ? AND tenant_id = ? FOR UPDATE");
+        $rowStmt = $pdo->prepare("SELECT amount, balance_amount, currency, income_date, balance_bank_id FROM income WHERE id = ? AND tenant_id = ? FOR UPDATE");
         $rowStmt->execute([$income_id, $tenant_id]);
         $current = $rowStmt->fetch(PDO::FETCH_ASSOC);
         if (!$current) {
@@ -325,18 +334,19 @@ if ($action == 'add_income' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         // Reverse the original credit and re-apply the new amount to the same bank.
         // If the reversal fails (bank removed) the link is dropped; legacy rows (NULL) are left alone.
         $balance_bank_id = null;
+        $balance_amount = null;
         if ($current['balance_bank_id'] !== null) {
             $bankId = (int) $current['balance_bank_id'];
             if (incomeMoveBalance($pdo, (int) $tenant_id, (int) $user_id, $bankId, $current, -1)) {
                 $newRow = ['amount' => $amount, 'currency' => $currency, 'income_date' => $date];
-                if (incomeMoveBalance($pdo, (int) $tenant_id, (int) $user_id, $bankId, $newRow, +1)) {
+                if (incomeMoveBalance($pdo, (int) $tenant_id, (int) $user_id, $bankId, $newRow, +1, $balance_amount)) {
                     $balance_bank_id = $bankId;
                 }
             }
         }
 
-        $stmt = $pdo->prepare("UPDATE income SET amount = ?, description = ?, category = ?, income_date = ?, is_recurring = ?, recurrence_day = ?, currency = ?, balance_bank_id = ? WHERE id = ? AND tenant_id = ?");
-        $stmt->execute([$amount, $desc, $category, $date, $is_recurring, $recurrence_day, $currency, $balance_bank_id, $income_id, $tenant_id]);
+        $stmt = $pdo->prepare("UPDATE income SET amount = ?, description = ?, category = ?, income_date = ?, is_recurring = ?, recurrence_day = ?, currency = ?, balance_bank_id = ?, balance_amount = ? WHERE id = ? AND tenant_id = ?");
+        $stmt->execute([$amount, $desc, $category, $date, $is_recurring, $recurrence_day, $currency, $balance_bank_id, $balance_amount, $income_id, $tenant_id]);
 
         $pdo->commit();
 

@@ -83,10 +83,10 @@ $events = [];
 // A. Subscriptions — one entry per subscription (the latest row per description),
 //    not one per monthly charge that has been logged.
 $stmt = $pdo->prepare("
-    SELECT e.id, e.description, e.amount, e.expense_date
+    SELECT e.id, e.description, e.amount, e.expense_date, latest.first_date
     FROM expenses e
     JOIN (
-        SELECT MAX(id) AS id
+        SELECT MAX(id) AS id, MIN(expense_date) AS first_date
         FROM expenses
         WHERE tenant_id = ? AND is_subscription = 1
         GROUP BY description
@@ -96,17 +96,22 @@ $stmt = $pdo->prepare("
 $stmt->execute([$_SESSION['tenant_id'], $_SESSION['tenant_id']]);
 $subs = $stmt->fetchAll();
 
+// Day 29-31 events fall on the month's last day in shorter months instead of disappearing
+$viewKey = $year * 12 + $month;
 foreach ($subs as $sub) {
-    $day = date('d', strtotime($sub['expense_date']));
-    if ($day <= $days_in_month) {
-        $events[(int) $day][] = [
-            'type' => 'sub',
-            'title' => $sub['description'],
-            'amount' => number_format($sub['amount'], 2),
-            'color' => 'warning',
-            'icon' => 'fa-repeat'
-        ];
+    // Not before the month the subscription first appeared
+    $start = strtotime($sub['first_date']);
+    if ($viewKey < (int) date('Y', $start) * 12 + (int) date('n', $start)) {
+        continue;
     }
+    $day = min((int) date('j', strtotime($sub['expense_date'])), $days_in_month);
+    $events[$day][] = [
+        'type' => 'sub',
+        'title' => $sub['description'],
+        'amount' => number_format($sub['amount'], 2),
+        'color' => 'warning',
+        'icon' => 'fa-repeat'
+    ];
 }
 
 // B. Card Bills
@@ -115,16 +120,14 @@ $stmt->execute([$_SESSION['tenant_id']]);
 $cards = $stmt->fetchAll();
 
 foreach ($cards as $card) {
-    $day = $card['bill_day'];
-    if ($day <= $days_in_month) {
-        $events[(int) $day][] = [
-            'type' => 'bill',
-            'title' => $card['bank_name'] . ' Bill',
-            'amount' => 'Due',
-            'color' => 'danger',
-            'icon' => 'fa-file-invoice-dollar'
-        ];
-    }
+    $day = min(max(1, (int) $card['bill_day']), $days_in_month);
+    $events[$day][] = [
+        'type' => 'bill',
+        'title' => $card['bank_name'] . ' Bill',
+        'amount' => 'Due',
+        'color' => 'danger',
+        'icon' => 'fa-file-invoice-dollar'
+    ];
 }
 
 // C. Custom Reminders
@@ -133,23 +136,20 @@ $stmt->execute([$_SESSION['tenant_id']]);
 $reminders = $stmt->fetchAll();
 
 foreach ($reminders as $rem) {
-    $rDay = date('d', strtotime($rem['alert_date']));
-    $rMonth = date('n', strtotime($rem['alert_date']));
-    $rYear = date('Y', strtotime($rem['alert_date']));
+    $rDay = (int) date('j', strtotime($rem['alert_date']));
+    $rMonth = (int) date('n', strtotime($rem['alert_date']));
+    $rYear = (int) date('Y', strtotime($rem['alert_date']));
+    $rKey = $rYear * 12 + $rMonth;
 
     $recur_type = $rem['recurrence_type'] ?? 'none';
 
     $should_show = false;
     if ($recur_type == 'monthly') {
-        // Show every month on this day
-        if ($rDay <= $days_in_month) {
-            $should_show = true;
-        }
+        // Show every month on this day, from the start month on (last day of shorter months)
+        $should_show = $viewKey >= $rKey;
     } elseif ($recur_type == 'yearly') {
-        // Show every year on this month & day
-        if ($rMonth == $month && $rDay <= $days_in_month) {
-            $should_show = true;
-        }
+        // Show every year on this month & day (Feb 29 -> Feb 28 in common years), from the start year on
+        $should_show = $rMonth == $month && $year >= $rYear;
     } else {
         // One-time: Specific Date
         if ($rMonth == $month && $rYear == $year) {
@@ -158,7 +158,7 @@ foreach ($reminders as $rem) {
     }
 
     if ($should_show) {
-        $events[(int) $rDay][] = [
+        $events[min($rDay, $days_in_month)][] = [
             'type' => 'reminder',
             'id' => $rem['id'],
             'title' => $rem['title'],

@@ -60,9 +60,11 @@ function expenseCardBankId(PDO $pdo, int $tenantId, ?array $card): ?int
  * Move a bank balance by an expense row ($sign -1 = deduct, +1 = reverse).
  * The amount is expressed in the bank's currency: the entered amount when the
  * currencies match, otherwise the AED amount (converted when the bank is not AED).
- * $row needs amount (AED), original_amount, currency, expense_date.
+ * $row needs amount (AED), original_amount, currency, expense_date. When $row carries balance_amount
+ * (the bank-currency amount stored at deduction time) a reversal uses exactly that instead of
+ * today's rate. $applied receives the bank-currency amount that was moved.
  */
-function expenseMoveBalance(PDO $pdo, int $tenantId, int $userId, int $bankId, array $row, int $sign): bool
+function expenseMoveBalance(PDO $pdo, int $tenantId, int $userId, int $bankId, array $row, int $sign, ?float &$applied = null): bool
 {
     $bank = BalanceHelper::bank($pdo, $tenantId, $bankId);
     if (!$bank) {
@@ -72,14 +74,28 @@ function expenseMoveBalance(PDO $pdo, int $tenantId, int $userId, int $bankId, a
     $entryCur = strtoupper($row['currency'] ?: 'AED');
     $aed      = (float) $row['amount'];
 
-    if ($entryCur !== 'AED' && $row['original_amount'] !== null && $bankCur === $entryCur) {
+    if (($row['balance_amount'] ?? null) !== null) {
+        $value = (float) $row['balance_amount'];
+    } elseif ($entryCur !== 'AED' && $row['original_amount'] !== null && $bankCur === $entryCur) {
         $value = (float) $row['original_amount'];
     } elseif ($bankCur === 'AED') {
         $value = $aed;
     } else {
         $value = $aed / fxToAed($pdo, $bankCur);
     }
-    return BalanceHelper::adjust($pdo, $tenantId, $userId, $bankId, $sign * round($value, 2), $row['expense_date']);
+    $applied = round($value, 2);
+    return BalanceHelper::adjust($pdo, $tenantId, $userId, $bankId, $sign * $applied, $row['expense_date']);
+}
+
+/** Strict Y-m-d check (rejects 2026-02-31) within 2000-2100; returns the date or null. */
+function expenseStrictDate(string $raw): ?string
+{
+    $d = DateTime::createFromFormat('!Y-m-d', $raw);
+    if (!$d || $d->format('Y-m-d') !== $raw) {
+        return null;
+    }
+    $y = (int) $d->format('Y');
+    return ($y < 2000 || $y > 2100) ? null : $raw;
 }
 
 /** fxPrewarm() only when one of these tenant expenses actually moved a bank balance. */
@@ -103,7 +119,7 @@ function expenseReverseBalances(PDO $pdo, int $tenantId, int $userId, array $ids
         return;
     }
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
-    $stmt = $pdo->prepare("SELECT amount, original_amount, currency, expense_date, balance_bank_id FROM expenses
+    $stmt = $pdo->prepare("SELECT amount, original_amount, balance_amount, currency, expense_date, balance_bank_id FROM expenses
                            WHERE id IN ($placeholders) AND tenant_id = ? AND balance_bank_id IS NOT NULL FOR UPDATE");
     $stmt->execute(array_merge($ids, [$tenantId]));
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -296,12 +312,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $cardMap[(int)$c['id']] = $c;
     }
 
-    $validateDate = function ($raw) {
-        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw) || !strtotime($raw)) return null;
-        $y = (int)substr($raw, 0, 4);
-        if ($y < 2000 || $y > 2100) return null;
-        return $raw;
-    };
+    $validateDate = fn($raw) => expenseStrictDate((string) $raw);
 
     // --- Pass 1: normalise + validate every complete row (all-or-nothing) ---
     $prepared = [];
@@ -340,6 +351,13 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             $final_amount    = round($amount * $exchange_rate, 2);
         }
 
+        // Cashback is typed in the entry currency; store it in AED like the amount
+        $cashbackRaw = floatval($row['cashback_earned'] ?? 0);
+        if ($cashbackRaw < 0) {
+            Flash::redirect($addUrl, 'error', "Cashback cannot be negative on \"$desc\"");
+        }
+        $cashbackAed = round($cashbackRaw * $exchange_rate, 2);
+
         // Split shares (AED) for this row; equal splits are computed per row
         $shares = null;
         if ($split !== null) {
@@ -357,7 +375,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             'tags'            => trim((string) ($row['tags'] ?? '')),
             'is_sub'          => isset($row['is_subscription']) ? 1 : 0,
             'is_fixed'        => isset($row['is_fixed']) ? 1 : 0,
-            'cashback'        => floatval($row['cashback_earned'] ?? 0),
+            'cashback'        => $cashbackAed,
             'date'            => $rowDate,
             'card_id'         => $row_card_id,
             'shares'          => $shares,
@@ -384,21 +402,22 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $pdo->exec("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
         $pdo->beginTransaction();
 
-        $stmt = $pdo->prepare("INSERT INTO expenses (user_id, tenant_id, spent_by_user_id, amount, description, category, payment_method, card_id, balance_bank_id, expense_date, is_subscription, currency, original_amount, tags, cashback_earned, is_fixed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt = $pdo->prepare("INSERT INTO expenses (user_id, tenant_id, spent_by_user_id, amount, description, category, payment_method, card_id, balance_bank_id, expense_date, is_subscription, currency, original_amount, tags, cashback_earned, is_fixed, balance_amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
         $saved = 0;
         foreach ($prepared as $i => $p) {
             // Deduct from the debit card's bank (current balance, even for back-dated rows) and remember the bank for reversal
             $balance_bank_id = null;
+            $balance_amount = null;
             $bank_id = $rowBank[$i] ?? null;
             if ($bank_id) {
                 $moveRow = ['amount' => $p['amount'], 'original_amount' => $p['original_amount'], 'currency' => $currency, 'expense_date' => $p['date']];
-                if (expenseMoveBalance($pdo, (int) $tenant_id, (int) $user_id, $bank_id, $moveRow, -1)) {
+                if (expenseMoveBalance($pdo, (int) $tenant_id, (int) $user_id, $bank_id, $moveRow, -1, $balance_amount)) {
                     $balance_bank_id = $bank_id;
                 }
             }
 
-            $stmt->execute([$user_id, $tenant_id, $spent_by, $p['amount'], $p['desc'], $p['category'], $method, $p['card_id'], $balance_bank_id, $p['date'], $p['is_sub'], $currency, $p['original_amount'], $p['tags'], $p['cashback'], $p['is_fixed']]);
+            $stmt->execute([$user_id, $tenant_id, $spent_by, $p['amount'], $p['desc'], $p['category'], $method, $p['card_id'], $balance_bank_id, $p['date'], $p['is_sub'], $currency, $p['original_amount'], $p['tags'], $p['cashback'], $p['is_fixed'], $balance_amount]);
             if ($p['shares']) {
                 expenseWriteSplits($pdo, (int) $tenant_id, (int) $pdo->lastInsertId(), $p['shares'], false);
             }
@@ -475,16 +494,34 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             if ($tpl) {
                 $today = date('Y-m-d');
                 $desc = $tpl['description'];
+
+                // Already logged this month? (same name, any case) -> refuse a second charge
+                $dupStmt = $pdo->prepare("SELECT 1 FROM expenses WHERE tenant_id = ? AND is_subscription = 1 AND LOWER(description) = LOWER(?) AND expense_date >= ? AND expense_date <= LAST_DAY(?) LIMIT 1");
+                $dupStmt->execute([$tenant_id, $desc, date('Y-m-01'), $today]);
+                if ($dupStmt->fetchColumn()) {
+                    Flash::redirect('subscriptions.php', 'error', "\"$desc\" is already logged this month");
+                }
+
+                // Foreign-currency subscriptions are re-converted at today's rate
+                $tplCur = strtoupper($tpl['currency'] ?: 'AED');
+                if ($tplCur !== 'AED' && $tpl['original_amount'] !== null) {
+                    fxPrewarm($pdo, (int) $tenant_id, [$tplCur]);
+                    $tpl['amount'] = round((float) $tpl['original_amount'] * fxToAed($pdo, $tplCur), 2);
+                }
                 $amount = $tpl['amount'];
 
                 // Debit card subscriptions are deducted from the card's bank (logic mirrored from add_expense)
                 $bank_id = null;
                 $card_id = null;
-                if ($tpl['payment_method'] === 'Card' && $tpl['card_id']) {
+                if ($tpl['payment_method'] === 'Card') {
                     $cStmt = $pdo->prepare("SELECT id, bank_name, card_type, bank_id FROM cards WHERE id = ? AND tenant_id = ?");
-                    $cStmt->execute([$tpl['card_id'], $tenant_id]);
+                    $cStmt->execute([$tpl['card_id'] ?: 0, $tenant_id]);
                     $card_info = $cStmt->fetch() ?: null;
-                    $card_id = $card_info ? (int) $card_info['id'] : null;
+                    if (!$card_info) {
+                        // Never log a Card expense without a card: the card was deleted
+                        Flash::redirect('subscriptions.php', 'error', "The card for \"$desc\" no longer exists. Edit the subscription to pick another card.");
+                    }
+                    $card_id = (int) $card_info['id'];
                     $bank_id = expenseCardBankId($pdo, (int) $tenant_id, $card_info);
                     if ($bank_id) {
                         fxPrewarm($pdo, (int) $tenant_id);
@@ -494,9 +531,10 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
                 $pdo->beginTransaction();
 
                 $balance_bank_id = null;
+                $balance_amount = null;
                 if ($bank_id) {
                     $moveRow = ['amount' => $tpl['amount'], 'original_amount' => $tpl['original_amount'], 'currency' => $tpl['currency'], 'expense_date' => $today];
-                    if (expenseMoveBalance($pdo, (int) $tenant_id, (int) $user_id, $bank_id, $moveRow, -1)) {
+                    if (expenseMoveBalance($pdo, (int) $tenant_id, (int) $user_id, $bank_id, $moveRow, -1, $balance_amount)) {
                         $balance_bank_id = $bank_id;
                     }
                 }
@@ -507,8 +545,8 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
                         user_id, tenant_id, spent_by_user_id, amount, description,
                         category, payment_method, card_id, balance_bank_id, expense_date,
                         is_subscription, currency, original_amount, tags,
-                        cashback_earned, is_fixed
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        cashback_earned, is_fixed, balance_amount
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
                 $insStmt->execute([
                     $user_id,
@@ -526,7 +564,8 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
                     $tpl['original_amount'],
                     $tpl['tags'],
                     $tpl['cashback_earned'],
-                    $tpl['is_fixed']
+                    $tpl['is_fixed'],
+                    $balance_amount
                 ]);
 
                 $pdo->commit();
@@ -596,7 +635,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         Flash::redirect($editUrl, 'error', $msg);
     };
 
-    $oldStmt = $pdo->prepare("SELECT category, balance_bank_id, user_id, spent_by_user_id FROM expenses WHERE id = ? AND tenant_id = ?");
+    $oldStmt = $pdo->prepare("SELECT category, balance_bank_id, user_id, spent_by_user_id, payment_method, card_id FROM expenses WHERE id = ? AND tenant_id = ?");
     $oldStmt->execute([$expense_id, $tenant_id]);
     $old = $oldStmt->fetch();
     if (!$old) {
@@ -605,24 +644,23 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
 
     $amount = floatval($_POST['amount'] ?? 0);
     $dateRaw = (string) ($_POST['expense_date'] ?? '');
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateRaw) || !strtotime($dateRaw)) {
-        $fail("Invalid date format");
+    $date = expenseStrictDate($dateRaw);
+    if ($date === null) {
+        $fail("Invalid date");
     }
-    $year_check = (int)substr($dateRaw, 0, 4);
-    if ($year_check < 2000 || $year_check > 2100) {
-        $fail("Invalid year");
-    }
-    $date = $dateRaw;
     $desc = trim((string) ($_POST['description'] ?? ''));
     $category = trim((string) ($_POST['category'] ?? ''));
     $method = trim((string) ($_POST['payment_method'] ?? ''));
     $tags = trim((string) ($_POST['tags'] ?? ''));
     $is_sub = isset($_POST['is_subscription']) && $_POST['is_subscription'] == '1' ? 1 : 0;
-    $cashback = floatval($_POST['cashback_earned'] ?? 0);
+    $cashbackRaw = floatval($_POST['cashback_earned'] ?? 0);
     $is_fixed = isset($_POST['is_fixed']) && $_POST['is_fixed'] == '1' ? 1 : 0;
 
     if ($amount <= 0) {
         $fail("Amount must be greater than zero");
+    }
+    if ($cashbackRaw < 0) {
+        $fail("Cashback cannot be negative");
     }
     if ($desc === '') {
         $fail("Description is required");
@@ -642,6 +680,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     }
     $final_amount = round($amount, 2);
     $original_amount = null;
+    $exchange_rate = 1.0;
 
     if ($currency !== 'AED') {
         $rateRaw = trim((string) ($_POST['exchange_rate'] ?? ''));
@@ -652,6 +691,8 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $original_amount = $amount;
         $final_amount = round($amount * $exchange_rate, 2);
     }
+    // Cashback is typed in the entry currency; store it in AED like the amount
+    $cashback = round($cashbackRaw * $exchange_rate, 2);
 
     // The card must belong to this tenant
     $card_id = null;
@@ -686,16 +727,24 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     try {
-        // If this expense moved a bank balance, prepare the FX rates before the transaction
-        $newBankId = null;
-        if ($old['balance_bank_id'] !== null) {
-            $newBankId = expenseCardBankId($pdo, (int) $tenant_id, $card_info);
-            fxPrewarm($pdo, (int) $tenant_id);
+        // The new version may draw from a debit card's bank even if the old one never did
+        // (Cash / credit card -> debit card). An old debit-card row that was never linked
+        // (deduction was skipped or predates balance_bank_id) stays unlinked.
+        $newBankId = expenseCardBankId($pdo, (int) $tenant_id, $card_info);
+        if ($newBankId !== null && $old['balance_bank_id'] === null && $old['payment_method'] === 'Card' && $old['card_id']) {
+            $oCard = $pdo->prepare("SELECT id, bank_name, card_type, bank_id FROM cards WHERE id = ? AND tenant_id = ?");
+            $oCard->execute([$old['card_id'], $tenant_id]);
+            if (expenseCardBankId($pdo, (int) $tenant_id, $oCard->fetch() ?: null) !== null) {
+                $newBankId = null;
+            }
+        }
+        if ($old['balance_bank_id'] !== null || $newBankId !== null) {
+            fxPrewarm($pdo, (int) $tenant_id, [$currency]);
         }
 
         $pdo->beginTransaction();
 
-        $rowStmt = $pdo->prepare("SELECT amount, original_amount, currency, expense_date, balance_bank_id FROM expenses WHERE id = ? AND tenant_id = ? FOR UPDATE");
+        $rowStmt = $pdo->prepare("SELECT amount, original_amount, balance_amount, currency, expense_date, balance_bank_id FROM expenses WHERE id = ? AND tenant_id = ? FOR UPDATE");
         $rowStmt->execute([$expense_id, $tenant_id]);
         $current = $rowStmt->fetch(PDO::FETCH_ASSOC);
         if (!$current) {
@@ -703,14 +752,15 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             Flash::redirect('expenses.php', 'error', 'Expense not found');
         }
 
-        // Reverse the original deduction, then deduct the new amount from the (debit) card's bank.
-        // Legacy rows (balance_bank_id NULL) were never linked to a balance and are left alone.
+        // Reverse the original deduction (if any), then deduct the new amount from the (debit) card's bank.
+        if ($current['balance_bank_id'] !== null) {
+            expenseMoveBalance($pdo, (int) $tenant_id, (int) $user_id, (int) $current['balance_bank_id'], $current, +1);
+        }
         $balance_bank_id = null;
-        if ($current['balance_bank_id'] !== null
-            && expenseMoveBalance($pdo, (int) $tenant_id, (int) $user_id, (int) $current['balance_bank_id'], $current, +1)
-            && $newBankId !== null) {
+        $balance_amount = null;
+        if ($newBankId !== null) {
             $newRow = ['amount' => $final_amount, 'original_amount' => $original_amount, 'currency' => $currency, 'expense_date' => $date];
-            if (expenseMoveBalance($pdo, (int) $tenant_id, (int) $user_id, $newBankId, $newRow, -1)) {
+            if (expenseMoveBalance($pdo, (int) $tenant_id, (int) $user_id, $newBankId, $newRow, -1, $balance_amount)) {
                 $balance_bank_id = $newBankId;
             }
         }
@@ -719,7 +769,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             amount = ?, description = ?, category = ?, payment_method = ?,
             card_id = ?, balance_bank_id = ?, expense_date = ?, is_subscription = ?,
             currency = ?, original_amount = ?, tags = ?,
-            cashback_earned = ?, is_fixed = ?
+            cashback_earned = ?, is_fixed = ?, balance_amount = ?
             WHERE id = ? AND tenant_id = ?");
         $stmt->execute([
             $final_amount,
@@ -735,6 +785,7 @@ if ($action == 'add_expense' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             $tags,
             $cashback,
             $is_fixed,
+            $balance_amount,
             $expense_id,
             $tenant_id
         ]);

@@ -64,8 +64,8 @@ if ($action == 'export_expenses') {
     $category_filter = filter_input(INPUT_GET, 'category');
     $payment_filter = filter_input(INPUT_GET, 'payment_method');
     $card_filter = filter_input(INPUT_GET, 'card_id', FILTER_VALIDATE_INT);
-    $start_date = filter_input(INPUT_GET, 'start');
-    $end_date = filter_input(INPUT_GET, 'end');
+    $start_date = filter_input(INPUT_GET, 'start', FILTER_VALIDATE_REGEXP, ['options' => ['regexp' => '/^\d{4}-\d{2}-\d{2}$/']]) ?: null;
+    $end_date = filter_input(INPUT_GET, 'end', FILTER_VALIDATE_REGEXP, ['options' => ['regexp' => '/^\d{4}-\d{2}-\d{2}$/']]) ?: null;
 
     $query = "SELECT e.*, c.bank_name, c.card_name
 FROM expenses e
@@ -158,8 +158,8 @@ AND YEAR(e.expense_date) = :year";
     $month = export_month();
     $year = export_year();
     $category_filter = filter_input(INPUT_GET, 'category');
-    $start_date = filter_input(INPUT_GET, 'start');
-    $end_date = filter_input(INPUT_GET, 'end');
+    $start_date = filter_input(INPUT_GET, 'start', FILTER_VALIDATE_REGEXP, ['options' => ['regexp' => '/^\d{4}-\d{2}-\d{2}$/']]) ?: null;
+    $end_date = filter_input(INPUT_GET, 'end', FILTER_VALIDATE_REGEXP, ['options' => ['regexp' => '/^\d{4}-\d{2}-\d{2}$/']]) ?: null;
 
     $query = "SELECT income_date, description, category, amount, currency, is_recurring FROM income WHERE tenant_id = :tenant_id AND MONTH(income_date) = :month AND YEAR(income_date) = :year";
     $params = ['tenant_id' => $_SESSION['tenant_id'], 'month' => $month, 'year' => $year];

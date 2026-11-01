@@ -57,12 +57,52 @@ function archiveTable(PDO $pdo, string $table, string $archive, string $dateColu
     }
 }
 
+/**
+ * Copies the split rows of expenses older than the cutoff into expense_splits_archive. Must run
+ * BEFORE the expenses are archived: expense_splits.expense_id has ON DELETE CASCADE, so deleting an
+ * expense would otherwise destroy its splits. Re-runnable: rows already archived are skipped.
+ */
+function archiveSplits(PDO $pdo, string $cutoff): int
+{
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `expense_splits_archive` LIKE `expense_splits`");
+
+    $liveCols    = $pdo->query("SHOW COLUMNS FROM `expense_splits`")->fetchAll(PDO::FETCH_COLUMN);
+    $archiveCols = $pdo->query("SHOW COLUMNS FROM `expense_splits_archive`")->fetchAll(PDO::FETCH_COLUMN);
+    $cols = array_values(array_intersect($liveCols, $archiveCols));
+    if (!in_array('id', $cols, true)) {
+        throw new RuntimeException('Archive table expense_splits_archive has no id column');
+    }
+    $colList = implode(', ', array_map(fn($c) => "s.`$c`", $cols));
+    $insList = implode(', ', array_map(fn($c) => "`$c`", $cols));
+
+    $stmt = $pdo->prepare(
+        "INSERT INTO `expense_splits_archive` ($insList)
+         SELECT $colList FROM `expense_splits` s
+           JOIN `expenses` e ON e.id = s.expense_id
+          WHERE e.expense_date < ?
+            AND s.id NOT IN (SELECT id FROM `expense_splits_archive`)"
+    );
+    $stmt->execute([$cutoff]);
+    return $stmt->rowCount();
+}
+
 try {
+    // Splits first (see archiveSplits); card payments and settlements use the same cutoff as the
+    // expenses they pay for / settle, so card outstanding and split balances stay consistent.
+    $moved_splits = archiveSplits($pdo, $cutoff_date);
+    echo $moved_splits > 0 ? "Copied $moved_splits expense splits to archive.\n" : "No old expense splits to archive.\n";
+
     $moved_expenses = archiveTable($pdo, 'expenses', 'expenses_archive', 'expense_date', $cutoff_date);
     echo $moved_expenses > 0 ? "Moved $moved_expenses expenses to archive.\n" : "No old expenses to archive.\n";
 
     $moved_income = archiveTable($pdo, 'income', 'income_archive', 'income_date', $cutoff_date);
     echo $moved_income > 0 ? "Moved $moved_income income records to archive.\n" : "No old income to archive.\n";
+
+    $moved_payments = archiveTable($pdo, 'card_payments', 'card_payments_archive', 'payment_date', $cutoff_date);
+    echo $moved_payments > 0 ? "Moved $moved_payments card payments to archive.\n" : "No old card payments to archive.\n";
+
+    $moved_settlements = archiveTable($pdo, 'settlements', 'settlements_archive', 'settled_on', $cutoff_date);
+    echo $moved_settlements > 0 ? "Moved $moved_settlements settlements to archive.\n" : "No old settlements to archive.\n";
 
     if ($moved_expenses > 0 || $moved_income > 0) {
         $pdo->query("OPTIMIZE TABLE expenses, income")->fetchAll();

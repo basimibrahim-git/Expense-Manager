@@ -43,6 +43,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         Flash::redirect('zakath_calculator.php', 'error', 'Please give this calculation a name.');
     }
 
+    // Filed under the cycle whose due date just passed when that cycle has no paid calculation yet
+    // (grace until the next due date); otherwise under the upcoming due date.
+    $filingDue = $hawl ? ZakathHelper::filingDueDate($pdo, $tenant_id, $hawl) : null;
+
     // Server-side calculation; the nisab comes from the server's prices, never the form.
     $calc = ZakathHelper::calculate($cash, $gold, $invest, $recv, $liab, $nisab['value']);
 
@@ -55,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user_id'], $tenant_id, $cycle, $cash, $gold, $invest, $recv, $liab,
             $calc['net'], $nisab['basis'], $nisab['value'],
             $prices['gold']['aed_per_gram'], $prices['silver']['aed_per_gram'],
-            $calc['zakat'], $hawl['due'] ?? null,
+            $calc['zakat'], $filingDue,
         ]);
     } catch (Throwable $e) {
         error_log('Zakath calculation save failed: ' . $e->getMessage());
@@ -70,8 +74,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $auto = ZakathHelper::autoAssets($pdo, $tenant_id);
 
+$default_due   = $hawl ? ZakathHelper::filingDueDate($pdo, $tenant_id, $hawl) : null;
 $default_cycle = $hawl
-    ? 'Zakath ' . date('Y', strtotime($hawl['due'])) . ' (due ' . date('M d, Y', strtotime($hawl['due'])) . ')'
+    ? 'Zakath ' . date('Y', strtotime($default_due)) . ' (due ' . date('M d, Y', strtotime($default_due)) . ')'
     : 'Ramadan ' . date('Y');
 
 $fields = [
@@ -177,7 +182,7 @@ Layout::sidebar();
                             <input type="text" name="cycle_name" id="cycleName" class="form-control rounded-pill px-3" maxlength="100"
                                 value="<?php echo Html::e($default_cycle); ?>" required>
                             <?php if ($hawl): ?>
-                                <div class="form-text mt-1 text-muted">Saved against the hawl ending <?php echo Html::e(date('M d, Y', strtotime($hawl['due']))); ?>.</div>
+                                <div class="form-text mt-1 text-muted">Saved against the hawl ending <?php echo Html::e(date('M d, Y', strtotime($default_due))); ?>.</div>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -301,8 +306,8 @@ Layout::sidebar();
                         − debts due within the next 12 months.</li>
                     <li>If net wealth is <strong>at or above the nisab</strong>, Zakath is <strong>2.5% of the whole amount</strong> (not only the part above nisab).
                         Below the nisab, nothing is due.</li>
-                    <li><strong>Hawl</strong>: Zakath is due once a lunar year (354 days) has passed since your wealth first reached the nisab.
-                        Each due date is your hawl start date + 354 days, repeating.</li>
+                    <li><strong>Hawl</strong>: Zakath is due once a lunar (Hijri) year has passed since your wealth first reached the nisab.
+                        Each due date is the Hijri anniversary of your hawl start date (Umm al-Qura calendar), repeating.</li>
                 </ol>
                 <p class="text-muted mb-0">This is a calculation aid, not a fatwa. Rulings differ between schools (e.g. on jewellery worn for personal use
                     and on deducting long-term debts) — follow the scholar you trust and adjust the figures above accordingly.</p>

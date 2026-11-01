@@ -38,6 +38,9 @@ if ($configured && $can_manage && !$returned) {
         $client      = new LeanClient();
         $customer_id = LeanSync::ensureCustomer($pdo, $client, $tenant_id);
         $return_url  = Notifier::appUrl('lean_return.php');
+        if ($return_url === '') {
+            throw new RuntimeException('APP_URL is not set in .env, so the bank cannot redirect back to the app.');
+        }
         $sdk_config  = [
             'app_token'            => LeanClient::appToken(),
             'access_token'         => $client->customerToken($customer_id), // customer-scoped, meant for the browser
@@ -55,6 +58,9 @@ if ($configured && $can_manage && !$returned) {
     } catch (PDOException $e) {
         error_log('Lean connect DB: ' . $e->getMessage());
         $error = 'Open banking is not set up yet (database tables missing).';
+    } catch (RuntimeException $e) {
+        error_log('Lean connect: ' . $e->getMessage());
+        $error = $e->getMessage();
     }
 }
 

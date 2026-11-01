@@ -4,6 +4,7 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
 use App\Helpers\Flash;
+use App\Helpers\ExchangeRateHelper;
 
 Bootstrap::init();
 
@@ -26,6 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
 $tenant_id = (int) $_SESSION['tenant_id'];
 $allowed_account_types = ['Savings', 'Current', 'Salary'];
+$allowed_currencies = ['AED', 'INR'];
 
 // ADD BANK
 if ($action == 'add_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -33,7 +35,10 @@ if ($action == 'add_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $account_type = trim($_POST['account_type'] ?? 'Current');
     $account_number = trim($_POST['account_number'] ?? '');
     $iban = trim($_POST['iban'] ?? '');
-    $currency = trim($_POST['currency'] ?? 'AED');
+    $currency = strtoupper(trim($_POST['currency'] ?? 'AED'));
+    if (!in_array($currency, $allowed_currencies, true)) {
+        Flash::redirect('add_bank.php', 'error', 'Currency must be AED or INR');
+    }
     $notes = trim($_POST['notes'] ?? '');
     $is_default = isset($_POST['is_default']) && $_POST['is_default'] == '1' ? 1 : 0;
     if (!in_array($account_type, $allowed_account_types, true)) {
@@ -80,7 +85,10 @@ elseif ($action == 'update_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
     $account_type = trim($_POST['account_type'] ?? 'Current');
     $account_number = trim($_POST['account_number'] ?? '');
     $iban = trim($_POST['iban'] ?? '');
-    $currency = trim($_POST['currency'] ?? 'AED');
+    $currency = strtoupper(trim($_POST['currency'] ?? 'AED'));
+    if (!in_array($currency, $allowed_currencies, true)) {
+        Flash::redirect("edit_bank.php?id=$bank_id", 'error', 'Currency must be AED or INR');
+    }
     $notes = trim($_POST['notes'] ?? '');
     $is_default = isset($_POST['is_default']) && $_POST['is_default'] == '1' ? 1 : 0;
     if (!in_array($account_type, $allowed_account_types, true)) {
@@ -95,9 +103,11 @@ elseif ($action == 'update_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         $pdo->beginTransaction();
 
         // Any family member with edit permission may manage the tenant's banks
-        $own = $pdo->prepare("SELECT bank_name FROM banks WHERE id = ? AND tenant_id = ? FOR UPDATE");
+        $own = $pdo->prepare("SELECT bank_name, currency FROM banks WHERE id = ? AND tenant_id = ? FOR UPDATE");
         $own->execute([$bank_id, $tenant_id]);
-        $old_name = $own->fetchColumn();
+        $oldRow = $own->fetch(PDO::FETCH_ASSOC);
+        $old_name = $oldRow ? $oldRow['bank_name'] : false;
+        $old_currency = $oldRow ? strtoupper($oldRow['currency'] ?: 'AED') : $currency;
         if ($old_name === false) {
             $pdo->rollBack();
             Flash::redirect('my_banks.php', 'error', 'Bank not found');
@@ -115,6 +125,13 @@ elseif ($action == 'update_bank' && $_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($old_name !== $bank_name) {
             $pdo->prepare("UPDATE bank_balances SET bank_id = ? WHERE tenant_id = ? AND bank_id IS NULL AND bank_name = ?")
                 ->execute([$bank_id, $tenant_id, $old_name]);
+        }
+
+        // A currency change re-expresses existing snapshots at the current rate (history is not re-valued)
+        if ($old_currency !== $currency) {
+            $rate = ExchangeRateHelper::getRate($old_currency, $currency, $pdo);
+            $pdo->prepare("UPDATE bank_balances SET amount = ROUND(amount * ?, 2), currency = ? WHERE tenant_id = ? AND (bank_id = ? OR (bank_id IS NULL AND bank_name = ?))")
+                ->execute([$rate, $currency, $tenant_id, $bank_id, $bank_name]);
         }
 
         $pdo->commit();
@@ -139,11 +156,17 @@ elseif ($action == 'delete' && $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_P
         try {
             $pdo->beginTransaction();
 
-            $stmt = $pdo->prepare("SELECT id FROM banks WHERE id = ? AND tenant_id = ? FOR UPDATE");
+            $stmt = $pdo->prepare("SELECT bank_name FROM banks WHERE id = ? AND tenant_id = ? FOR UPDATE");
             $stmt->execute([$bank_id, $tenant_id]);
-            if ($stmt->fetchColumn()) {
+            $bankName = $stmt->fetchColumn();
+            if ($bankName !== false) {
                 // Unlink cards first
                 $pdo->prepare("UPDATE cards SET bank_id = NULL WHERE bank_id = ? AND tenant_id = ?")->execute([$bank_id, $tenant_id]);
+                // Remove the bank's balance snapshots and clear income/expense links to it
+                $pdo->prepare("DELETE FROM bank_balances WHERE tenant_id = ? AND (bank_id = ? OR (bank_id IS NULL AND bank_name = ?))")->execute([$tenant_id, $bank_id, $bankName]);
+                $pdo->prepare("UPDATE expenses SET balance_bank_id = NULL WHERE balance_bank_id = ? AND tenant_id = ?")->execute([$bank_id, $tenant_id]);
+                $pdo->prepare("UPDATE income SET balance_bank_id = NULL WHERE balance_bank_id = ? AND tenant_id = ?")->execute([$bank_id, $tenant_id]);
+                $pdo->prepare("UPDATE card_payments SET bank_id = NULL WHERE bank_id = ? AND tenant_id = ?")->execute([$bank_id, $tenant_id]);
 
                 $stmt = $pdo->prepare("DELETE FROM banks WHERE id = ? AND tenant_id = ?");
                 $stmt->execute([$bank_id, $tenant_id]);

@@ -64,9 +64,10 @@ check('Jan 31 statement, due 25 → Feb 25',        '2026-02-25', C::dueDateFor(
 check('Jan 31 statement, due 31 → Feb 28',        '2026-02-28', C::dueDateFor('2026-01-31', 31, 31));
 check('Jan 31 statement, due 30 → Feb 29 leap',   '2028-02-29', C::dueDateFor('2028-01-31', 31, 30));
 check('Feb 28 stmt (day 31), due 30 → Mar 30',    '2026-03-30', C::dueDateFor('2026-02-28', 31, 30));
-check('Feb 28 stmt (day 29), due 30 → Mar 30',    '2026-03-30', C::dueDateFor('2026-02-28', 29, 30));
-check('Feb 29 stmt leap (day 29), due 30 → Mar 30', '2028-03-30', C::dueDateFor('2028-02-29', 29, 30));
-check('Leap: Feb 29 stmt (day 29), due 31 → Mar 31', '2028-03-31', C::dueDateFor('2028-02-29', 29, 31));
+check('Feb 28 stmt (day 29), due 30 → Mar 1 (gap kept)', '2026-03-01', C::dueDateFor('2026-02-28', 29, 30));
+check('Feb 28 stmt (day 28), due 30 → Mar 2',      '2026-03-02', C::dueDateFor('2026-02-28', 28, 30));
+check('Feb 29 stmt leap (day 29), due 30 → Mar 1', '2028-03-01', C::dueDateFor('2028-02-29', 29, 30));
+check('Leap: Feb 29 stmt (day 29), due 31 → Mar 2', '2028-03-02', C::dueDateFor('2028-02-29', 29, 31));
 check('Dec 20 statement, due 10 → Jan 10 next yr', '2027-01-10', C::dueDateFor('2026-12-20', 20, 10));
 check('Dec 1 statement, due 25 → Dec 25',         '2026-12-25', C::dueDateFor('2026-12-01', 1, 25));
 

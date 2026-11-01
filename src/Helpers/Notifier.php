@@ -68,7 +68,7 @@ class Notifier
     public static function wrap(string $title, string $bodyHtml, ?string $buttonUrl = null, string $buttonText = 'Open Expense Manager'): string
     {
         $button = '';
-        if ($buttonUrl !== null) {
+        if ($buttonUrl !== null && $buttonUrl !== '') {
             $button = '<p style="margin:24px 0 0;"><a href="' . Html::e($buttonUrl) . '" style="display:inline-block;padding:10px 18px;background:#4f46e5;color:#ffffff;border-radius:6px;text-decoration:none;font-weight:600;">'
                 . Html::e($buttonText) . '</a></p>';
         }
@@ -82,13 +82,16 @@ class Notifier
     }
 
     /**
-     * Absolute URL to a page of the app (for email buttons). Uses APP_URL when set.
+     * Absolute URL to a page of the app (for email buttons). Uses APP_URL only.
+     * Never derived from the request Host header (host-header poisoning): when APP_URL
+     * is not configured an error is logged and '' is returned, so callers must skip the link.
      */
     public static function appUrl(string $page = 'dashboard.php'): string
     {
         $appUrl = rtrim($_ENV['APP_URL'] ?? '', '/');
         if ($appUrl === '') {
-            $appUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . rtrim(BASE_URL, '/');
+            error_log('APP_URL is not set in .env; refusing to build an absolute link (' . $page . ')');
+            return '';
         }
         return $appUrl . '/' . ltrim($page, '/');
     }

@@ -12,6 +12,7 @@ use App\Core\Bootstrap;
 use App\Helpers\SecurityHelper;
 use App\Helpers\AuditHelper;
 use App\Helpers\Flash;
+use App\Helpers\BalanceHelper;
 
 Bootstrap::init();
 
@@ -37,14 +38,12 @@ $dt = DateTime::createFromFormat('!Y-m-d', $dateRaw);
 if (!$dt || $dt->format('Y-m-d') !== $dateRaw) {
     Flash::redirect($back, 'error', 'Invalid date');
 }
-$date = $dateRaw;
+$date = $dt->format('Y-m-t'); // adjustments are always dated month end
 $back .= '?month=' . (int) $dt->format('n') . '&year=' . (int) $dt->format('Y');
 
-$diffRaw = $_POST['difference'] ?? '';
-if (!is_numeric($diffRaw) || !is_finite((float) $diffRaw) || abs((float) $diffRaw) >= 1e12) {
-    Flash::redirect($back, 'error', 'Invalid difference');
-}
-$diff = round((float) $diffRaw, 2);
+// Recompute the gap server-side; the posted value is not trusted
+$recon = BalanceHelper::monthlyReconciliation($pdo, $tenant_id, (int) $dt->format('n'), (int) $dt->format('Y'));
+$diff  = round($recon['actual'] - ($recon['opening'] + $recon['income'] - $recon['expense']), 2);
 
 if ($action !== 'auto_fix') {
     Flash::redirect($back, 'error', 'Unknown action');
@@ -58,6 +57,14 @@ if (abs($diff) < 0.01) {
 $desc = 'Reconciliation Adjustment (' . $dt->format('F Y') . ')';
 
 try {
+    // Block double submission: an adjustment for this month already exists
+    $dup = $pdo->prepare("SELECT (SELECT COUNT(*) FROM income WHERE tenant_id = ? AND category = 'Adjustment' AND description = ? AND income_date = ?)
+        + (SELECT COUNT(*) FROM expenses WHERE tenant_id = ? AND category = 'Adjustment' AND description = ? AND expense_date = ?)");
+    $dup->execute([$tenant_id, $desc, $date, $tenant_id, $desc, $date]);
+    if ((int) $dup->fetchColumn() > 0) {
+        Flash::redirect($back, 'error', 'An adjustment for this month was already recorded. Delete it first to re-run Auto-Fix.');
+    }
+
     if ($diff > 0) {
         // Surplus -> Income
         $stmt = $pdo->prepare("INSERT INTO income (user_id, tenant_id, amount, description, category, income_date, currency) VALUES (?, ?, ?, ?, 'Adjustment', ?, 'AED')");

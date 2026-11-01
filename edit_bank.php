@@ -81,7 +81,7 @@ Layout::sidebar();
                     <div class="mb-3">
                         <label class="form-label fw-bold text-muted small" for="currency">Currency</label>
                         <select name="currency" id="currency" class="form-select rounded-pill px-3">
-                            <?php foreach (['AED', 'USD', 'EUR', 'GBP', 'INR'] as $cur): ?>
+                            <?php foreach (['AED', 'INR'] as $cur): ?>
                                 <option value="<?php echo $cur; ?>" <?php echo ($bank['currency'] ?? 'AED') == $cur ? 'selected' : ''; ?>>
                                     <?php echo $cur; ?>
                                 </option>

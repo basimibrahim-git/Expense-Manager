@@ -449,7 +449,8 @@ function getCircleOffset($pct) {
         <?php
         $over_cats = [];
         foreach ($cat_budgets as $cat => $limit) {
-            if (($expenses[$cat] ?? 0) > $limit) {
+            // Same rule as the alert emails (BudgetAlertHelper): spent % of target >= the over threshold
+            if ((float) $limit > 0 && ((float) ($expenses[$cat] ?? 0) / (float) $limit) * 100 >= $over_pct) {
                 $over_cats[] = $cat;
             }
         }

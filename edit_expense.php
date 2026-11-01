@@ -43,6 +43,12 @@ if (!$has_original) {
 $entry_amount = $has_original ? $expense['original_amount'] : $expense['amount'];
 $entry_rate = $has_original ? round((float) $expense['amount'] / (float) $expense['original_amount'], 6) : '';
 
+// Cashback is stored in AED; show it in the entry currency (the form converts it back with the rate)
+$entry_cashback = (float) ($expense['cashback_earned'] ?? 0);
+if ($has_original && $entry_rate > 0) {
+    $entry_cashback = round($entry_cashback / (float) $entry_rate, 2);
+}
+
 $expense_ts = strtotime($expense['expense_date']);
 
 // ---- Family split (needs the family_split migration and at least two members) ----
@@ -201,7 +207,7 @@ Layout::sidebar();
                     <div class="col-md-6 mb-3">
                         <label class="form-label" for="cashback_earned">Rewards Earned</label>
                         <input type="number" name="cashback_earned" id="cashback_earned" class="form-control" step="0.01"
-                               value="<?php echo Html::e($expense['cashback_earned'] ?? 0); ?>">
+                               min="0" value="<?php echo Html::e($entry_cashback); ?>">
                     </div>
                     <div class="col-md-6 mb-3 d-flex align-items-end">
                         <div class="form-check">

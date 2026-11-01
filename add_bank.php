@@ -64,9 +64,6 @@ Layout::sidebar();
                         <label for="currency" class="form-label fw-bold text-muted small">Base Currency</label>
                         <select name="currency" id="currency" class="form-select rounded-pill px-3">
                             <option value="AED">AED - UAE Dirham</option>
-                            <option value="USD">USD - US Dollar</option>
-                            <option value="EUR">EUR - Euro</option>
-                            <option value="GBP">GBP - British Pound</option>
                             <option value="INR">INR - Indian Rupee</option>
                         </select>
                     </div>

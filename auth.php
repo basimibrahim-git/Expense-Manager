@@ -34,34 +34,50 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             `attempted_at` DATETIME NOT NULL,
             `success` TINYINT(1) NOT NULL DEFAULT 0,
             PRIMARY KEY (`id`),
-            INDEX `idx_ip_attempted` (`ip`, `attempted_at`)
+            INDEX `idx_ip_attempted` (`ip`, `attempted_at`),
+            INDEX `idx_email_attempted` (`email`, `attempted_at`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
         $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 
-        // Rate limiting: count failed attempts in last 15 minutes
-        // We limit to 5 failed attempts for the specific email OR 20 failed attempts from the same IP (NAT group safe).
-        $rateLimitEmailStmt = $pdo->prepare(
+        // Rate limiting. Atomic: the attempt is recorded FIRST (one INSERT), then counted, so
+        // parallel requests cannot all slip under the limit. It is removed again on success.
+        // Lock-out is keyed on email + IP, so an attacker elsewhere cannot lock the victim out;
+        // a looser per-IP limit and a very loose per-email limit (distributed guessing) also apply.
+        $pdo->prepare("INSERT INTO login_attempts (ip, email, attempted_at, success) VALUES (?, ?, NOW(), 0)")
+            ->execute([$ip, $email]);
+        $attemptId = (int) $pdo->lastInsertId();
+
+        $pairStmt = $pdo->prepare(
             "SELECT COUNT(*) FROM login_attempts
-             WHERE email = ? AND success = 0
+             WHERE ip = ? AND email = ? AND success = 0
              AND attempted_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)"
         );
-        $rateLimitEmailStmt->execute([$email]);
-        $failedEmailCount = (int) $rateLimitEmailStmt->fetchColumn();
+        $pairStmt->execute([$ip, $email]);
+        $failedPairCount = (int) $pairStmt->fetchColumn();
 
-        $rateLimitIpStmt = $pdo->prepare(
+        $ipStmt = $pdo->prepare(
             "SELECT COUNT(*) FROM login_attempts
              WHERE ip = ? AND success = 0
              AND attempted_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)"
         );
-        $rateLimitIpStmt->execute([$ip]);
-        $failedIpCount = (int) $rateLimitIpStmt->fetchColumn();
+        $ipStmt->execute([$ip]);
+        $failedIpCount = (int) $ipStmt->fetchColumn();
 
-        if ($failedEmailCount >= 5 || $failedIpCount >= 20) {
+        $emailStmt = $pdo->prepare(
+            "SELECT COUNT(*) FROM login_attempts
+             WHERE email = ? AND success = 0
+             AND attempted_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)"
+        );
+        $emailStmt->execute([$email]);
+        $failedEmailCount = (int) $emailStmt->fetchColumn();
+
+        // This attempt is already counted, hence ">" (5 real tries allowed per email+IP, 20 per IP).
+        if ($failedPairCount > 5 || $failedIpCount > 20 || $failedEmailCount > 50) {
             $blockedUser = $pdo->prepare("SELECT id, tenant_id FROM users WHERE email = ?");
             $blockedUser->execute([$email]);
             if ($blocked = $blockedUser->fetch()) {
-                AuditHelper::logFor($pdo, (int) $blocked['id'], $blocked['tenant_id'], 'login_blocked', "Rate-limited login attempt for $email from $ip (Email fails: $failedEmailCount, IP fails: $failedIpCount)");
+                AuditHelper::logFor($pdo, (int) $blocked['id'], $blocked['tenant_id'], 'login_blocked', "Rate-limited login attempt for $email from $ip (Pair fails: $failedPairCount, IP fails: $failedIpCount, Email fails: $failedEmailCount)");
             }
             Flash::redirect('index.php', 'error', "Too many failed attempts. Try again in 15 minutes.");
             exit();
@@ -72,8 +88,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $stmt->execute(['email' => $email]);
         $user = $stmt->fetch();
 
-        if ($user && password_verify($password, $user['password'])) {
-            // Record successful attempt
+        // Always run one password_verify (against a dummy hash for unknown emails) so response
+        // time does not reveal whether the account exists.
+        $dummyHash = '$2y$10$Hn5N6EMakIxjOOIAfOfgnOTrrAEuenzCoVtBx3rhUlYd6iz6oHTAK';
+        $passwordOk = password_verify($password, $user ? $user['password'] : $dummyHash);
+
+        if ($user && $passwordOk) {
+            // Replace the pre-recorded failed attempt with a successful one
+            $pdo->prepare("DELETE FROM login_attempts WHERE id = ?")->execute([$attemptId]);
             $pdo->prepare("INSERT INTO login_attempts (ip, email, attempted_at, success) VALUES (?, ?, NOW(), 1)")
                 ->execute([$ip, $email]);
 
@@ -107,10 +129,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             header("Location: dashboard.php");
             exit();
         } else {
-            // Record failed attempt
-            $pdo->prepare("INSERT INTO login_attempts (ip, email, attempted_at, success) VALUES (?, ?, NOW(), 0)")
-                ->execute([$ip, $email]);
-
+            // Failed attempt was already recorded above.
             // No session yet, so attribute the failure to the targeted account when it exists.
             if ($user) {
                 AuditHelper::logFor($pdo, (int) $user['id'], $user['tenant_id'], 'login_failed', "Failed login: $email from $ip");

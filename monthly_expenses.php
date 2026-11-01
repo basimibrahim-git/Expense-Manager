@@ -121,7 +121,7 @@ if ($end_date) {
     $params['end'] = $end_date;
 }
 
-$query .= " ORDER BY e.expense_date DESC LIMIT $items_per_page OFFSET $offset";
+$query .= " ORDER BY e.expense_date DESC, e.id DESC LIMIT $items_per_page OFFSET $offset";
 
 try {
     $stmt = $pdo->prepare($query);

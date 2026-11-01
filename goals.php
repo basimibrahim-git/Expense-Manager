@@ -47,8 +47,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         }
 
         // Goals are shared by the family (listed per tenant), so any editor in the tenant may update them
-        $stmt = $pdo->prepare("UPDATE sinking_funds SET current_saved = current_saved + ? WHERE id = ? AND tenant_id = ?");
-        $stmt->execute([$amount, $id, $_SESSION['tenant_id']]);
+        // A withdrawal can only take what is saved: current_saved never goes below 0
+        $stmt = $pdo->prepare("UPDATE sinking_funds SET current_saved = current_saved + ? WHERE id = ? AND tenant_id = ? AND current_saved + ? >= 0");
+        $stmt->execute([$amount, $id, $_SESSION['tenant_id'], $amount]);
+        if ($stmt->rowCount() === 0) {
+            Flash::redirect('goals.php', 'error', 'Goal not found, or the withdrawal is more than the saved amount.');
+        }
 
         AuditHelper::log($pdo, 'add_goal_funds', "Added $amount AED to Goal ID: $id");
         Flash::redirect('goals.php', 'success', 'Funds added');

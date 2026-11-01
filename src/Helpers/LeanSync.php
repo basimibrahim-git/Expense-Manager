@@ -407,8 +407,9 @@ class LeanSync
             $from = $row['last_synced_at']
                 ? date('Y-m-d', strtotime($row['last_synced_at'] . ' -' . self::OVERLAP_DAYS . ' days'))
                 : date('Y-m-d', strtotime('-' . self::FIRST_SYNC_DAYS . ' days'));
+            $seen = []; // occurrence counter for id-less transactions (see normaliseTransaction)
             foreach ($client->transactions($entityId, $accountId, $from, $today) as $t) {
-                $tx = self::normaliseTransaction($t, $accountId, $currency);
+                $tx = self::normaliseTransaction($t, $accountId, $currency, $seen);
                 if ($tx === null) {
                     continue;
                 }
@@ -476,7 +477,7 @@ class LeanSync
     }
 
     /** @return array{id: string, date: string, amount: float, currency: string, description: string, merchant: ?string, card_last4: ?string}|null */
-    private static function normaliseTransaction(array $t, string $accountId, string $accountCurrency): ?array
+    private static function normaliseTransaction(array $t, string $accountId, string $accountCurrency, array &$seen = []): ?array
     {
         if (strtoupper((string) ($t['status'] ?? 'BOOKED')) === 'PENDING') {
             return null; // pending items often come back later with a different id
@@ -504,7 +505,11 @@ class LeanSync
 
         $id = self::str($t['transaction_id'] ?? null, 128);
         if ($id === null) {
-            $id = 'h:' . sha1($accountId . '|' . $date . '|' . $amount . '|' . $description . '|' . ($t['transaction_reference'] ?? ''));
+            // Two genuinely identical same-day transactions must not merge: the 2nd, 3rd... in the
+            // same response get an occurrence suffix (the 1st keeps the original hash)
+            $base = $accountId . '|' . $date . '|' . $amount . '|' . $description . '|' . ($t['transaction_reference'] ?? '');
+            $n = $seen[$base] = ($seen[$base] ?? -1) + 1;
+            $id = 'h:' . sha1($n > 0 ? $base . '|#' . $n : $base);
         }
 
         $card = null;
@@ -535,7 +540,11 @@ class LeanSync
      * Import 'new' transactions (tenant-checked ids) as expenses or income in one DB transaction.
      * $categories maps transaction id → chosen category; invalid/missing ones fall back to a suggestion.
      *
-     * @return array{imported: int, skipped: int}
+     * A credit is never imported as an expense and a debit never as income (the stored sign decides),
+     * and a transaction matching an existing manual entry (same tenant, date and AED amount) is left
+     * for review instead of being booked twice. 'skipped' counts everything not imported.
+     *
+     * @return array{imported: int, skipped: int, wrong_direction: int, duplicates: int}
      */
     public static function import(PDO $pdo, int $tenantId, int $userId, array $ids, string $kind, array $categories): array
     {
@@ -544,7 +553,7 @@ class LeanSync
         }
         $ids = self::ids($ids);
         if (!$ids) {
-            return ['imported' => 0, 'skipped' => 0];
+            return ['imported' => 0, 'skipped' => 0, 'wrong_direction' => 0, 'duplicates' => 0];
         }
 
         $in = implode(',', array_fill(0, count($ids), '?'));
@@ -586,7 +595,14 @@ class LeanSync
             "UPDATE lean_transactions SET status = 'imported', imported_expense_id = ?, imported_income_id = ? WHERE id = ? AND tenant_id = ?"
         );
 
-        $imported = 0;
+        // Existing manual entries on the same date and amount (open-banking imports excluded)
+        $dupSql = $kind === 'expense'
+            ? "SELECT 1 FROM expenses WHERE tenant_id = ? AND expense_date = ? AND ABS(amount - ?) < 0.005 AND COALESCE(tags, '') <> 'open-banking' LIMIT 1"
+            : "SELECT 1 FROM income WHERE tenant_id = ? AND income_date = ? AND ABS(amount - ?) < 0.005
+                 AND id NOT IN (SELECT imported_income_id FROM lean_transactions WHERE tenant_id = ? AND imported_income_id IS NOT NULL) LIMIT 1";
+        $dupStmt = $pdo->prepare($dupSql);
+
+        $imported = $wrongDirection = $duplicates = 0;
         $pdo->beginTransaction();
         try {
             foreach ($rows as $r) {
@@ -598,6 +614,19 @@ class LeanSync
                 $orig = round(abs((float) $r['amount']), 2);
                 $aed  = round($orig * $rates[$cur], 2);
                 if ($aed <= 0) {
+                    continue;
+                }
+                // Stored amount is signed: negative = money out (debit), positive = money in (credit)
+                $signed = (float) $r['amount'];
+                if (($kind === 'expense' && $signed > 0) || ($kind === 'income' && $signed < 0)) {
+                    $wrongDirection++;
+                    continue;
+                }
+                $dupStmt->execute($kind === 'expense'
+                    ? [$tenantId, $r['booking_date'], $aed]
+                    : [$tenantId, $r['booking_date'], $aed, $tenantId]);
+                if ($dupStmt->fetchColumn()) {
+                    $duplicates++;
                     continue;
                 }
                 $text = trim(($r['merchant'] ?? '') . ' ' . $r['description']);
@@ -639,7 +668,10 @@ class LeanSync
         if ($kind === 'expense' && $imported > 0) {
             BudgetAlertHelper::checkTenant($pdo, $tenantId);
         }
-        return ['imported' => $imported, 'skipped' => count($ids) - $imported];
+        return [
+            'imported' => $imported, 'skipped' => count($ids) - $imported,
+            'wrong_direction' => $wrongDirection, 'duplicates' => $duplicates,
+        ];
     }
 
     /** Mark tenant transactions as ignored ($ignore) or back to new. Returns the number changed. */

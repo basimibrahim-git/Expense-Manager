@@ -142,7 +142,18 @@ try {
             AuditHelper::log($pdo, 'lean_import', "Open banking: imported {$res['imported']} transaction(s) as {$kind}");
             $msg = "Imported {$res['imported']} transaction" . ($res['imported'] === 1 ? '' : 's') . " as {$kind}.";
             if ($res['skipped'] > 0) {
-                $msg .= " {$res['skipped']} skipped (already handled).";
+                $handled = $res['skipped'] - $res['wrong_direction'] - $res['duplicates'];
+                $parts = [];
+                if ($handled > 0) {
+                    $parts[] = "$handled already handled";
+                }
+                if ($res['wrong_direction'] > 0) {
+                    $parts[] = "{$res['wrong_direction']} not " . ($kind === 'expense' ? 'debits' : 'credits');
+                }
+                if ($res['duplicates'] > 0) {
+                    $parts[] = "{$res['duplicates']} already entered manually (same date and amount)";
+                }
+                $msg .= " {$res['skipped']} skipped (" . implode(', ', $parts) . ').';
             }
             Flash::redirect($back, $res['imported'] > 0 ? 'success' : 'warning', $msg);
             break;

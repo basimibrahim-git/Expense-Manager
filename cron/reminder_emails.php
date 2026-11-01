@@ -17,7 +17,7 @@
  *   0 9 * * * php /var/www/html/expenses/cron/reminder_emails.php >> /var/log/cron.log 2>&1
  *
  * HTTP trigger (for testing, requires CRON_SECRET in .env):
- *   https://yourdomain.com/expenses/cron/reminder_emails.php?key=YOUR_SECRET
+ *   https://yourdomain.com/expenses/cron/reminder_emails.php?key=YOUR_SECRET  (or send header  X-Cron-Key: YOUR_SECRET, preferred)
  */
 
 define('IS_CLI', php_sapi_name() === 'cli');
@@ -34,7 +34,9 @@ if (!IS_CLI) {
         $_ENV[trim($k)] = trim(trim($v), "\"'");
     }
     $secret = $_ENV['CRON_SECRET'] ?? '';
-    if ($secret === '' || !hash_equals($secret, (string) ($_GET['key'] ?? ''))) {
+    // Preferred: X-Cron-Key header (keeps the secret out of URLs/logs); ?key= still works for old setups.
+    $provided = (string) ($_SERVER['HTTP_X_CRON_KEY'] ?? ($_GET['key'] ?? ''));
+    if ($secret === '' || !hash_equals($secret, $provided)) {
         http_response_code(403);
         die('Forbidden');
     }

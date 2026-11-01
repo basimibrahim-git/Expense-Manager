@@ -69,8 +69,6 @@ $all_banks = $banks_stmt->fetchAll();
                             <select name="currency" id="currency_selector" class="form-select fw-bold text-primary rounded-start-pill px-3" style="max-width: 100px;">
                                 <option value="AED">AED</option>
                                 <option value="INR">INR</option>
-                                <option value="USD">USD</option>
-                                <option value="EUR">EUR</option>
                             </select>
                             <input type="number" name="amount" id="amount" class="form-control rounded-end-pill px-3" step="0.01"
                                 placeholder="0.00" required>

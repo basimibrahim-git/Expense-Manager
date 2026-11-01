@@ -5,6 +5,7 @@ use App\Helpers\AuditHelper;
 use App\Helpers\Html;
 use App\Helpers\Layout;
 use App\Helpers\MailHelper;
+use App\Helpers\Notifier;
 use App\Helpers\PasswordResetHelper;
 use App\Helpers\SecurityHelper;
 
@@ -32,10 +33,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt->execute([$email]);
             $user = $stmt->fetch();
 
-            if (PasswordResetHelper::isRateLimited($pdo, $user ? (int) $user['id'] : null, $ip)) {
+            // A per-user limit hit is answered exactly like success (no account enumeration);
+            // only the per-IP limit is shown, and it does not depend on the account.
+            if (PasswordResetHelper::isRateLimited($pdo, null, $ip)) {
                 $error = "Too many reset requests. Please wait 15 minutes and try again.";
             } else {
-                if ($user) {
+                $appUrlOk = Notifier::appUrl('reset_password.php') !== '';
+                if ($user && !$appUrlOk) {
+                    error_log("Password reset skipped: APP_URL is not configured");
+                }
+                if ($user && $appUrlOk && !PasswordResetHelper::isRateLimited($pdo, (int) $user['id'], $ip)) {
                     $token = PasswordResetHelper::create($pdo, (int) $user['id'], $ip);
                     $link = PasswordResetHelper::url($token);
 
